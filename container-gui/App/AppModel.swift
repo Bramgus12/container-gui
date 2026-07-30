@@ -9,6 +9,12 @@ nonisolated protocol ContainerMutating: Sendable {
     func mutate(_ mutation: ContainerMutation, containerID: String) async throws
 }
 
+nonisolated protocol ContainerRunning: Sendable {
+    func streamRun(
+        _ configuration: RunConfiguration
+    ) -> AsyncThrowingStream<ProcessEvent, Error>
+}
+
 actor CLIContainerListService: ContainerListing {
     private let cli: any ContainerCLI
 
@@ -42,6 +48,16 @@ actor CLIContainerMutationService: ContainerMutating {
     func mutate(_ mutation: ContainerMutation, containerID: String) async throws {
         let identifier = try ContainerIdentifier(validating: containerID)
         _ = try await cli.run(mutation.command(for: identifier))
+    }
+}
+
+nonisolated struct CLIContainerRunService: ContainerRunning {
+    let cli: any ContainerCLI
+
+    func streamRun(
+        _ configuration: RunConfiguration
+    ) -> AsyncThrowingStream<ProcessEvent, Error> {
+        cli.stream(.run(configuration))
     }
 }
 
@@ -147,6 +163,7 @@ final class AppModel {
     private let cliFactory: any ContainerCLIMaking
     private var containerLister: (any ContainerListing)?
     private var containerMutator: (any ContainerMutating)?
+    private var containerRunner: (any ContainerRunning)?
     private var configuredExecutableURL: URL?
     private var refreshGeneration = 0
 
@@ -158,12 +175,14 @@ final class AppModel {
         setup: SetupModel,
         cliFactory: any ContainerCLIMaking = ProcessContainerCLIFactory(),
         containerLister: (any ContainerListing)? = nil,
-        containerMutator: (any ContainerMutating)? = nil
+        containerMutator: (any ContainerMutating)? = nil,
+        containerRunner: (any ContainerRunning)? = nil
     ) {
         self.setup = setup
         self.cliFactory = cliFactory
         self.containerLister = containerLister
         self.containerMutator = containerMutator
+        self.containerRunner = containerRunner
     }
 
     var filteredContainers: [ContainerSummary] {
@@ -178,6 +197,7 @@ final class AppModel {
             let cli = cliFactory.makeCLI(executableURL: context.executableURL)
             containerLister = CLIContainerListService(cli: cli)
             containerMutator = CLIContainerMutationService(cli: cli)
+            containerRunner = CLIContainerRunService(cli: cli)
             containers = []
             selectedContainerID = nil
             containerListState = .idle
@@ -275,6 +295,42 @@ final class AppModel {
         mutationFailure = nil
     }
 
+    func runContainer(
+        _ configuration: RunConfiguration,
+        onEvent: (ProcessEvent) -> Void
+    ) async throws {
+        guard let containerRunner else {
+            throw CLIError.launchFailed(message: "The container executable is not ready.")
+        }
+
+        var standardOutput = ""
+        var standardError = ""
+        for try await event in containerRunner.streamRun(configuration) {
+            switch event {
+            case .standardOutput(let output):
+                standardOutput.append(output)
+            case .standardError(let output):
+                standardError.append(output)
+            case .terminated(let exitCode) where exitCode != 0:
+                onEvent(event)
+                throw CLIError.nonZeroExit(
+                    invocation: ProcessContainerCLI.displayInvocation(
+                        executable: "container",
+                        arguments: ContainerCommand.run(configuration).arguments
+                    ),
+                    exitCode: exitCode,
+                    standardError: standardError
+                )
+            case .terminated:
+                break
+            }
+            onEvent(event)
+        }
+
+        await refreshContainers()
+        selectNewContainer(configuration: configuration, standardOutput: standardOutput)
+    }
+
     private func matchesFilter(_ container: ContainerSummary) -> Bool {
         switch containerFilter {
         case .all:
@@ -298,5 +354,30 @@ final class AppModel {
         ]
         .compactMap { $0 }
         .contains { $0.localizedCaseInsensitiveContains(query) }
+    }
+
+    private func selectNewContainer(
+        configuration: RunConfiguration,
+        standardOutput: String
+    ) {
+        if let requestedName = configuration.name?.rawValue,
+           containers.contains(where: { $0.id == requestedName }) {
+            selectedContainerID = requestedName
+            return
+        }
+
+        let outputTokens = standardOutput
+            .split(whereSeparator: { $0.isWhitespace })
+            .map(String.init)
+            .reversed()
+        if let container = containers.first(where: { container in
+            outputTokens.contains {
+                container.id == $0
+                    || container.id.hasPrefix($0)
+                    || $0.hasPrefix(container.id)
+            }
+        }) {
+            selectedContainerID = container.id
+        }
     }
 }

@@ -364,6 +364,7 @@ private struct MainNavigationView: View {
 private struct ContainerListView: View {
     @Bindable var model: AppModel
     @State private var pendingDeletion: PendingContainerDeletion?
+    @State private var runContainerModel: RunContainerModel?
 
     var body: some View {
         table
@@ -382,6 +383,16 @@ private struct ContainerListView: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 240)
+                }
+
+                ToolbarItem {
+                    Button {
+                        runContainerModel = RunContainerModel()
+                    } label: {
+                        Label("Run Container", systemImage: "plus")
+                    }
+                    .keyboardShortcut("n", modifiers: .command)
+                    .accessibilityIdentifier("containers.run")
                 }
 
                 ToolbarItem {
@@ -463,6 +474,9 @@ private struct ContainerListView: View {
                 } else {
                     Text("This permanently deletes “\(deletion.containerID)”. This action cannot be undone.")
                 }
+            }
+            .sheet(item: $runContainerModel) { runModel in
+                RunContainerSheet(model: runModel, appModel: model)
             }
     }
 

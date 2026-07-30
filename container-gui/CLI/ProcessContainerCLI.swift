@@ -223,8 +223,15 @@ actor ProcessContainerCLI: ContainerCLI {
         executableURL: URL,
         arguments: [String]
     ) -> String {
+        displayInvocation(executable: executableURL.path, arguments: arguments)
+    }
+
+    static func displayInvocation(
+        executable: String,
+        arguments: [String]
+    ) -> String {
         let sanitized = sanitizedArguments(arguments)
-        return ([executableURL.path] + sanitized)
+        return ([executable] + sanitized)
             .map(displayArgument)
             .joined(separator: " ")
     }

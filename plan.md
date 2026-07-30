@@ -418,13 +418,13 @@ Build the app as a sequence of small, independently testable increments. Each st
 
 **Tasks:**
 
-- [ ] Build the run sheet with image, optional name, detach/remove options, CPU, memory, ports, environment, and command arguments.
-- [ ] Validate fields inline before enabling **Run**.
-- [ ] Show a safely escaped, display-only command preview.
-- [ ] Convert the form into `RunConfiguration`, then `ContainerCommand.run`.
-- [ ] Stream or display pull/run progress without blocking the form.
-- [ ] Close on success, select the new container, and refresh the list.
-- [ ] Preserve the form after failure so the user can correct it.
+- [x] Build the run sheet with image, optional name, detach/remove options, CPU, memory, ports, environment, and command arguments.
+- [x] Validate fields inline before enabling **Run**.
+- [x] Show a safely escaped, display-only command preview.
+- [x] Convert the form into `RunConfiguration`, then `ContainerCommand.run`.
+- [x] Stream or display pull/run progress without blocking the form.
+- [x] Close on success, select the new container, and refresh the list.
+- [x] Preserve the form after failure so the user can correct it.
 
 **Deliverable:** a user can run a typical detached web-service container without Terminal.
 
