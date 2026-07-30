@@ -18,7 +18,7 @@
                BlueprintIdentifier = "F73B64D6301BC06B009E09E1"
                BuildableName = "Container GUI.app"
                BlueprintName = "Container GUI"
-               ReferencedContainer = "container:Container GUI.xcodeproj">
+               ReferencedContainer = "container:container-gui.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -38,7 +38,7 @@
                BlueprintIdentifier = "A10000000000000000000006"
                BuildableName = "Container GUITests.xctest"
                BlueprintName = "Container GUITests"
-               ReferencedContainer = "container:Container GUI.xcodeproj">
+               ReferencedContainer = "container:container-gui.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -59,7 +59,7 @@
             BlueprintIdentifier = "F73B64D6301BC06B009E09E1"
             BuildableName = "Container GUI.app"
             BlueprintName = "Container GUI"
-            ReferencedContainer = "container:Container GUI.xcodeproj">
+            ReferencedContainer = "container:container-gui.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -75,7 +75,7 @@
             BlueprintIdentifier = "F73B64D6301BC06B009E09E1"
             BuildableName = "Container GUI.app"
             BlueprintName = "Container GUI"
-            ReferencedContainer = "container:Container GUI.xcodeproj">
+            ReferencedContainer = "container:container-gui.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

@@ -241,10 +241,10 @@ Exclude administrator-only DNS and kernel mutation from v1.
 
 ## 6. Planned project structure
 
-Because the Xcode project uses a file-system-synchronized group, new files placed under `Container GUI/` should appear in the target without manually editing `project.pbxproj`.
+Because the Xcode project uses a file-system-synchronized group, new files placed under `container-gui/` should appear in the target without manually editing `project.pbxproj`.
 
 ```text
-Container GUI/
+container-gui/
 ├── App/
 │   ├── Container_GUIApp.swift
 │   ├── AppModel.swift
@@ -272,7 +272,7 @@ Container GUI/
 │   └── Formatters.swift
 └── Assets.xcassets/
 
-Container GUITests/
+container-gui-tests/
 ├── ContainerCommandTests.swift
 ├── ProcessContainerCLITests.swift
 ├── CLIDecodingTests.swift

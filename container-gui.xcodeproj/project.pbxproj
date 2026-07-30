@@ -22,14 +22,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A10000000000000000000002 /* Container GUITests */ = {
+		A10000000000000000000002 /* container-gui-tests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Container GUITests";
+			path = "container-gui-tests";
 			sourceTree = "<group>";
 		};
-		F73B64D9301BC06B009E09E1 /* Container GUI */ = {
+		F73B64D9301BC06B009E09E1 /* container-gui */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Container GUI";
+			path = "container-gui";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -51,8 +51,8 @@
 		F73B64CE301BC06B009E09E1 = {
 			isa = PBXGroup;
 			children = (
-				F73B64D9301BC06B009E09E1 /* Container GUI */,
-				A10000000000000000000002 /* Container GUITests */,
+				F73B64D9301BC06B009E09E1 /* container-gui */,
+				A10000000000000000000002 /* container-gui-tests */,
 				F73B64D8301BC06B009E09E1 /* Products */,
 			);
 			sourceTree = "<group>";
