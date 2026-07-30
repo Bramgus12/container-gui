@@ -5,6 +5,10 @@ nonisolated protocol ContainerListing: Sendable {
     func listContainers() async throws -> [ContainerSummary]
 }
 
+nonisolated protocol ContainerMutating: Sendable {
+    func mutate(_ mutation: ContainerMutation, containerID: String) async throws
+}
+
 actor CLIContainerListService: ContainerListing {
     private let cli: any ContainerCLI
 
@@ -26,6 +30,70 @@ actor CLIContainerListService: ContainerListing {
             )
         }
     }
+}
+
+actor CLIContainerMutationService: ContainerMutating {
+    private let cli: any ContainerCLI
+
+    init(cli: any ContainerCLI) {
+        self.cli = cli
+    }
+
+    func mutate(_ mutation: ContainerMutation, containerID: String) async throws {
+        let identifier = try ContainerIdentifier(validating: containerID)
+        _ = try await cli.run(mutation.command(for: identifier))
+    }
+}
+
+nonisolated enum ContainerMutation: Equatable, Sendable {
+    case start
+    case stop
+    case delete(force: Bool)
+
+    var displayName: String {
+        switch self {
+        case .start: "Start"
+        case .stop: "Stop"
+        case .delete(force: false): "Delete"
+        case .delete(force: true): "Force Delete"
+        }
+    }
+
+    func isAllowed(for state: ContainerState) -> Bool {
+        switch (self, state) {
+        case (.start, .created), (.start, .stopped):
+            true
+        case (.stop, .running), (.stop, .paused):
+            true
+        case (.delete(force: false), .created), (.delete(force: false), .stopped):
+            true
+        case (.delete(force: true), .created),
+             (.delete(force: true), .running),
+             (.delete(force: true), .stopped),
+             (.delete(force: true), .paused):
+            true
+        default:
+            false
+        }
+    }
+
+    fileprivate func command(for identifier: ContainerIdentifier) -> ContainerCommand {
+        switch self {
+        case .start:
+            .start(id: identifier)
+        case .stop:
+            .stop(id: identifier, timeout: nil)
+        case .delete(let force):
+            .delete(id: identifier, force: force)
+        }
+    }
+}
+
+nonisolated struct ContainerMutationFailure: Identifiable, Equatable, Sendable {
+    let id = UUID()
+    let containerID: String
+    let mutation: ContainerMutation
+    let message: String
 }
 
 enum AppDestination: String, CaseIterable, Identifiable, Sendable {
@@ -73,9 +141,12 @@ final class AppModel {
 
     private(set) var containers: [ContainerSummary] = []
     private(set) var containerListState: ContainerListState = .idle
+    private(set) var containerMutations: [String: ContainerMutation] = [:]
+    private(set) var mutationFailure: ContainerMutationFailure?
 
     private let cliFactory: any ContainerCLIMaking
     private var containerLister: (any ContainerListing)?
+    private var containerMutator: (any ContainerMutating)?
     private var configuredExecutableURL: URL?
     private var refreshGeneration = 0
 
@@ -86,11 +157,13 @@ final class AppModel {
     init(
         setup: SetupModel,
         cliFactory: any ContainerCLIMaking = ProcessContainerCLIFactory(),
-        containerLister: (any ContainerListing)? = nil
+        containerLister: (any ContainerListing)? = nil,
+        containerMutator: (any ContainerMutating)? = nil
     ) {
         self.setup = setup
         self.cliFactory = cliFactory
         self.containerLister = containerLister
+        self.containerMutator = containerMutator
     }
 
     var filteredContainers: [ContainerSummary] {
@@ -102,12 +175,14 @@ final class AppModel {
     func activate(_ context: PreflightContext) async {
         if configuredExecutableURL != context.executableURL {
             configuredExecutableURL = context.executableURL
-            containerLister = CLIContainerListService(
-                cli: cliFactory.makeCLI(executableURL: context.executableURL)
-            )
+            let cli = cliFactory.makeCLI(executableURL: context.executableURL)
+            containerLister = CLIContainerListService(cli: cli)
+            containerMutator = CLIContainerMutationService(cli: cli)
             containers = []
             selectedContainerID = nil
             containerListState = .idle
+            containerMutations = [:]
+            mutationFailure = nil
         }
 
         if containerListState == .idle {
@@ -142,6 +217,62 @@ final class AppModel {
             guard generation == refreshGeneration else { return }
             containerListState = .failed(error.localizedDescription)
         }
+    }
+
+    func mutationInProgress(for containerID: String) -> ContainerMutation? {
+        containerMutations[containerID]
+    }
+
+    func canPerform(_ mutation: ContainerMutation, on container: ContainerSummary) -> Bool {
+        containerMutations[container.id] == nil && mutation.isAllowed(for: container.state)
+    }
+
+    func perform(_ mutation: ContainerMutation, on containerID: String) async {
+        guard containerMutations[containerID] == nil else {
+            return
+        }
+        guard let container = containers.first(where: { $0.id == containerID }),
+              mutation.isAllowed(for: container.state)
+        else {
+            mutationFailure = ContainerMutationFailure(
+                containerID: containerID,
+                mutation: mutation,
+                message: "The container state changed. Refresh the list and try again."
+            )
+            return
+        }
+        guard let containerMutator else {
+            mutationFailure = ContainerMutationFailure(
+                containerID: containerID,
+                mutation: mutation,
+                message: "The container executable is not ready."
+            )
+            return
+        }
+
+        mutationFailure = nil
+        containerMutations[containerID] = mutation
+        defer { containerMutations[containerID] = nil }
+
+        do {
+            try await containerMutator.mutate(mutation, containerID: containerID)
+        } catch is CancellationError {
+            // Cancellation is an intentional transition, not a user-facing failure.
+        } catch CLIError.cancelled {
+            // ProcessContainerCLI normalizes process cancellation to CLIError.cancelled.
+        } catch {
+            mutationFailure = ContainerMutationFailure(
+                containerID: containerID,
+                mutation: mutation,
+                message: error.localizedDescription
+            )
+        }
+
+        await refreshContainers()
+    }
+
+    func dismissMutationFailure() {
+        mutationFailure = nil
     }
 
     private func matchesFilter(_ container: ContainerSummary) -> Bool {

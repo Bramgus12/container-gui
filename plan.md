@@ -400,13 +400,13 @@ Build the app as a sequence of small, independently testable increments. Each st
 
 **Tasks:**
 
-- [ ] Add start, graceful stop, and delete commands.
-- [ ] Enable actions according to container state.
-- [ ] Track busy state per container rather than globally.
-- [ ] Confirm delete and force-delete operations.
-- [ ] Prevent conflicting concurrent mutations on the same container.
-- [ ] Refresh the container list after every completed mutation.
-- [ ] Show actionable stderr when the requested transition fails.
+- [x] Add start, graceful stop, and delete commands.
+- [x] Enable actions according to container state.
+- [x] Track busy state per container rather than globally.
+- [x] Confirm delete and force-delete operations.
+- [x] Prevent conflicting concurrent mutations on the same container.
+- [x] Refresh the container list after every completed mutation.
+- [x] Show actionable stderr when the requested transition fails.
 
 **Deliverable:** existing containers can be started, stopped, and deleted from the list and detail toolbar.
 

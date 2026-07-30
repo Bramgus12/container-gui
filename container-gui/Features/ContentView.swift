@@ -363,6 +363,7 @@ private struct MainNavigationView: View {
 
 private struct ContainerListView: View {
     @Bindable var model: AppModel
+    @State private var pendingDeletion: PendingContainerDeletion?
 
     var body: some View {
         table
@@ -393,12 +394,75 @@ private struct ContainerListView: View {
                     .disabled(model.containerListState == .loading)
                     .accessibilityIdentifier("containers.refresh")
                 }
+
+                ToolbarItemGroup {
+                    Button {
+                        perform(.start)
+                    } label: {
+                        Label("Start", systemImage: "play.fill")
+                    }
+                    .disabled(!canPerform(.start))
+                    .accessibilityIdentifier("containers.start")
+
+                    Button {
+                        perform(.stop)
+                    } label: {
+                        Label("Stop", systemImage: "stop.fill")
+                    }
+                    .disabled(!canPerform(.stop))
+                    .accessibilityIdentifier("containers.stop")
+
+                    Menu {
+                        Button("Delete…", role: .destructive) {
+                            requestDeletion(force: false)
+                        }
+                        .disabled(!canPerform(.delete(force: false)))
+
+                        Button("Force Delete…", role: .destructive) {
+                            requestDeletion(force: true)
+                        }
+                        .disabled(!canPerform(.delete(force: true)))
+                    } label: {
+                        Label("More Actions", systemImage: "ellipsis.circle")
+                    }
+                    .disabled(selectedContainer == nil || selectedContainerIsBusy)
+                    .accessibilityIdentifier("containers.moreActions")
+                }
             }
             .overlay {
                 overlay
             }
             .safeAreaInset(edge: .bottom) {
-                refreshErrorBanner
+                VStack(spacing: 0) {
+                    mutationErrorBanner
+                    refreshErrorBanner
+                }
+            }
+            .alert(
+                pendingDeletion?.mutation == .delete(force: true)
+                    ? "Force Delete Container?"
+                    : "Delete Container?",
+                isPresented: Binding(
+                    get: { pendingDeletion != nil },
+                    set: { if !$0 { pendingDeletion = nil } }
+                ),
+                presenting: pendingDeletion
+            ) { deletion in
+                Button(deletion.mutation.displayName, role: .destructive) {
+                    Task {
+                        await model.perform(deletion.mutation, on: deletion.containerID)
+                    }
+                    pendingDeletion = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingDeletion = nil
+                }
+            } message: { deletion in
+                if deletion.mutation == .delete(force: true) {
+                    Text("This immediately stops and permanently deletes “\(deletion.containerID)”. This action cannot be undone.")
+                } else {
+                    Text("This permanently deletes “\(deletion.containerID)”. This action cannot be undone.")
+                }
             }
     }
 
@@ -409,8 +473,16 @@ private struct ContainerListView: View {
                 Text(container.image ?? "—")
             }
             TableColumn("State") { container in
-                Label(container.state.displayName, systemImage: container.state.systemImage)
-                    .foregroundStyle(container.state.tint)
+                if let mutation = model.mutationInProgress(for: container.id) {
+                    HStack(spacing: 7) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("\(mutation.displayName)…")
+                    }
+                } else {
+                    Label(container.state.displayName, systemImage: container.state.systemImage)
+                        .foregroundStyle(container.state.tint)
+                }
             }
             TableColumn("Architecture") { container in
                 Text(container.architecture ?? "—")
@@ -432,6 +504,37 @@ private struct ContainerListView: View {
                 } else {
                     Text("—")
                 }
+            }
+        }
+        .contextMenu(forSelectionType: String.self) { selection in
+            if let container = model.containers.first(where: { selection.contains($0.id) }) {
+                Button("Start") {
+                    Task { await model.perform(.start, on: container.id) }
+                }
+                .disabled(!model.canPerform(.start, on: container))
+
+                Button("Stop") {
+                    Task { await model.perform(.stop, on: container.id) }
+                }
+                .disabled(!model.canPerform(.stop, on: container))
+
+                Divider()
+
+                Button("Delete…", role: .destructive) {
+                    pendingDeletion = PendingContainerDeletion(
+                        containerID: container.id,
+                        mutation: .delete(force: false)
+                    )
+                }
+                .disabled(!model.canPerform(.delete(force: false), on: container))
+
+                Button("Force Delete…", role: .destructive) {
+                    pendingDeletion = PendingContainerDeletion(
+                        containerID: container.id,
+                        mutation: .delete(force: true)
+                    )
+                }
+                .disabled(!model.canPerform(.delete(force: true), on: container))
             }
         }
         .accessibilityIdentifier("containers.table")
@@ -496,6 +599,64 @@ private struct ContainerListView: View {
             .background(.bar)
         }
     }
+
+    @ViewBuilder
+    private var mutationErrorBanner: some View {
+        if let failure = model.mutationFailure {
+            HStack(spacing: 12) {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(failure.mutation.displayName) failed for \(failure.containerID)")
+                            .fontWeight(.semibold)
+                        Text(failure.message)
+                            .textSelection(.enabled)
+                    }
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                }
+                Spacer()
+                Button("Dismiss") {
+                    model.dismissMutationFailure()
+                }
+            }
+            .padding(10)
+            .background(.bar)
+            .accessibilityIdentifier("containers.mutationError")
+        }
+    }
+
+    private var selectedContainer: ContainerSummary? {
+        guard let id = model.selectedContainerID else { return nil }
+        return model.containers.first { $0.id == id }
+    }
+
+    private var selectedContainerIsBusy: Bool {
+        guard let selectedContainer else { return false }
+        return model.mutationInProgress(for: selectedContainer.id) != nil
+    }
+
+    private func canPerform(_ mutation: ContainerMutation) -> Bool {
+        guard let selectedContainer else { return false }
+        return model.canPerform(mutation, on: selectedContainer)
+    }
+
+    private func perform(_ mutation: ContainerMutation) {
+        guard let selectedContainer else { return }
+        Task { await model.perform(mutation, on: selectedContainer.id) }
+    }
+
+    private func requestDeletion(force: Bool) {
+        guard let selectedContainer else { return }
+        pendingDeletion = PendingContainerDeletion(
+            containerID: selectedContainer.id,
+            mutation: .delete(force: force)
+        )
+    }
+}
+
+private struct PendingContainerDeletion: Equatable {
+    let containerID: String
+    let mutation: ContainerMutation
 }
 
 private extension ContainerState {

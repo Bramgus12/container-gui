@@ -41,6 +41,10 @@ final class ContainerCommandTests: XCTestCase {
             ["delete", "--force", "web.1_test"]
         )
         XCTAssertEqual(
+            ContainerCommand.delete(id: id, force: false).arguments,
+            ["delete", "web.1_test"]
+        )
+        XCTAssertEqual(
             ContainerCommand.logs(id: id, follow: true, tail: tail).arguments,
             ["logs", "--follow", "-n", "200", "web.1_test"]
         )
