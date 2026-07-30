@@ -1,0 +1,14 @@
+[
+  {
+    "id": "current-web",
+    "memoryUsageBytes": 47431680,
+    "memoryLimitBytes": 1073741824,
+    "cpuUsageUsec": 1234567,
+    "networkRxBytes": 1289011,
+    "networkTxBytes": 876544,
+    "blockReadBytes": 4718592,
+    "blockWriteBytes": 2202009,
+    "numProcesses": 3,
+    "futureMetric": 99
+  }
+]

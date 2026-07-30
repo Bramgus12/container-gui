@@ -1,0 +1,7 @@
+{
+  "status": "ready",
+  "healthy": true,
+  "version": "1.0.0",
+  "message": "services are available",
+  "future": "ignored"
+}

@@ -308,13 +308,13 @@ Build the app as a sequence of small, independently testable increments. Each st
 
 **Tasks:**
 
-- [ ] Add `ContainerCommand` and generate `[String]` arguments for every MVP operation.
-- [ ] Add `RunConfiguration` with validation for names, ports, environment variables, CPU, and memory.
-- [ ] Add `CommandResult`, `ProcessEvent`, and `CLIError`.
-- [ ] Add the `ContainerCLI` protocol.
-- [ ] Add initial container, image, system, and version DTOs plus view-facing models.
-- [ ] Create JSON fixtures for the minimum and current supported Apple Container versions.
-- [ ] Test every generated argument array, including spaces, Unicode, quotes, and values beginning with a dash.
+- [x] Add `ContainerCommand` and generate `[String]` arguments for every MVP operation.
+- [x] Add `RunConfiguration` with validation for names, ports, environment variables, CPU, and memory.
+- [x] Add `CommandResult`, `ProcessEvent`, and `CLIError`.
+- [x] Add the `ContainerCLI` protocol.
+- [x] Add initial container, image, system, and version DTOs plus view-facing models.
+- [x] Create JSON fixtures for the minimum and current supported Apple Container versions.
+- [x] Test every generated argument array, including spaces, Unicode, quotes, and values beginning with a dash.
 
 **Deliverable:** a fully unit-tested command/model layer with no dependency on the real CLI.
 

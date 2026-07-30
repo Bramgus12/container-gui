@@ -1,0 +1,16 @@
+[
+  {
+    "name": "ghcr.io/example/app:1.0",
+    "descriptor": {
+      "digest": "sha256:2222",
+      "size": 42000000,
+      "mediaType": "application/vnd.oci.image.manifest.v1+json"
+    },
+    "createdAt": "2026-06-09T12:00:00.000Z",
+    "platform": {
+      "os": "linux",
+      "architecture": "arm64"
+    },
+    "unknown": "ignored"
+  }
+]

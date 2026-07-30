@@ -1,0 +1,59 @@
+[
+  {
+    "id": "current-web",
+    "configuration": {
+      "id": "current-web",
+      "image": {
+        "reference": "ghcr.io/example/app:1.0",
+        "digest": "sha256:2222"
+      },
+      "platform": {
+        "os": "linux",
+        "architecture": "arm64",
+        "variant": "v8"
+      },
+      "creationDate": "2026-06-09T12:34:56.123Z",
+      "resources": {
+        "cpus": "2",
+        "memoryInBytes": "1073741824"
+      },
+      "publishedPorts": [
+        {
+          "hostAddress": "127.0.0.1",
+          "hostPort": "8080",
+          "containerPort": 80,
+          "protocol": "tcp"
+        }
+      ],
+      "mounts": [
+        {
+          "source": "app-data",
+          "destination": "/data",
+          "options": ["rw"],
+          "type": {
+            "virtiofs": {}
+          }
+        }
+      ],
+      "newConfigurationField": true
+    },
+    "status": {
+      "status": "running",
+      "networks": [
+        {
+          "network": "default",
+          "hostname": "current-web",
+          "ipv4Address": "192.168.64.4",
+          "ipv6Address": "fd00::4",
+          "gateway": "192.168.64.1",
+          "macAddress": "02:42:ac:11:00:04",
+          "mtu": 1500,
+          "futureNetworkField": "ignored"
+        }
+      ]
+    },
+    "futureTopLevelField": {
+      "ignored": true
+    }
+  }
+]

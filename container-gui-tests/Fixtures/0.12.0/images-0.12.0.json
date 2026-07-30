@@ -1,0 +1,12 @@
+[
+  {
+    "reference": "docker.io/library/alpine:3.20",
+    "digest": "sha256:1111",
+    "size": 8100000,
+    "creationDate": "2026-04-27T10:00:00Z",
+    "platform": {
+      "os": "linux",
+      "architecture": "arm64"
+    }
+  }
+]

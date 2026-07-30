@@ -1,0 +1,32 @@
+[
+  {
+    "configuration": {
+      "id": "legacy-web",
+      "image": {
+        "reference": "docker.io/library/nginx:1.27"
+      },
+      "platform": {
+        "os": "linux",
+        "architecture": "arm64"
+      },
+      "creationDate": "2026-04-27T12:00:00Z"
+    },
+    "status": {
+      "status": "running",
+      "startedDate": "2026-04-27T12:00:01Z",
+      "networks": [
+        {
+          "network": "default",
+          "address": "192.168.64.3"
+        }
+      ]
+    }
+  },
+  {
+    "configuration": {
+      "id": "unknown-state",
+      "image": "example/image:edge"
+    },
+    "status": "future-state"
+  }
+]

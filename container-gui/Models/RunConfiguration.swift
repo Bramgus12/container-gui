@@ -1,0 +1,240 @@
+import Foundation
+import Darwin
+
+enum CommandValidationError: Error, Equatable, Sendable {
+    case empty(field: String)
+    case invalid(field: String, value: String)
+    case nonPositive(field: String)
+    case outOfRange(field: String, value: Int)
+}
+
+extension CommandValidationError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .empty(let field):
+            "\(field) cannot be empty."
+        case .invalid(let field, let value):
+            "\(value) is not a valid \(field.lowercased())."
+        case .nonPositive(let field):
+            "\(field) must be greater than zero."
+        case .outOfRange(let field, let value):
+            "\(field) value \(value) is outside the allowed range."
+        }
+    }
+}
+
+struct ContainerIdentifier: Hashable, Sendable {
+    let rawValue: String
+
+    init(validating value: String) throws {
+        guard !value.isEmpty else {
+            throw CommandValidationError.empty(field: "Container identifier")
+        }
+        guard Self.isValid(value) else {
+            throw CommandValidationError.invalid(field: "Container identifier", value: value)
+        }
+        rawValue = value
+    }
+
+    private static func isValid(_ value: String) -> Bool {
+        guard value.first != "-", value.unicodeScalars.allSatisfy({
+            !CharacterSet.whitespacesAndNewlines.contains($0) && !CharacterSet.controlCharacters.contains($0)
+        }) else {
+            return false
+        }
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-")
+        return value.unicodeScalars.allSatisfy(allowed.contains)
+    }
+}
+
+struct ImageReference: Hashable, Sendable {
+    let rawValue: String
+
+    init(validating value: String) throws {
+        guard !value.isEmpty else {
+            throw CommandValidationError.empty(field: "Image reference")
+        }
+        guard value.first != "-",
+              value.unicodeScalars.allSatisfy({
+                  $0.isASCII
+                      && !CharacterSet.whitespacesAndNewlines.contains($0)
+                      && !CharacterSet.controlCharacters.contains($0)
+              })
+        else {
+            throw CommandValidationError.invalid(field: "Image reference", value: value)
+        }
+        rawValue = value
+    }
+}
+
+struct CPULimit: Equatable, Sendable {
+    let value: String
+
+    init(_ value: String) throws {
+        guard value.range(of: #"^[0-9]+(?:\.[0-9]+)?$"#, options: .regularExpression) != nil,
+              let decimal = Decimal(string: value, locale: Locale(identifier: "en_US_POSIX")),
+              decimal > 0
+        else {
+            throw CommandValidationError.invalid(field: "CPU limit", value: value)
+        }
+        self.value = value
+    }
+}
+
+struct MemoryLimit: Equatable, Sendable {
+    let value: String
+
+    init(_ value: String) throws {
+        guard value.range(
+            of: #"^[1-9][0-9]*(?:[KMGTPEkmgtpe](?:[Bb])?)?$"#,
+            options: .regularExpression
+        ) != nil else {
+            throw CommandValidationError.invalid(field: "Memory limit", value: value)
+        }
+        self.value = value
+    }
+}
+
+struct EnvironmentVariable: Equatable, Sendable {
+    let key: String
+    let value: String
+
+    init(key: String, value: String) throws {
+        guard key.range(of: #"^[A-Za-z_][A-Za-z0-9_]*$"#, options: .regularExpression) != nil else {
+            throw CommandValidationError.invalid(field: "Environment variable key", value: key)
+        }
+        guard !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+            throw CommandValidationError.invalid(field: "Environment variable value", value: value)
+        }
+        self.key = key
+        self.value = value
+    }
+
+    var argument: String {
+        "\(key)=\(value)"
+    }
+}
+
+enum PortProtocol: String, Equatable, Sendable {
+    case tcp
+    case udp
+}
+
+struct PortMapping: Equatable, Sendable {
+    let hostAddress: String?
+    let hostPort: Int
+    let containerPort: Int
+    let `protocol`: PortProtocol
+
+    init(
+        hostAddress: String? = nil,
+        hostPort: Int,
+        containerPort: Int,
+        protocol: PortProtocol = .tcp
+    ) throws {
+        guard (1...65_535).contains(hostPort) else {
+            throw CommandValidationError.outOfRange(field: "Host port", value: hostPort)
+        }
+        guard (1...65_535).contains(containerPort) else {
+            throw CommandValidationError.outOfRange(field: "Container port", value: containerPort)
+        }
+        if let hostAddress {
+            guard Self.isIPAddress(hostAddress) else {
+                throw CommandValidationError.invalid(field: "Host IP address", value: hostAddress)
+            }
+        }
+        self.hostAddress = hostAddress
+        self.hostPort = hostPort
+        self.containerPort = containerPort
+        self.protocol = `protocol`
+    }
+
+    var argument: String {
+        let address = hostAddress.map { $0.contains(":") ? "[\($0)]:" : "\($0):" } ?? ""
+        let protocolSuffix = `protocol` == .tcp ? "" : "/\(`protocol`.rawValue)"
+        return "\(address)\(hostPort):\(containerPort)\(protocolSuffix)"
+    }
+
+    private static func isIPAddress(_ value: String) -> Bool {
+        var ipv4 = in_addr()
+        if inet_pton(AF_INET, value, &ipv4) == 1 {
+            return true
+        }
+        var ipv6 = in6_addr()
+        return inet_pton(AF_INET6, value, &ipv6) == 1
+    }
+}
+
+struct RunConfiguration: Equatable, Sendable {
+    let image: ImageReference
+    let name: ContainerIdentifier?
+    let detached: Bool
+    let removeWhenStopped: Bool
+    let cpuLimit: CPULimit?
+    let memoryLimit: MemoryLimit?
+    let ports: [PortMapping]
+    let environment: [EnvironmentVariable]
+    let command: [String]
+
+    init(
+        image: String,
+        name: String? = nil,
+        detached: Bool = true,
+        removeWhenStopped: Bool = false,
+        cpuLimit: String? = nil,
+        memoryLimit: String? = nil,
+        ports: [PortMapping] = [],
+        environment: [EnvironmentVariable] = [],
+        command: [String] = []
+    ) throws {
+        self.image = try ImageReference(validating: image)
+        if let name {
+            self.name = try ContainerIdentifier(validating: name)
+        } else {
+            self.name = nil
+        }
+        self.detached = detached
+        self.removeWhenStopped = removeWhenStopped
+        if let cpuLimit {
+            self.cpuLimit = try CPULimit(cpuLimit)
+        } else {
+            self.cpuLimit = nil
+        }
+        if let memoryLimit {
+            self.memoryLimit = try MemoryLimit(memoryLimit)
+        } else {
+            self.memoryLimit = nil
+        }
+        self.ports = ports
+        self.environment = environment
+        self.command = command
+    }
+
+    var arguments: [String] {
+        var result = ["run", "--progress", "plain"]
+        if detached {
+            result.append("--detach")
+        }
+        if removeWhenStopped {
+            result.append("--rm")
+        }
+        if let name {
+            result += ["--name", name.rawValue]
+        }
+        if let cpuLimit {
+            result += ["--cpus", cpuLimit.value]
+        }
+        if let memoryLimit {
+            result += ["--memory", memoryLimit.value]
+        }
+        for port in ports {
+            result += ["--publish", port.argument]
+        }
+        for variable in environment {
+            result += ["--env", variable.argument]
+        }
+        result.append(image.rawValue)
+        result += command
+        return result
+    }
+}
