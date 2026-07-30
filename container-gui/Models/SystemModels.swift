@@ -1,13 +1,13 @@
 import Foundation
 
-struct SystemStatusDTO: Decodable, Equatable, Sendable {
+nonisolated struct SystemStatusDTO: Decodable, Equatable, Sendable {
     let status: String?
     let healthy: Bool?
     let version: String?
     let message: String?
 }
 
-struct SystemStatus: Equatable, Sendable {
+nonisolated struct SystemStatus: Equatable, Sendable {
     let isRunning: Bool
     let version: String?
     let message: String?
@@ -19,14 +19,14 @@ struct SystemStatus: Equatable, Sendable {
     }
 }
 
-struct SystemVersionDTO: Decodable, Equatable, Sendable {
+nonisolated struct SystemVersionDTO: Decodable, Equatable, Sendable {
     let appName: String
     let version: String
     let buildType: String?
     let commit: String?
 }
 
-struct SystemVersion: Equatable, Sendable {
+nonisolated struct SystemVersion: Equatable, Sendable {
     let cli: SystemVersionDTO?
     let server: SystemVersionDTO?
 

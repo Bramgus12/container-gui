@@ -346,14 +346,14 @@ Build the app as a sequence of small, independently testable increments. Each st
 
 **Tasks:**
 
-- [ ] Check Apple silicon and the supported macOS version.
-- [ ] Look for `/usr/local/bin/container`.
-- [ ] Support a user-selected executable as a fallback and persist it as a URL bookmark.
-- [ ] Validate the executable with `container system version --format json`.
-- [ ] Parse and display CLI/server versions.
-- [ ] Check `container system status --format json`.
-- [ ] Model readiness as explicit states: checking, missing CLI, unsupported version, service stopped, failure, and ready.
-- [ ] Add retry and reset-custom-path actions.
+- [x] Check Apple silicon and the supported macOS version.
+- [x] Look for `/usr/local/bin/container`.
+- [x] Support a user-selected executable as a fallback and persist it as a URL bookmark.
+- [x] Validate the executable with `container system version --format json`.
+- [x] Parse and display CLI/server versions.
+- [x] Check `container system status --format json`.
+- [x] Model readiness as explicit states: checking, missing CLI, unsupported version, service stopped, failure, and ready.
+- [x] Add retry and reset-custom-path actions.
 
 **Deliverable:** a preflight service that converts installation state into a single typed readiness value.
 
