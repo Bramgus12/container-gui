@@ -365,12 +365,12 @@ Build the app as a sequence of small, independently testable increments. Each st
 
 **Tasks:**
 
-- [ ] Create a setup screen driven by the preflight state.
-- [ ] Link missing-CLI users to Apple's installation instructions.
-- [ ] Add **Choose Executable…** and **Retry**.
-- [ ] Add **Start Service** only when the CLI is valid and the service is stopped.
-- [ ] Show sanitized stderr, exit code, and a copy-diagnostics action on failure.
-- [ ] Transition to the main navigation only when preflight reports ready.
+- [x] Create a setup screen driven by the preflight state.
+- [x] Link missing-CLI users to Apple's installation instructions.
+- [x] Add **Choose Executable…** and **Retry**.
+- [x] Add **Start Service** only when the CLI is valid and the service is stopped.
+- [x] Show sanitized stderr, exit code, and a copy-diagnostics action on failure.
+- [x] Transition to the main navigation only when preflight reports ready.
 
 **Deliverable:** a user can diagnose and resolve all supported setup conditions without opening the debugger.
 

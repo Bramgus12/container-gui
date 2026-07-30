@@ -75,10 +75,12 @@ nonisolated struct PreflightDiagnostic: Equatable, Sendable {
     let exitCode: Int32?
 
     init(error: Error) {
-        summary = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        summary = DiagnosticSanitizer.sanitize(
+            (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        )
         if case .nonZeroExit(let invocation, let exitCode, let standardError) = error as? CLIError {
             self.invocation = invocation
-            self.standardError = standardError
+            self.standardError = DiagnosticSanitizer.sanitize(standardError)
             self.exitCode = exitCode
         } else {
             invocation = nil
@@ -88,10 +90,33 @@ nonisolated struct PreflightDiagnostic: Equatable, Sendable {
     }
 
     init(summary: String) {
-        self.summary = summary
+        self.summary = DiagnosticSanitizer.sanitize(summary)
         invocation = nil
         standardError = nil
         exitCode = nil
+    }
+}
+
+nonisolated enum DiagnosticSanitizer {
+    static func sanitize(_ value: String) -> String {
+        var result = value
+        let patterns = [
+            #"(?i)\b(password|passwd|token|secret|api[_-]?key|access[_-]?key)\b(\s*[:=]\s*)([^\s,;]+)"#,
+            #"(?i)\b(bearer)(\s+)([A-Za-z0-9._~+/=-]+)"#,
+        ]
+
+        for pattern in patterns {
+            guard let expression = try? NSRegularExpression(pattern: pattern) else {
+                continue
+            }
+            let range = NSRange(result.startIndex..<result.endIndex, in: result)
+            result = expression.stringByReplacingMatches(
+                in: result,
+                range: range,
+                withTemplate: "$1$2<redacted>"
+            )
+        }
+        return result
     }
 }
 
@@ -307,6 +332,27 @@ actor PreflightService {
     @discardableResult
     func resetCustomExecutable() async -> PreflightReadiness {
         await bookmarkStore.reset()
+        return await check()
+    }
+
+    @discardableResult
+    func startService() async -> PreflightReadiness {
+        guard case .serviceStopped(let context) = readiness else {
+            return await check()
+        }
+        guard fileChecker.isExecutableFile(at: context.executableURL) else {
+            return finish(.missingCLI(customExecutableURL: context.executableURL))
+        }
+
+        do {
+            let cli = cliFactory.makeCLI(executableURL: context.executableURL)
+            _ = try await cli.run(.systemStart)
+        } catch {
+            return finish(.failure(
+                executableURL: context.executableURL,
+                diagnostic: PreflightDiagnostic(error: error)
+            ))
+        }
         return await check()
     }
 

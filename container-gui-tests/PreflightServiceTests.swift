@@ -216,6 +216,60 @@ final class PreflightServiceTests: XCTestCase {
         XCTAssertEqual(firstState, retriedState)
     }
 
+    func testStartServiceRunsCommandAndRechecksReadiness() async {
+        let cli = StartableStubContainerCLI()
+        let service = PreflightService(
+            platform: PlatformSnapshot(
+                architecture: "arm64",
+                operatingSystemVersion: PlatformVersion(major: 26, minor: 0, patch: 0)
+            ),
+            standardExecutableURLs: [executableURL],
+            bookmarkStore: MemoryBookmarkStore(),
+            fileChecker: StubExecutableFileChecker(executableURLs: [executableURL]),
+            cliFactory: StartableStubContainerCLIFactory(cli: cli)
+        )
+
+        guard case .serviceStopped = await service.check() else {
+            return XCTFail("Expected stopped service before starting")
+        }
+        guard case .ready = await service.startService() else {
+            return XCTFail("Expected ready service after starting")
+        }
+        let commands = await cli.commands
+        XCTAssertEqual(
+            commands,
+            [.systemVersion, .systemStatus, .systemStart, .systemVersion, .systemStatus]
+        )
+    }
+
+    func testStartServiceFailurePreservesDiagnosticDetails() async {
+        let cli = StartableStubContainerCLI(startError: .nonZeroExit(
+            invocation: "/test/container system start --disable-kernel-install",
+            exitCode: 8,
+            standardError: "token=do-not-copy start failed"
+        ))
+        let service = PreflightService(
+            platform: PlatformSnapshot(
+                architecture: "arm64",
+                operatingSystemVersion: PlatformVersion(major: 26, minor: 0, patch: 0)
+            ),
+            standardExecutableURLs: [executableURL],
+            bookmarkStore: MemoryBookmarkStore(),
+            fileChecker: StubExecutableFileChecker(executableURLs: [executableURL]),
+            cliFactory: StartableStubContainerCLIFactory(cli: cli)
+        )
+
+        _ = await service.check()
+        let state = await service.startService()
+
+        guard case .failure(_, let diagnostic) = state else {
+            return XCTFail("Expected start failure")
+        }
+        XCTAssertEqual(diagnostic.exitCode, 8)
+        XCTAssertTrue(diagnostic.standardError?.contains("token=<redacted>") == true)
+        XCTAssertFalse(diagnostic.standardError?.contains("do-not-copy") == true)
+    }
+
     func testSemanticVersionsSupportPrereleaseSuffixAndBounds() throws {
         XCTAssertEqual(try SemanticVersion("1.2.3-beta.1"), SemanticVersion(
             major: 1,
@@ -340,5 +394,65 @@ nonisolated private struct StubContainerCLI: ContainerCLI {
         _ command: ContainerCommand
     ) -> AsyncThrowingStream<ProcessEvent, Error> {
         AsyncThrowingStream { $0.finish() }
+    }
+}
+
+nonisolated private struct StartableStubContainerCLIFactory: ContainerCLIMaking {
+    let cli: StartableStubContainerCLI
+
+    func makeCLI(executableURL: URL) -> any ContainerCLI {
+        cli
+    }
+}
+
+private actor StartableStubContainerCLI: ContainerCLI {
+    private(set) var commands: [ContainerCommand] = []
+    private var statusChecks = 0
+    private let startError: CLIError?
+
+    init(startError: CLIError? = nil) {
+        self.startError = startError
+    }
+
+    func run(_ command: ContainerCommand) throws -> CommandResult {
+        commands.append(command)
+        switch command {
+        case .systemVersion:
+            return testResult("""
+            [
+              {"appName":"container","version":"1.0.0"},
+              {"appName":"container-apiserver","version":"1.0.0"}
+            ]
+            """)
+        case .systemStatus:
+            statusChecks += 1
+            return testResult(statusChecks == 1
+                ? #"{"status":"stopped","healthy":false}"#
+                : #"{"status":"ready","healthy":true}"#
+            )
+        case .systemStart:
+            if let startError {
+                throw startError
+            }
+            return testResult("")
+        default:
+            throw CLIError.invalidOutput(description: "Unexpected test command")
+        }
+    }
+
+    nonisolated func stream(
+        _ command: ContainerCommand
+    ) -> AsyncThrowingStream<ProcessEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
+
+    private func testResult(_ output: String) -> CommandResult {
+        CommandResult(
+            standardOutput: output,
+            standardError: "",
+            exitCode: 0,
+            duration: .zero,
+            invocation: "/test/container"
+        )
     }
 }

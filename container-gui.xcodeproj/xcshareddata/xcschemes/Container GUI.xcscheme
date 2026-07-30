@@ -41,6 +41,17 @@
                ReferencedContainer = "container:container-gui.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "B20000000000000000000006"
+               BuildableName = "Container GUIUITests.xctest"
+               BlueprintName = "Container GUIUITests"
+               ReferencedContainer = "container:container-gui.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
