@@ -11,7 +11,7 @@ import SwiftUI
 struct Container_GUIApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView(model: AppDependencies.makeSetupModel())
+            ContentView(model: AppDependencies.makeAppModel())
         }
     }
 }

@@ -382,13 +382,13 @@ Build the app as a sequence of small, independently testable increments. Each st
 
 **Tasks:**
 
-- [ ] Implement `container list --all --format json`.
-- [ ] Decode output into `ContainerSummary` values with tolerant unknown-field handling.
-- [ ] Create `AppModel` as the `@MainActor @Observable` composition root.
-- [ ] Build a `NavigationSplitView` with Containers, Images, System, and Settings destinations.
-- [ ] Add a macOS table for ID/name, image, state, architecture, address, and creation time.
-- [ ] Add refresh, search, running/stopped filters, selection, empty state, and error state.
-- [ ] Prevent stale refresh results from replacing newer data.
+- [x] Implement `container list --all --format json`.
+- [x] Decode output into `ContainerSummary` values with tolerant unknown-field handling.
+- [x] Create `AppModel` as the `@MainActor @Observable` composition root.
+- [x] Build a `NavigationSplitView` with Containers, Images, System, and Settings destinations.
+- [x] Add a macOS table for ID/name, image, state, architecture, address, and creation time.
+- [x] Add refresh, search, running/stopped filters, selection, empty state, and error state.
+- [x] Prevent stale refresh results from replacing newer data.
 
 **Deliverable:** a responsive, searchable container browser.
 

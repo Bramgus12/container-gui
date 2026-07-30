@@ -7,14 +7,14 @@
 	objects = {
 
 /* Begin PBXContainerItemProxy section */
-		B2000000000000000000000A /* PBXContainerItemProxy */ = {
+		A1000000000000000000000A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F73B64CF301BC06B009E09E1 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = F73B64D6301BC06B009E09E1;
 			remoteInfo = "Container GUI";
 		};
-		A1000000000000000000000A /* PBXContainerItemProxy */ = {
+		B2000000000000000000000A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F73B64CF301BC06B009E09E1 /* Project object */;
 			proxyType = 1;
@@ -24,20 +24,20 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		B20000000000000000000001 /* Container GUIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Container GUIUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000001 /* Container GUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Container GUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000000000000000000001 /* Container GUIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Container GUIUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F73B64D7301BC06B009E09E1 /* Container GUI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Container GUI.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		B20000000000000000000002 /* container-gui-ui-tests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "container-gui-ui-tests";
-			sourceTree = "<group>";
-		};
 		A10000000000000000000002 /* container-gui-tests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "container-gui-tests";
+			sourceTree = "<group>";
+		};
+		B20000000000000000000002 /* container-gui-ui-tests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "container-gui-ui-tests";
 			sourceTree = "<group>";
 		};
 		F73B64D9301BC06B009E09E1 /* container-gui */ = {
@@ -48,12 +48,12 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		B20000000000000000000003 /* Frameworks */ = {
+		A10000000000000000000003 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 			);
 		};
-		A10000000000000000000003 /* Frameworks */ = {
+		B20000000000000000000003 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 			);
@@ -70,7 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				F73B64D9301BC06B009E09E1 /* container-gui */,
-				A10000000000000000000002 /* Container GUITests */,
+				A10000000000000000000002 /* container-gui-tests */,
 				B20000000000000000000002 /* container-gui-ui-tests */,
 				F73B64D8301BC06B009E09E1 /* Products */,
 			);
@@ -89,27 +89,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		B20000000000000000000006 /* Container GUIUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = B20000000000000000000009 /* Build configuration list for PBXNativeTarget "Container GUIUITests" */;
-			buildPhases = (
-				B20000000000000000000004 /* Sources */,
-				B20000000000000000000003 /* Frameworks */,
-				B20000000000000000000005 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				B2000000000000000000000B /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				B20000000000000000000002 /* container-gui-ui-tests */,
-			);
-			name = "Container GUIUITests";
-			productName = "Container GUIUITests";
-			productReference = B20000000000000000000001 /* Container GUIUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
 		A10000000000000000000006 /* Container GUITests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A10000000000000000000009 /* Build configuration list for PBXNativeTarget "Container GUITests" */;
@@ -131,6 +110,27 @@
 			productReference = A10000000000000000000001 /* Container GUITests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		B20000000000000000000006 /* Container GUIUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B20000000000000000000009 /* Build configuration list for PBXNativeTarget "Container GUIUITests" */;
+			buildPhases = (
+				B20000000000000000000004 /* Sources */,
+				B20000000000000000000003 /* Frameworks */,
+				B20000000000000000000005 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B2000000000000000000000B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B20000000000000000000002 /* container-gui-ui-tests */,
+			);
+			name = "Container GUIUITests";
+			productName = "Container GUIUITests";
+			productReference = B20000000000000000000001 /* Container GUIUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		F73B64D6301BC06B009E09E1 /* Container GUI */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F73B64E2301BC06C009E09E1 /* Build configuration list for PBXNativeTarget "Container GUI" */;
@@ -142,7 +142,7 @@
 			buildRules = (
 			);
 			fileSystemSynchronizedGroups = (
-				F73B64D9301BC06B009E09E1 /* Container GUI */,
+				F73B64D9301BC06B009E09E1 /* container-gui */,
 			);
 			name = "Container GUI";
 			productName = "Container GUI";
@@ -172,7 +172,7 @@
 					};
 				};
 			};
-			buildConfigurationList = F73B64D2301BC06B009E09E1 /* Build configuration list for PBXProject "Container GUI" */;
+			buildConfigurationList = F73B64D2301BC06B009E09E1 /* Build configuration list for PBXProject "container-gui" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -194,12 +194,12 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		B20000000000000000000005 /* Resources */ = {
+		A10000000000000000000005 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
 		};
-		A10000000000000000000005 /* Resources */ = {
+		B20000000000000000000005 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -212,12 +212,12 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		B20000000000000000000004 /* Sources */ = {
+		A10000000000000000000004 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
 			);
 		};
-		A10000000000000000000004 /* Sources */ = {
+		B20000000000000000000004 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
 			);
@@ -243,36 +243,6 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		B20000000000000000000007 /* Debug configuration for PBXNativeTarget "Container GUIUITests" */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = CN495B7KTS;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.gussekloo.Container-GUIUITests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = "Container GUI";
-			};
-			name = Debug;
-		};
-		B20000000000000000000008 /* Release configuration for PBXNativeTarget "Container GUIUITests" */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = CN495B7KTS;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.gussekloo.Container-GUIUITests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = "Container GUI";
-			};
-			name = Release;
-		};
 		A10000000000000000000007 /* Debug configuration for PBXNativeTarget "Container GUITests" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -305,7 +275,37 @@
 			};
 			name = Release;
 		};
-		F73B64E0301BC06C009E09E1 /* Debug configuration for PBXProject "Container GUI" */ = {
+		B20000000000000000000007 /* Debug configuration for PBXNativeTarget "Container GUIUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = CN495B7KTS;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gussekloo.Container-GUIUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "Container GUI";
+			};
+			name = Debug;
+		};
+		B20000000000000000000008 /* Release configuration for PBXNativeTarget "Container GUIUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = CN495B7KTS;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.gussekloo.Container-GUIUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "Container GUI";
+			};
+			name = Release;
+		};
+		F73B64E0301BC06C009E09E1 /* Debug configuration for PBXProject "container-gui" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -369,7 +369,7 @@
 			};
 			name = Debug;
 		};
-		F73B64E1301BC06C009E09E1 /* Release configuration for PBXProject "Container GUI" */ = {
+		F73B64E1301BC06C009E09E1 /* Release configuration for PBXProject "container-gui" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -494,14 +494,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B20000000000000000000009 /* Build configuration list for PBXNativeTarget "Container GUIUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				B20000000000000000000007 /* Debug configuration for PBXNativeTarget "Container GUIUITests" */,
-				B20000000000000000000008 /* Release configuration for PBXNativeTarget "Container GUIUITests" */,
-			);
-			defaultConfigurationName = Release;
-		};
 		A10000000000000000000009 /* Build configuration list for PBXNativeTarget "Container GUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -510,11 +502,19 @@
 			);
 			defaultConfigurationName = Release;
 		};
-		F73B64D2301BC06B009E09E1 /* Build configuration list for PBXProject "Container GUI" */ = {
+		B20000000000000000000009 /* Build configuration list for PBXNativeTarget "Container GUIUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				F73B64E0301BC06C009E09E1 /* Debug configuration for PBXProject "Container GUI" */,
-				F73B64E1301BC06C009E09E1 /* Release configuration for PBXProject "Container GUI" */,
+				B20000000000000000000007 /* Debug configuration for PBXNativeTarget "Container GUIUITests" */,
+				B20000000000000000000008 /* Release configuration for PBXNativeTarget "Container GUIUITests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		F73B64D2301BC06B009E09E1 /* Build configuration list for PBXProject "container-gui" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F73B64E0301BC06C009E09E1 /* Debug configuration for PBXProject "container-gui" */,
+				F73B64E1301BC06C009E09E1 /* Release configuration for PBXProject "container-gui" */,
 			);
 			defaultConfigurationName = Release;
 		};

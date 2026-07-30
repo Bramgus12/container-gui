@@ -2,18 +2,20 @@ import Foundation
 
 @MainActor
 enum AppDependencies {
-    static func makeSetupModel(
+    static func makeAppModel(
         processInfo: ProcessInfo = .processInfo
-    ) -> SetupModel {
+    ) -> AppModel {
         #if DEBUG
         if let scenario = UITestPreflightScenario(arguments: processInfo.arguments) {
-            return SetupModel(
-                preflight: UITestPreflightService(scenario: scenario),
-                diagnosticsCopier: SystemDiagnosticsCopier()
+            return AppModel(
+                setup: SetupModel(
+                    preflight: UITestPreflightService(scenario: scenario),
+                    diagnosticsCopier: SystemDiagnosticsCopier()
+                )
             )
         }
         #endif
-        return SetupModel()
+        return AppModel()
     }
 }
 

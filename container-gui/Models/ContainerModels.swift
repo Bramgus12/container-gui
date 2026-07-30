@@ -1,6 +1,6 @@
 import Foundation
 
-struct ContainerDTO: Decodable, Equatable, Sendable {
+nonisolated struct ContainerDTO: Decodable, Equatable, Sendable {
     let id: String?
     let configuration: ContainerConfigurationDTO?
     let status: ContainerStatusDTO?
@@ -27,7 +27,7 @@ struct ContainerDTO: Decodable, Equatable, Sendable {
     }
 }
 
-struct ContainerConfigurationDTO: Decodable, Equatable, Sendable {
+nonisolated struct ContainerConfigurationDTO: Decodable, Equatable, Sendable {
     let id: String?
     let image: CLIReferenceDTO?
     let platform: PlatformDTO?
@@ -41,7 +41,7 @@ struct ContainerConfigurationDTO: Decodable, Equatable, Sendable {
     let readOnly: Bool?
 }
 
-struct CLIReferenceDTO: Decodable, Equatable, Sendable {
+nonisolated struct CLIReferenceDTO: Decodable, Equatable, Sendable {
     let reference: String?
     let digest: String?
 
@@ -64,20 +64,20 @@ struct CLIReferenceDTO: Decodable, Equatable, Sendable {
     }
 }
 
-struct PlatformDTO: Decodable, Equatable, Sendable {
+nonisolated struct PlatformDTO: Decodable, Equatable, Sendable {
     let os: String?
     let architecture: String?
     let variant: String?
 }
 
-struct InitProcessDTO: Decodable, Equatable, Sendable {
+nonisolated struct InitProcessDTO: Decodable, Equatable, Sendable {
     let executable: String?
     let arguments: [String]?
     let environment: [String]?
     let workingDirectory: String?
 }
 
-struct ContainerResourcesDTO: Decodable, Equatable, Sendable {
+nonisolated struct ContainerResourcesDTO: Decodable, Equatable, Sendable {
     let cpus: Int?
     let memoryInBytes: UInt64?
 
@@ -94,7 +94,7 @@ struct ContainerResourcesDTO: Decodable, Equatable, Sendable {
     }
 }
 
-struct ContainerStatusDTO: Decodable, Equatable, Sendable {
+nonisolated struct ContainerStatusDTO: Decodable, Equatable, Sendable {
     let state: String?
     let startedDate: String?
     let exitCode: Int?
@@ -125,7 +125,7 @@ struct ContainerStatusDTO: Decodable, Equatable, Sendable {
     }
 }
 
-struct ContainerNetworkDTO: Decodable, Equatable, Sendable {
+nonisolated struct ContainerNetworkDTO: Decodable, Equatable, Sendable {
     let network: String?
     let hostname: String?
     let address: String?
@@ -136,7 +136,7 @@ struct ContainerNetworkDTO: Decodable, Equatable, Sendable {
     let mtu: Int?
 }
 
-struct PublishedPortDTO: Decodable, Equatable, Sendable {
+nonisolated struct PublishedPortDTO: Decodable, Equatable, Sendable {
     let hostAddress: String?
     let hostPort: Int?
     let containerPort: Int?
@@ -160,7 +160,7 @@ struct PublishedPortDTO: Decodable, Equatable, Sendable {
     }
 }
 
-struct ContainerMountDTO: Decodable, Equatable, Sendable {
+nonisolated struct ContainerMountDTO: Decodable, Equatable, Sendable {
     let source: String?
     let destination: String?
     let options: [String]?
@@ -184,7 +184,7 @@ struct ContainerMountDTO: Decodable, Equatable, Sendable {
     }
 }
 
-enum ContainerState: Equatable, Sendable {
+nonisolated enum ContainerState: Equatable, Sendable {
     case created
     case running
     case stopped
@@ -209,7 +209,7 @@ enum ContainerState: Equatable, Sendable {
     }
 }
 
-struct ContainerSummary: Identifiable, Equatable, Sendable {
+nonisolated struct ContainerSummary: Identifiable, Equatable, Sendable {
     let id: String
     let image: String?
     let state: ContainerState
@@ -233,7 +233,7 @@ struct ContainerSummary: Identifiable, Equatable, Sendable {
     }
 }
 
-struct ContainerNetwork: Equatable, Sendable {
+nonisolated struct ContainerNetwork: Equatable, Sendable {
     let name: String?
     let hostname: String?
     let ipv4Address: String?
@@ -241,7 +241,7 @@ struct ContainerNetwork: Equatable, Sendable {
     let macAddress: String?
 }
 
-struct ContainerDetails: Identifiable, Equatable, Sendable {
+nonisolated struct ContainerDetails: Identifiable, Equatable, Sendable {
     let id: String
     let summary: ContainerSummary
     let networks: [ContainerNetwork]
@@ -271,7 +271,7 @@ struct ContainerDetails: Identifiable, Equatable, Sendable {
     }
 }
 
-private func parseCLIDate(_ value: String?) -> Date? {
+nonisolated private func parseCLIDate(_ value: String?) -> Date? {
     guard let value else {
         return nil
     }
@@ -280,7 +280,7 @@ private func parseCLIDate(_ value: String?) -> Date? {
     return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
 }
 
-private extension KeyedDecodingContainer {
+nonisolated private extension KeyedDecodingContainer {
     func decodeLossyIntIfPresent(forKey key: Key) throws -> Int? {
         if let value = try? decodeIfPresent(Int.self, forKey: key) {
             return value
