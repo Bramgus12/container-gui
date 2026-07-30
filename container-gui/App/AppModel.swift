@@ -249,6 +249,8 @@ final class AppModel {
     private var containerRunner: (any ContainerRunning)?
     private var containerDiagnoser: (any ContainerDiagnosing)?
     private var imageService: (any ImageManaging)?
+    private let failureLog: OperationFailureLog
+    private var systemModel: SystemModel?
     private var configuredExecutableURL: URL?
     private var refreshGeneration = 0
     private var imageRefreshGeneration = 0
@@ -265,7 +267,8 @@ final class AppModel {
         containerMutator: (any ContainerMutating)? = nil,
         containerRunner: (any ContainerRunning)? = nil,
         containerDiagnoser: (any ContainerDiagnosing)? = nil,
-        imageService: (any ImageManaging)? = nil
+        imageService: (any ImageManaging)? = nil,
+        failureLog: OperationFailureLog? = nil
     ) {
         self.setup = setup
         self.cliFactory = cliFactory
@@ -274,6 +277,7 @@ final class AppModel {
         self.containerRunner = containerRunner
         self.containerDiagnoser = containerDiagnoser
         self.imageService = imageService
+        self.failureLog = failureLog ?? OperationFailureLog()
     }
 
     var filteredContainers: [ContainerSummary] {
@@ -306,6 +310,11 @@ final class AppModel {
             containerRunner = CLIContainerRunService(cli: cli)
             containerDiagnoser = CLIContainerDiagnosticsService(cli: cli)
             imageService = CLIImageService(cli: cli)
+            systemModel = SystemModel(
+                context: context,
+                service: CLISystemService(cli: cli),
+                failureLog: failureLog
+            )
             containers = []
             selectedContainerID = nil
             containerListState = .idle
@@ -349,6 +358,7 @@ final class AppModel {
             imageListState = images.isEmpty ? .idle : .loaded
         } catch {
             guard generation == imageRefreshGeneration else { return }
+            failureLog.record(operation: "Refresh images", error: error)
             imageListState = .failed(error.localizedDescription)
         }
     }
@@ -380,6 +390,7 @@ final class AppModel {
         } catch {
             guard generation == imageInspectionGeneration,
                   selectedImageID == selectedID else { return }
+            failureLog.record(operation: "Inspect image", error: error)
             imageInspectionState = .failed(error.localizedDescription)
         }
     }
@@ -392,27 +403,31 @@ final class AppModel {
             throw CLIError.launchFailed(message: "The container executable is not ready.")
         }
 
-        var standardError = ""
-        for try await event in imageService.pullImage(reference: reference) {
-            if case .standardError(let output) = event {
-                standardError.append(output)
-            }
-            if case .terminated(let exitCode) = event, exitCode != 0 {
+        do {
+            var standardError = ""
+            for try await event in imageService.pullImage(reference: reference) {
+                if case .standardError(let output) = event {
+                    standardError.append(output)
+                }
+                if case .terminated(let exitCode) = event, exitCode != 0 {
+                    onEvent(event)
+                    let validatedReference = try ImageReference(validating: reference)
+                    throw CLIError.nonZeroExit(
+                        invocation: ProcessContainerCLI.displayInvocation(
+                            executable: "container",
+                            arguments: ContainerCommand.pullImage(reference: validatedReference).arguments
+                        ),
+                        exitCode: exitCode,
+                        standardError: standardError
+                    )
+                }
                 onEvent(event)
-                let validatedReference = try ImageReference(validating: reference)
-                throw CLIError.nonZeroExit(
-                    invocation: ProcessContainerCLI.displayInvocation(
-                        executable: "container",
-                        arguments: ContainerCommand.pullImage(reference: validatedReference).arguments
-                    ),
-                    exitCode: exitCode,
-                    standardError: standardError
-                )
             }
-            onEvent(event)
+            await refreshImages()
+        } catch {
+            failureLog.record(operation: "Pull image", error: error)
+            throw error
         }
-
-        await refreshImages()
     }
 
     func deleteImage(reference: String) async {
@@ -442,6 +457,7 @@ final class AppModel {
         } catch CLIError.cancelled {
             // Process cancellation is normalized by ProcessContainerCLI.
         } catch {
+            failureLog.record(operation: "Delete image", error: error)
             imageDeletionFailure = ImageDeletionFailure(
                 reference: reference,
                 message: error.localizedDescription
@@ -484,6 +500,7 @@ final class AppModel {
             containerListState = containers.isEmpty ? .idle : .loaded
         } catch {
             guard generation == refreshGeneration else { return }
+            failureLog.record(operation: "Refresh containers", error: error)
             containerListState = .failed(error.localizedDescription)
         }
     }
@@ -530,6 +547,7 @@ final class AppModel {
         } catch CLIError.cancelled {
             // ProcessContainerCLI normalizes process cancellation to CLIError.cancelled.
         } catch {
+            failureLog.record(operation: mutation.displayName + " container", error: error)
             mutationFailure = ContainerMutationFailure(
                 containerID: containerID,
                 mutation: mutation,
@@ -549,6 +567,20 @@ final class AppModel {
         return ContainerDetailModel(containerID: containerID, service: containerDiagnoser)
     }
 
+    func makeSystemModel(context: PreflightContext) -> SystemModel {
+        if let systemModel {
+            return systemModel
+        }
+        let cli = cliFactory.makeCLI(executableURL: context.executableURL)
+        let model = SystemModel(
+            context: context,
+            service: CLISystemService(cli: cli),
+            failureLog: failureLog
+        )
+        systemModel = model
+        return model
+    }
+
     func runContainer(
         _ configuration: RunConfiguration,
         onEvent: (ProcessEvent) -> Void
@@ -558,30 +590,35 @@ final class AppModel {
         }
 
         var standardOutput = ""
-        var standardError = ""
-        for try await event in containerRunner.streamRun(configuration) {
-            switch event {
-            case .standardOutput(let output):
-                standardOutput.append(output)
-            case .standardError(let output):
-                standardError.append(output)
-            case .terminated(let exitCode) where exitCode != 0:
+        do {
+            var standardError = ""
+            for try await event in containerRunner.streamRun(configuration) {
+                switch event {
+                case .standardOutput(let output):
+                    standardOutput.append(output)
+                case .standardError(let output):
+                    standardError.append(output)
+                case .terminated(let exitCode) where exitCode != 0:
+                    onEvent(event)
+                    throw CLIError.nonZeroExit(
+                        invocation: ProcessContainerCLI.displayInvocation(
+                            executable: "container",
+                            arguments: ContainerCommand.run(configuration).arguments
+                        ),
+                        exitCode: exitCode,
+                        standardError: standardError
+                    )
+                case .terminated:
+                    break
+                }
                 onEvent(event)
-                throw CLIError.nonZeroExit(
-                    invocation: ProcessContainerCLI.displayInvocation(
-                        executable: "container",
-                        arguments: ContainerCommand.run(configuration).arguments
-                    ),
-                    exitCode: exitCode,
-                    standardError: standardError
-                )
-            case .terminated:
-                break
             }
-            onEvent(event)
-        }
 
-        await refreshContainers()
+            await refreshContainers()
+        } catch {
+            failureLog.record(operation: "Run container", error: error)
+            throw error
+        }
         selectNewContainer(configuration: configuration, standardOutput: standardOutput)
     }
 

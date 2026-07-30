@@ -472,12 +472,12 @@ Build the app as a sequence of small, independently testable increments. Each st
 
 **Tasks:**
 
-- [ ] Build the System screen with CLI/server versions and service health.
-- [ ] Add disk usage from `container system df --format json`.
-- [ ] Add recent service logs with bounded output.
-- [ ] Add start/stop service actions, confirming stop.
-- [ ] Build a sanitized diagnostics bundle containing app version, OS, architecture, CLI/server versions, recent operation failures, and exit codes.
-- [ ] Exclude DNS, kernel, prune, and bulk `--all` mutations from v1.
+- [x] Build the System screen with CLI/server versions and service health.
+- [x] Add disk usage from `container system df --format json`.
+- [x] Add recent service logs with bounded output.
+- [x] Add start/stop service actions, confirming stop.
+- [x] Build a sanitized diagnostics bundle containing app version, OS, architecture, CLI/server versions, recent operation failures, and exit codes.
+- [x] Exclude DNS, kernel, prune, and bulk `--all` mutations from v1.
 
 **Deliverable:** a support-ready system and diagnostics screen.
 

@@ -100,12 +100,30 @@ nonisolated struct PreflightDiagnostic: Equatable, Sendable {
 nonisolated enum DiagnosticSanitizer {
     static func sanitize(_ value: String) -> String {
         var result = value
-        let patterns = [
-            #"(?i)\b(password|passwd|token|secret|api[_-]?key|access[_-]?key)\b(\s*[:=]\s*)([^\s,;]+)"#,
-            #"(?i)\b(bearer)(\s+)([A-Za-z0-9._~+/=-]+)"#,
+        let replacements = [
+            (
+                #"(?i)\b(bearer)(\s+)([A-Za-z0-9._~+/=-]+)"#,
+                "$1$2<redacted>"
+            ),
+            (
+                #"(?i)(["'][^"']*(?:password|passwd|token|secret|api[_-]?key|access[_-]?key|private[_-]?key|credential|auth)[^"']*["']\s*:\s*)(["'][^"']*["']|[^,\s}\]]+)"#,
+                "$1\"<redacted>\""
+            ),
+            (
+                #"(?i)([A-Za-z0-9_.-]*(?:password|passwd|token|secret|api[_-]?key|access[_-]?key|private[_-]?key|credential|auth)[A-Za-z0-9_.-]*)(\s*[:=]\s*)([^\s,;]+)"#,
+                "$1$2<redacted>"
+            ),
+            (
+                #"(?i)(https?://)[^/@\s:]+:[^/@\s]+@"#,
+                "$1<redacted>@"
+            ),
+            (
+                #"(?is)-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----"#,
+                "<redacted private key>"
+            ),
         ]
 
-        for pattern in patterns {
+        for (pattern, replacement) in replacements {
             guard let expression = try? NSRegularExpression(pattern: pattern) else {
                 continue
             }
@@ -113,7 +131,7 @@ nonisolated enum DiagnosticSanitizer {
             result = expression.stringByReplacingMatches(
                 in: result,
                 range: range,
-                withTemplate: "$1$2<redacted>"
+                withTemplate: replacement
             )
         }
         return result
