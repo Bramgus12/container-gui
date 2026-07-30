@@ -1,6 +1,6 @@
 import Foundation
 
-struct ImageDTO: Decodable, Equatable, Sendable {
+nonisolated struct ImageDTO: Decodable, Equatable, Sendable {
     let reference: String?
     let name: String?
     let digest: String?
@@ -33,15 +33,15 @@ struct ImageDTO: Decodable, Equatable, Sendable {
     }
 }
 
-struct ImageDescriptorDTO: Decodable, Equatable, Sendable {
+nonisolated struct ImageDescriptorDTO: Decodable, Equatable, Sendable {
     let digest: String?
     let size: UInt64?
     let mediaType: String?
 }
 
-struct ImageSummary: Identifiable, Equatable, Sendable {
+nonisolated struct ImageSummary: Identifiable, Equatable, Sendable {
     var id: String {
-        digest ?? reference
+        reference
     }
 
     let reference: String

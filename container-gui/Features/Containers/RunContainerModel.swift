@@ -64,6 +64,10 @@ final class RunContainerModel: Identifiable {
     private(set) var progress = ""
     private(set) var errorMessage: String?
 
+    init(image: String = "") {
+        self.image = image
+    }
+
     var imageError: String? {
         validationMessage {
             _ = try ImageReference(validating: trimmed(image))

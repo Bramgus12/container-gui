@@ -455,12 +455,12 @@ Build the app as a sequence of small, independently testable increments. Each st
 
 **Tasks:**
 
-- [ ] Implement `container image list --verbose --format json`.
-- [ ] Build an image table with refresh, selection, and empty/error states.
-- [ ] Add image inspection.
-- [ ] Add pull with `--progress plain`, incremental progress display, and cancellation.
-- [ ] Add image deletion with confirmation and conflict errors.
-- [ ] Offer a selected image as the default in the run-container sheet.
+- [x] Implement `container image list --verbose --format json`.
+- [x] Build an image table with refresh, selection, and empty/error states.
+- [x] Add image inspection.
+- [x] Add pull with `--progress plain`, incremental progress display, and cancellation.
+- [x] Add image deletion with confirmation and conflict errors.
+- [x] Offer a selected image as the default in the run-container sheet.
 
 **Deliverable:** users can pull, inspect, run, and delete images.
 

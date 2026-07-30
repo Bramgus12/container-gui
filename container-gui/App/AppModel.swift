@@ -15,6 +15,13 @@ nonisolated protocol ContainerRunning: Sendable {
     ) -> AsyncThrowingStream<ProcessEvent, Error>
 }
 
+nonisolated protocol ImageManaging: Sendable {
+    func listImages() async throws -> [ImageSummary]
+    func inspectImage(reference: String) async throws -> String
+    func pullImage(reference: String) -> AsyncThrowingStream<ProcessEvent, Error>
+    func deleteImage(reference: String) async throws
+}
+
 actor CLIContainerListService: ContainerListing {
     private let cli: any ContainerCLI
 
@@ -58,6 +65,55 @@ nonisolated struct CLIContainerRunService: ContainerRunning {
         _ configuration: RunConfiguration
     ) -> AsyncThrowingStream<ProcessEvent, Error> {
         cli.stream(.run(configuration))
+    }
+}
+
+nonisolated struct CLIImageService: ImageManaging {
+    let cli: any ContainerCLI
+
+    func listImages() async throws -> [ImageSummary] {
+        let result = try await cli.run(.listImages)
+        do {
+            return try JSONDecoder()
+                .decode([ImageDTO].self, from: Data(result.standardOutput.utf8))
+                .compactMap(ImageSummary.init(dto:))
+        } catch {
+            throw CLIError.invalidOutput(
+                description: "The image list could not be decoded as JSON: \(error.localizedDescription)"
+            )
+        }
+    }
+
+    func inspectImage(reference: String) async throws -> String {
+        let imageReference = try ImageReference(validating: reference)
+        let result = try await cli.run(.inspectImage(reference: imageReference))
+        let data = Data(result.standardOutput.utf8)
+        do {
+            let object = try JSONSerialization.jsonObject(with: data)
+            let formatted = try JSONSerialization.data(
+                withJSONObject: object,
+                options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            )
+            return String(decoding: formatted, as: UTF8.self)
+        } catch {
+            throw CLIError.invalidOutput(
+                description: "Image inspection could not be decoded as JSON: \(error.localizedDescription)"
+            )
+        }
+    }
+
+    func pullImage(reference: String) -> AsyncThrowingStream<ProcessEvent, Error> {
+        do {
+            let imageReference = try ImageReference(validating: reference)
+            return cli.stream(.pullImage(reference: imageReference))
+        } catch {
+            return AsyncThrowingStream { $0.finish(throwing: error) }
+        }
+    }
+
+    func deleteImage(reference: String) async throws {
+        let imageReference = try ImageReference(validating: reference)
+        _ = try await cli.run(.deleteImage(reference: imageReference))
     }
 }
 
@@ -145,6 +201,26 @@ enum ContainerListState: Equatable, Sendable {
     case failed(String)
 }
 
+enum ImageListState: Equatable, Sendable {
+    case idle
+    case loading
+    case loaded
+    case failed(String)
+}
+
+enum ImageInspectionState: Equatable, Sendable {
+    case idle
+    case loading
+    case loaded(String)
+    case failed(String)
+}
+
+struct ImageDeletionFailure: Identifiable, Equatable, Sendable {
+    let id = UUID()
+    let reference: String
+    let message: String
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -154,19 +230,29 @@ final class AppModel {
     var searchText = ""
     var containerFilter: ContainerFilter = .all
     var selectedContainerID: String?
+    var imageSearchText = ""
+    var selectedImageID: String?
 
     private(set) var containers: [ContainerSummary] = []
     private(set) var containerListState: ContainerListState = .idle
     private(set) var containerMutations: [String: ContainerMutation] = [:]
     private(set) var mutationFailure: ContainerMutationFailure?
+    private(set) var images: [ImageSummary] = []
+    private(set) var imageListState: ImageListState = .idle
+    private(set) var imageInspectionState: ImageInspectionState = .idle
+    private(set) var deletingImageReference: String?
+    private(set) var imageDeletionFailure: ImageDeletionFailure?
 
     private let cliFactory: any ContainerCLIMaking
     private var containerLister: (any ContainerListing)?
     private var containerMutator: (any ContainerMutating)?
     private var containerRunner: (any ContainerRunning)?
     private var containerDiagnoser: (any ContainerDiagnosing)?
+    private var imageService: (any ImageManaging)?
     private var configuredExecutableURL: URL?
     private var refreshGeneration = 0
+    private var imageRefreshGeneration = 0
+    private var imageInspectionGeneration = 0
 
     convenience init() {
         self.init(setup: SetupModel())
@@ -178,7 +264,8 @@ final class AppModel {
         containerLister: (any ContainerListing)? = nil,
         containerMutator: (any ContainerMutating)? = nil,
         containerRunner: (any ContainerRunning)? = nil,
-        containerDiagnoser: (any ContainerDiagnosing)? = nil
+        containerDiagnoser: (any ContainerDiagnosing)? = nil,
+        imageService: (any ImageManaging)? = nil
     ) {
         self.setup = setup
         self.cliFactory = cliFactory
@@ -186,11 +273,27 @@ final class AppModel {
         self.containerMutator = containerMutator
         self.containerRunner = containerRunner
         self.containerDiagnoser = containerDiagnoser
+        self.imageService = imageService
     }
 
     var filteredContainers: [ContainerSummary] {
         containers.filter { container in
             matchesFilter(container) && matchesSearch(container)
+        }
+    }
+
+    var filteredImages: [ImageSummary] {
+        let query = imageSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return images }
+        return images.filter { image in
+            [
+                image.reference,
+                image.digest,
+                image.operatingSystem,
+                image.architecture,
+            ]
+            .compactMap { $0 }
+            .contains { $0.localizedCaseInsensitiveContains(query) }
         }
     }
 
@@ -202,16 +305,158 @@ final class AppModel {
             containerMutator = CLIContainerMutationService(cli: cli)
             containerRunner = CLIContainerRunService(cli: cli)
             containerDiagnoser = CLIContainerDiagnosticsService(cli: cli)
+            imageService = CLIImageService(cli: cli)
             containers = []
             selectedContainerID = nil
             containerListState = .idle
             containerMutations = [:]
             mutationFailure = nil
+            images = []
+            selectedImageID = nil
+            imageListState = .idle
+            imageInspectionState = .idle
+            deletingImageReference = nil
+            imageDeletionFailure = nil
         }
 
         if containerListState == .idle {
             await refreshContainers()
         }
+    }
+
+    func refreshImages() async {
+        guard let imageService else {
+            imageListState = .failed("The container executable is not ready.")
+            return
+        }
+
+        imageRefreshGeneration += 1
+        let generation = imageRefreshGeneration
+        imageListState = .loading
+
+        do {
+            let refreshedImages = try await imageService.listImages()
+            guard generation == imageRefreshGeneration else { return }
+            images = refreshedImages
+            if let selectedImageID,
+               !refreshedImages.contains(where: { $0.id == selectedImageID }) {
+                self.selectedImageID = nil
+                imageInspectionState = .idle
+            }
+            imageListState = .loaded
+        } catch is CancellationError {
+            guard generation == imageRefreshGeneration else { return }
+            imageListState = images.isEmpty ? .idle : .loaded
+        } catch {
+            guard generation == imageRefreshGeneration else { return }
+            imageListState = .failed(error.localizedDescription)
+        }
+    }
+
+    func inspectSelectedImage() async {
+        guard let selectedImage else {
+            imageInspectionGeneration += 1
+            imageInspectionState = .idle
+            return
+        }
+        guard let imageService else {
+            imageInspectionState = .failed("The container executable is not ready.")
+            return
+        }
+
+        imageInspectionGeneration += 1
+        let generation = imageInspectionGeneration
+        let selectedID = selectedImage.id
+        imageInspectionState = .loading
+
+        do {
+            let json = try await imageService.inspectImage(reference: selectedImage.reference)
+            guard generation == imageInspectionGeneration,
+                  selectedImageID == selectedID else { return }
+            imageInspectionState = .loaded(json)
+        } catch is CancellationError {
+            guard generation == imageInspectionGeneration else { return }
+            imageInspectionState = .idle
+        } catch {
+            guard generation == imageInspectionGeneration,
+                  selectedImageID == selectedID else { return }
+            imageInspectionState = .failed(error.localizedDescription)
+        }
+    }
+
+    func pullImage(
+        reference: String,
+        onEvent: (ProcessEvent) -> Void
+    ) async throws {
+        guard let imageService else {
+            throw CLIError.launchFailed(message: "The container executable is not ready.")
+        }
+
+        var standardError = ""
+        for try await event in imageService.pullImage(reference: reference) {
+            if case .standardError(let output) = event {
+                standardError.append(output)
+            }
+            if case .terminated(let exitCode) = event, exitCode != 0 {
+                onEvent(event)
+                let validatedReference = try ImageReference(validating: reference)
+                throw CLIError.nonZeroExit(
+                    invocation: ProcessContainerCLI.displayInvocation(
+                        executable: "container",
+                        arguments: ContainerCommand.pullImage(reference: validatedReference).arguments
+                    ),
+                    exitCode: exitCode,
+                    standardError: standardError
+                )
+            }
+            onEvent(event)
+        }
+
+        await refreshImages()
+    }
+
+    func deleteImage(reference: String) async {
+        guard deletingImageReference == nil else { return }
+        guard images.contains(where: { $0.reference == reference }) else {
+            imageDeletionFailure = ImageDeletionFailure(
+                reference: reference,
+                message: "The image changed. Refresh the list and try again."
+            )
+            return
+        }
+        guard let imageService else {
+            imageDeletionFailure = ImageDeletionFailure(
+                reference: reference,
+                message: "The container executable is not ready."
+            )
+            return
+        }
+
+        imageDeletionFailure = nil
+        deletingImageReference = reference
+        defer { deletingImageReference = nil }
+        do {
+            try await imageService.deleteImage(reference: reference)
+        } catch is CancellationError {
+            // Cancellation is intentional.
+        } catch CLIError.cancelled {
+            // Process cancellation is normalized by ProcessContainerCLI.
+        } catch {
+            imageDeletionFailure = ImageDeletionFailure(
+                reference: reference,
+                message: error.localizedDescription
+            )
+        }
+        await refreshImages()
+    }
+
+    func dismissImageDeletionFailure() {
+        imageDeletionFailure = nil
+    }
+
+    var selectedImage: ImageSummary? {
+        guard let selectedImageID else { return nil }
+        return images.first { $0.id == selectedImageID }
     }
 
     func refreshContainers() async {

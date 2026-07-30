@@ -334,7 +334,9 @@ private struct MainNavigationView: View {
             switch model.destination {
             case .containers:
                 ContainerListView(model: model)
-            case .images, .system, .settings:
+            case .images:
+                ImageListView(model: model)
+            case .system, .settings:
                 placeholder
             case nil:
                 ContentUnavailableView(
