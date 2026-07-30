@@ -1,6 +1,6 @@
 import Foundation
 
-enum ContainerCommand: Equatable, Sendable {
+nonisolated enum ContainerCommand: Equatable, Sendable {
     case systemStart
     case systemStop
     case systemStatus
@@ -71,7 +71,7 @@ enum ContainerCommand: Equatable, Sendable {
     }
 }
 
-struct StopTimeout: Equatable, Sendable {
+nonisolated struct StopTimeout: Equatable, Sendable {
     let seconds: Int
 
     init(seconds: Int) throws {
@@ -82,7 +82,7 @@ struct StopTimeout: Equatable, Sendable {
     }
 }
 
-struct LogTail: Equatable, Sendable {
+nonisolated struct LogTail: Equatable, Sendable {
     let lines: Int
 
     init(lines: Int) throws {
@@ -93,7 +93,7 @@ struct LogTail: Equatable, Sendable {
     }
 }
 
-struct SystemLogPeriod: Equatable, Sendable {
+nonisolated struct SystemLogPeriod: Equatable, Sendable {
     let rawValue: String
 
     init(value: Int, unit: Unit) throws {

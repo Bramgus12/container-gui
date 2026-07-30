@@ -1,0 +1,30 @@
+#!/bin/sh
+
+case "${FAKE_CONTAINER_SCENARIO:-success}" in
+    success)
+        printf 'fixture stdout: %s\n' "$*"
+        printf 'fixture stderr\n' >&2
+        ;;
+    failure)
+        printf 'simulated failure\n' >&2
+        exit "${FAKE_CONTAINER_EXIT_CODE:-23}"
+        ;;
+    invalid-utf8)
+        printf '\377valid\n'
+        ;;
+    delay)
+        exec /bin/sleep 30
+        ;;
+    large)
+        i=0
+        while [ "$i" -lt 20000 ]; do
+            printf 'stdout-%05d-abcdefghijklmnopqrstuvwxyz\n' "$i"
+            printf 'stderr-%05d-abcdefghijklmnopqrstuvwxyz\n' "$i" >&2
+            i=$((i + 1))
+        done
+        ;;
+    *)
+        printf 'unknown fixture scenario\n' >&2
+        exit 64
+        ;;
+esac

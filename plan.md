@@ -326,15 +326,15 @@ Build the app as a sequence of small, independently testable increments. Each st
 
 **Tasks:**
 
-- [ ] Implement `ProcessContainerCLI` as an actor.
-- [ ] Launch only an absolute executable URL using `Process.arguments`.
-- [ ] Capture stdout and stderr on separate pipes and read them concurrently.
-- [ ] Return exit status, output, duration, and a sanitized command description.
-- [ ] Map launch errors and nonzero exits to typed errors.
-- [ ] Propagate Swift task cancellation to the child process.
-- [ ] Size-limit retained output and handle invalid UTF-8 safely.
-- [ ] Create a test fixture executable that can emit output, errors, delays, and configurable exit codes.
-- [ ] Test large simultaneous stdout/stderr output to rule out pipe deadlocks.
+- [x] Implement `ProcessContainerCLI` as an actor.
+- [x] Launch only an absolute executable URL using `Process.arguments`.
+- [x] Capture stdout and stderr on separate pipes and read them concurrently.
+- [x] Return exit status, output, duration, and a sanitized command description.
+- [x] Map launch errors and nonzero exits to typed errors.
+- [x] Propagate Swift task cancellation to the child process.
+- [x] Size-limit retained output and handle invalid UTF-8 safely.
+- [x] Create a test fixture executable that can emit output, errors, delays, and configurable exit codes.
+- [x] Test large simultaneous stdout/stderr output to rule out pipe deadlocks.
 
 **Deliverable:** a reliable async adapter for one-shot CLI commands.
 

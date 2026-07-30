@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-enum CommandValidationError: Error, Equatable, Sendable {
+nonisolated enum CommandValidationError: Error, Equatable, Sendable {
     case empty(field: String)
     case invalid(field: String, value: String)
     case nonPositive(field: String)
@@ -23,7 +23,7 @@ extension CommandValidationError: LocalizedError {
     }
 }
 
-struct ContainerIdentifier: Hashable, Sendable {
+nonisolated struct ContainerIdentifier: Hashable, Sendable {
     let rawValue: String
 
     init(validating value: String) throws {
@@ -47,7 +47,7 @@ struct ContainerIdentifier: Hashable, Sendable {
     }
 }
 
-struct ImageReference: Hashable, Sendable {
+nonisolated struct ImageReference: Hashable, Sendable {
     let rawValue: String
 
     init(validating value: String) throws {
@@ -67,7 +67,7 @@ struct ImageReference: Hashable, Sendable {
     }
 }
 
-struct CPULimit: Equatable, Sendable {
+nonisolated struct CPULimit: Equatable, Sendable {
     let value: String
 
     init(_ value: String) throws {
@@ -81,7 +81,7 @@ struct CPULimit: Equatable, Sendable {
     }
 }
 
-struct MemoryLimit: Equatable, Sendable {
+nonisolated struct MemoryLimit: Equatable, Sendable {
     let value: String
 
     init(_ value: String) throws {
@@ -95,7 +95,7 @@ struct MemoryLimit: Equatable, Sendable {
     }
 }
 
-struct EnvironmentVariable: Equatable, Sendable {
+nonisolated struct EnvironmentVariable: Equatable, Sendable {
     let key: String
     let value: String
 
@@ -115,12 +115,12 @@ struct EnvironmentVariable: Equatable, Sendable {
     }
 }
 
-enum PortProtocol: String, Equatable, Sendable {
+nonisolated enum PortProtocol: String, Equatable, Sendable {
     case tcp
     case udp
 }
 
-struct PortMapping: Equatable, Sendable {
+nonisolated struct PortMapping: Equatable, Sendable {
     let hostAddress: String?
     let hostPort: Int
     let containerPort: Int
@@ -165,7 +165,7 @@ struct PortMapping: Equatable, Sendable {
     }
 }
 
-struct RunConfiguration: Equatable, Sendable {
+nonisolated struct RunConfiguration: Equatable, Sendable {
     let image: ImageReference
     let name: ContainerIdentifier?
     let detached: Bool

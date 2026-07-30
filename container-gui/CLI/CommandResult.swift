@@ -1,6 +1,6 @@
 import Foundation
 
-struct CommandResult: Equatable, Sendable {
+nonisolated struct CommandResult: Equatable, Sendable {
     let standardOutput: String
     let standardError: String
     let exitCode: Int32
