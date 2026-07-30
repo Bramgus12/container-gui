@@ -61,15 +61,16 @@ actor ProcessContainerCLI: ContainerCLI {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let result = try await self.run(command)
-                    if !result.standardOutput.isEmpty {
-                        continuation.yield(.standardOutput(result.standardOutput))
-                    }
-                    if !result.standardError.isEmpty {
-                        continuation.yield(.standardError(result.standardError))
-                    }
-                    continuation.yield(.terminated(exitCode: result.exitCode))
+                    let request = try await self.makeRequest(for: command)
+                    let exitCode = try await Self.executeStreaming(
+                        request,
+                        continuation: continuation
+                    )
+                    try Task.checkCancellation()
+                    continuation.yield(.terminated(exitCode: exitCode))
                     continuation.finish()
+                } catch is CancellationError {
+                    continuation.finish(throwing: CLIError.cancelled)
                 } catch {
                     continuation.finish(throwing: error)
                 }
@@ -77,6 +78,89 @@ actor ProcessContainerCLI: ContainerCLI {
             continuation.onTermination = { _ in
                 task.cancel()
             }
+        }
+    }
+
+    private func makeRequest(for command: ContainerCommand) throws -> ProcessRequest {
+        try validateExecutable()
+        return ProcessRequest(
+            executableURL: executableURL,
+            arguments: command.arguments,
+            environment: environment,
+            outputLimit: outputLimit,
+            invocation: Self.displayInvocation(
+                executableURL: executableURL,
+                arguments: command.arguments
+            )
+        )
+    }
+
+    private static func executeStreaming(
+        _ request: ProcessRequest,
+        continuation: AsyncThrowingStream<ProcessEvent, Error>.Continuation
+    ) async throws -> Int32 {
+        let process = Process()
+        let standardOutput = Pipe()
+        let standardError = Pipe()
+        let session = ProcessSession(process: process)
+
+        process.executableURL = request.executableURL
+        process.arguments = request.arguments
+        process.environment = request.environment
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = standardOutput
+        process.standardError = standardError
+
+        standardOutput.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
+            continuation.yield(.standardOutput(String(decoding: data, as: UTF8.self)))
+        }
+        standardError.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
+            continuation.yield(.standardError(String(decoding: data, as: UTF8.self)))
+        }
+
+        do {
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { processContinuation in
+                    process.terminationHandler = { process in
+                        standardOutput.fileHandleForReading.readabilityHandler = nil
+                        standardError.fileHandleForReading.readabilityHandler = nil
+
+                        if let remaining = try? standardOutput.fileHandleForReading.readToEnd(),
+                           !remaining.isEmpty {
+                            continuation.yield(
+                                .standardOutput(String(decoding: remaining, as: UTF8.self))
+                            )
+                        }
+                        if let remaining = try? standardError.fileHandleForReading.readToEnd(),
+                           !remaining.isEmpty {
+                            continuation.yield(
+                                .standardError(String(decoding: remaining, as: UTF8.self))
+                            )
+                        }
+                        processContinuation.resume(returning: process.terminationStatus)
+                    }
+
+                    do {
+                        try session.launch()
+                    } catch {
+                        standardOutput.fileHandleForReading.readabilityHandler = nil
+                        standardError.fileHandleForReading.readabilityHandler = nil
+                        processContinuation.resume(
+                            throwing: CLIError.launchFailed(message: error.localizedDescription)
+                        )
+                    }
+                }
+            } onCancel: {
+                session.cancel()
+            }
+        } catch {
+            standardOutput.fileHandleForReading.readabilityHandler = nil
+            standardError.fileHandleForReading.readabilityHandler = nil
+            throw error
         }
     }
 

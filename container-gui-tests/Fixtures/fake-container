@@ -23,6 +23,11 @@ case "${FAKE_CONTAINER_SCENARIO:-success}" in
             i=$((i + 1))
         done
         ;;
+    stream)
+        printf 'first\n'
+        /bin/sleep 1
+        printf 'second\n'
+        ;;
     *)
         printf 'unknown fixture scenario\n' >&2
         exit 64

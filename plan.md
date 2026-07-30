@@ -436,14 +436,14 @@ Build the app as a sequence of small, independently testable increments. Each st
 
 **Tasks:**
 
-- [ ] Decode `container inspect <id>`.
-- [ ] Build an overview for resources, networks, ports, and mounts.
-- [ ] Add raw formatted JSON for fields not yet represented by the UI.
-- [ ] Implement `container logs` and followed logs using `AsyncThrowingStream`.
-- [ ] Cap retained log lines and bytes.
-- [ ] Support pause, resume, autoscroll, copy, clear display, and stream cancellation.
-- [ ] Poll one-shot JSON stats at a modest interval only while the stats view is visible.
-- [ ] Stop log and stats work when selection changes or the view disappears.
+- [x] Decode `container inspect <id>`.
+- [x] Build an overview for resources, networks, ports, and mounts.
+- [x] Add raw formatted JSON for fields not yet represented by the UI.
+- [x] Implement `container logs` and followed logs using `AsyncThrowingStream`.
+- [x] Cap retained log lines and bytes.
+- [x] Support pause, resume, autoscroll, copy, clear display, and stream cancellation.
+- [x] Poll one-shot JSON stats at a modest interval only while the stats view is visible.
+- [x] Stop log and stats work when selection changes or the view disappears.
 
 **Deliverable:** an overview/logs/inspect/stats container detail screen.
 

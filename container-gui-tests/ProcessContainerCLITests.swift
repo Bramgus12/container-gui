@@ -103,6 +103,36 @@ final class ProcessContainerCLITests: XCTestCase {
         XCTAssertTrue(result.standardOutput.contains("\u{FFFD}valid"))
     }
 
+    func testStreamYieldsOutputBeforeTheProcessTerminates() async throws {
+        let cli = makeCLI(scenario: "stream", timeout: nil)
+        let clock = ContinuousClock()
+        let start = clock.now
+        var iterator = cli.stream(.systemStatus).makeAsyncIterator()
+
+        let first = try await iterator.next()
+
+        XCTAssertEqual(first, .standardOutput("first\n"))
+        XCTAssertLessThan(start.duration(to: clock.now), .milliseconds(900))
+    }
+
+    func testCancellingStreamConsumerTerminatesTheChild() async throws {
+        let cli = makeCLI(scenario: "delay", timeout: nil)
+        let consumer = Task {
+            for try await _ in cli.stream(.systemStatus) {}
+        }
+
+        try await Task.sleep(for: .milliseconds(100))
+        consumer.cancel()
+
+        do {
+            try await consumer.value
+        } catch let error as CLIError {
+            XCTAssertEqual(error, .cancelled)
+        } catch is CancellationError {
+            // AsyncThrowingStream may surface task cancellation directly.
+        }
+    }
+
     func testInvocationQuotesArgumentsAndRedactsSensitiveEnvironmentValues() async throws {
         let secret = try EnvironmentVariable(key: "API_TOKEN", value: "don't show this")
         let visible = try EnvironmentVariable(key: "GREETING", value: "hello world")

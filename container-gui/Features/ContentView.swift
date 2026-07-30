@@ -478,6 +478,18 @@ private struct ContainerListView: View {
             .sheet(item: $runContainerModel) { runModel in
                 RunContainerSheet(model: runModel, appModel: model)
             }
+            .inspector(
+                isPresented: Binding(
+                    get: { model.selectedContainerID != nil },
+                    set: { if !$0 { model.selectedContainerID = nil } }
+                )
+            ) {
+                if let containerID = model.selectedContainerID {
+                    ContainerDetailHost(appModel: model, containerID: containerID)
+                        .id(containerID)
+                        .inspectorColumnWidth(min: 360, ideal: 440, max: 620)
+                }
+            }
     }
 
     private var table: some View {
@@ -673,7 +685,7 @@ private struct PendingContainerDeletion: Equatable {
     let mutation: ContainerMutation
 }
 
-private extension ContainerState {
+extension ContainerState {
     var displayName: String {
         switch self {
         case .created: "Created"

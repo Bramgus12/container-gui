@@ -164,6 +164,7 @@ final class AppModel {
     private var containerLister: (any ContainerListing)?
     private var containerMutator: (any ContainerMutating)?
     private var containerRunner: (any ContainerRunning)?
+    private var containerDiagnoser: (any ContainerDiagnosing)?
     private var configuredExecutableURL: URL?
     private var refreshGeneration = 0
 
@@ -176,13 +177,15 @@ final class AppModel {
         cliFactory: any ContainerCLIMaking = ProcessContainerCLIFactory(),
         containerLister: (any ContainerListing)? = nil,
         containerMutator: (any ContainerMutating)? = nil,
-        containerRunner: (any ContainerRunning)? = nil
+        containerRunner: (any ContainerRunning)? = nil,
+        containerDiagnoser: (any ContainerDiagnosing)? = nil
     ) {
         self.setup = setup
         self.cliFactory = cliFactory
         self.containerLister = containerLister
         self.containerMutator = containerMutator
         self.containerRunner = containerRunner
+        self.containerDiagnoser = containerDiagnoser
     }
 
     var filteredContainers: [ContainerSummary] {
@@ -198,6 +201,7 @@ final class AppModel {
             containerLister = CLIContainerListService(cli: cli)
             containerMutator = CLIContainerMutationService(cli: cli)
             containerRunner = CLIContainerRunService(cli: cli)
+            containerDiagnoser = CLIContainerDiagnosticsService(cli: cli)
             containers = []
             selectedContainerID = nil
             containerListState = .idle
@@ -293,6 +297,11 @@ final class AppModel {
 
     func dismissMutationFailure() {
         mutationFailure = nil
+    }
+
+    func makeContainerDetailModel(containerID: String) -> ContainerDetailModel? {
+        guard let containerDiagnoser else { return nil }
+        return ContainerDetailModel(containerID: containerID, service: containerDiagnoser)
     }
 
     func runContainer(

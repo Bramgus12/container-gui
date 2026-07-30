@@ -36,7 +36,7 @@ nonisolated struct SystemVersion: Equatable, Sendable {
     }
 }
 
-struct ContainerStatsDTO: Decodable, Equatable, Sendable {
+nonisolated struct ContainerStatsDTO: Decodable, Equatable, Sendable {
     let id: String
     let memoryUsageBytes: UInt64?
     let memoryLimitBytes: UInt64?
@@ -48,7 +48,7 @@ struct ContainerStatsDTO: Decodable, Equatable, Sendable {
     let numProcesses: Int?
 }
 
-struct ContainerStats: Identifiable, Equatable, Sendable {
+nonisolated struct ContainerStats: Identifiable, Equatable, Sendable {
     let id: String
     let memoryUsageBytes: UInt64?
     let memoryLimitBytes: UInt64?
