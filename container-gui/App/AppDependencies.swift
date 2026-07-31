@@ -7,11 +7,18 @@ enum AppDependencies {
     ) -> AppModel {
         #if DEBUG
         if let scenario = UITestPreflightScenario(arguments: processInfo.arguments) {
-            return AppModel(
-                setup: SetupModel(
-                    preflight: UITestPreflightService(scenario: scenario),
-                    diagnosticsCopier: SystemDiagnosticsCopier()
+            let setup = SetupModel(
+                preflight: UITestPreflightService(scenario: scenario),
+                diagnosticsCopier: SystemDiagnosticsCopier()
+            )
+            if scenario == .lifecycle {
+                return AppModel(
+                    setup: setup,
+                    cliFactory: UITestContainerCLIFactory()
                 )
+            }
+            return AppModel(
+                setup: setup
             )
         }
         #endif
@@ -25,6 +32,7 @@ nonisolated private enum UITestPreflightScenario: String, Sendable {
     case stopped
     case failed
     case ready
+    case lifecycle
 
     init?(arguments: [String]) {
         guard let flagIndex = arguments.firstIndex(of: "--ui-test-preflight"),
@@ -50,7 +58,7 @@ nonisolated private enum UITestPreflightScenario: String, Sendable {
                     standardError: "service unavailable"
                 ))
             )
-        case .ready:
+        case .ready, .lifecycle:
             .ready(Self.context(isRunning: true))
         }
     }
@@ -104,6 +112,124 @@ private actor UITestPreflightService: PreflightServicing {
             scenario = .ready
         }
         return scenario.readiness
+    }
+}
+
+nonisolated private struct UITestContainerCLIFactory: ContainerCLIMaking {
+    private let cli = UITestContainerCLI()
+
+    func makeCLI(executableURL: URL) -> any ContainerCLI {
+        cli
+    }
+}
+
+private actor UITestContainerCLI: ContainerCLI {
+    private struct FixtureContainer: Sendable {
+        var id: String
+        var image: String
+        var state: String
+    }
+
+    private var containers = [
+        FixtureContainer(id: "demo-stopped", image: "alpine:3.21", state: "stopped"),
+    ]
+
+    func run(_ command: ContainerCommand) async throws -> CommandResult {
+        let output: String
+        switch command {
+        case .listContainers:
+            output = containerListJSON
+        case .inspectContainer(let id):
+            output = inspectJSON(for: id.rawValue)
+        case .start(let id):
+            update(id: id.rawValue, state: "running")
+            output = ""
+        case .stop(let id, _):
+            update(id: id.rawValue, state: "stopped")
+            output = ""
+        case .delete(let id, _):
+            containers.removeAll { $0.id == id.rawValue }
+            output = ""
+        case .systemVersion:
+            output = """
+            [{"appName":"container","version":"1.0.0"},{"appName":"container-apiserver","version":"1.0.0"}]
+            """
+        case .systemStatus:
+            output = #"{"status":"ready","healthy":true,"version":"1.0.0"}"#
+        case .systemDiskUsage:
+            output = #"[{"type":"images","totalCount":1,"activeCount":1,"sizeBytes":1024,"reclaimableBytes":0}]"#
+        case .systemLogs:
+            output = "UI test service is healthy."
+        case .listImages:
+            output = "[]"
+        case .inspectImage:
+            output = "{}"
+        case .systemStart, .systemStop, .pullImage, .deleteImage, .run, .logs, .stats:
+            output = ""
+        }
+        return CommandResult(
+            standardOutput: output,
+            standardError: "",
+            exitCode: 0,
+            duration: .zero,
+            invocation: "ui-test-container \(command.arguments.joined(separator: " "))"
+        )
+    }
+
+    nonisolated func stream(
+        _ command: ContainerCommand
+    ) -> AsyncThrowingStream<ProcessEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                switch command {
+                case .run(let configuration):
+                    let id = configuration.name?.rawValue ?? "ui-test-container"
+                    await addContainer(
+                        id: id,
+                        image: configuration.image.rawValue
+                    )
+                    continuation.yield(.standardOutput("\(id)\n"))
+                    continuation.yield(.terminated(exitCode: 0))
+                    continuation.finish()
+                case .logs:
+                    continuation.yield(.standardOutput("UI test log line\n"))
+                    continuation.yield(.terminated(exitCode: 0))
+                    continuation.finish()
+                default:
+                    continuation.yield(.terminated(exitCode: 0))
+                    continuation.finish()
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private var containerListJSON: String {
+        let rows = containers.map { container in
+            """
+            {"id":"\(container.id)","configuration":{"id":"\(container.id)","image":"\(container.image)","platform":{"os":"linux","architecture":"arm64"}},"status":{"state":"\(container.state)"}}
+            """
+        }
+        return "[\(rows.joined(separator: ","))]"
+    }
+
+    private func inspectJSON(for id: String) -> String {
+        guard let container = containers.first(where: { $0.id == id }) else {
+            return "{}"
+        }
+        return """
+        {"id":"\(container.id)","configuration":{"id":"\(container.id)","image":"\(container.image)","platform":{"os":"linux","architecture":"arm64"}},"status":{"state":"\(container.state)"}}
+        """
+    }
+
+    private func update(id: String, state: String) {
+        guard let index = containers.firstIndex(where: { $0.id == id }) else { return }
+        containers[index].state = state
+    }
+
+    private func addContainer(id: String, image: String) {
+        containers.removeAll { $0.id == id }
+        containers.append(FixtureContainer(id: id, image: image, state: "running"))
     }
 }
 #endif

@@ -359,7 +359,7 @@ final class AppModel {
         } catch {
             guard generation == imageRefreshGeneration else { return }
             failureLog.record(operation: "Refresh images", error: error)
-            imageListState = .failed(error.localizedDescription)
+            imageListState = .failed(DiagnosticSanitizer.sanitize(error.localizedDescription))
         }
     }
 
@@ -391,7 +391,7 @@ final class AppModel {
             guard generation == imageInspectionGeneration,
                   selectedImageID == selectedID else { return }
             failureLog.record(operation: "Inspect image", error: error)
-            imageInspectionState = .failed(error.localizedDescription)
+            imageInspectionState = .failed(DiagnosticSanitizer.sanitize(error.localizedDescription))
         }
     }
 
@@ -460,7 +460,7 @@ final class AppModel {
             failureLog.record(operation: "Delete image", error: error)
             imageDeletionFailure = ImageDeletionFailure(
                 reference: reference,
-                message: error.localizedDescription
+                message: DiagnosticSanitizer.sanitize(error.localizedDescription)
             )
         }
         await refreshImages()
@@ -501,7 +501,7 @@ final class AppModel {
         } catch {
             guard generation == refreshGeneration else { return }
             failureLog.record(operation: "Refresh containers", error: error)
-            containerListState = .failed(error.localizedDescription)
+            containerListState = .failed(DiagnosticSanitizer.sanitize(error.localizedDescription))
         }
     }
 
@@ -551,7 +551,7 @@ final class AppModel {
             mutationFailure = ContainerMutationFailure(
                 containerID: containerID,
                 mutation: mutation,
-                message: error.localizedDescription
+                message: DiagnosticSanitizer.sanitize(error.localizedDescription)
             )
         }
 

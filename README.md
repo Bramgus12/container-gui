@@ -1,0 +1,182 @@
+<div align="center">
+
+# Container GUI
+
+### Apple Container, without the command-line friction.
+
+A native macOS control center for running containers, managing images,
+watching resource usage, and keeping the Apple Container service healthy.
+
+[![macOS 26+](https://img.shields.io/badge/macOS-26%2B-111111?style=for-the-badge&logo=apple&logoColor=white)](https://www.apple.com/macos/)
+[![Apple silicon](https://img.shields.io/badge/Apple%20silicon-required-111111?style=for-the-badge&logo=apple&logoColor=white)](#requirements)
+[![SwiftUI](https://img.shields.io/badge/SwiftUI-native-F05138?style=for-the-badge&logo=swift&logoColor=white)](https://developer.apple.com/xcode/swiftui/)
+[![Apple Container 0.12–<2.0](https://img.shields.io/badge/Apple%20Container-0.12–%3C2.0-3276D3?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/apple/container)
+
+[Get started](#getting-started) · [Explore features](#everything-you-need-in-one-window) · [Develop](#development) · [Troubleshoot](docs/TROUBLESHOOTING.md)
+
+</div>
+
+---
+
+Container GUI wraps Apple's [`container`](https://github.com/apple/container)
+CLI in a focused SwiftUI experience. It handles the everyday container
+workflow—from guided setup to logs and live statistics—while executing commands
+directly, never through a shell.
+
+## Everything you need in one window
+
+| | Capability | What you can do |
+| :---: | --- | --- |
+| 📦 | **Containers** | Search, filter, run, start, stop, and safely delete containers. |
+| 🔎 | **Deep inspection** | Explore configuration, networking, ports, mounts, and formatted inspection JSON. |
+| 📜 | **Logs & stats** | Follow bounded logs and monitor CPU, memory, network, and block I/O. |
+| 🖼️ | **Images** | Search local images, inspect metadata, stream pull progress, run, and delete. |
+| ❤️ | **System health** | Check CLI and server versions, control the service, and review disk usage and recent logs. |
+| 🩺 | **Diagnostics** | Copy a sanitized support report with common secrets and credentials redacted. |
+
+### Designed to feel at home on macOS
+
+- A native `NavigationSplitView`, searchable tables, inspectors, sheets, and
+  familiar keyboard shortcuts.
+- Guided onboarding for a missing executable, incompatible CLI, or stopped
+  background service.
+- Context-aware actions that disable invalid operations and prevent conflicting
+  work on the same resource.
+- Clear progress, cancellation, empty states, and actionable error messages
+  throughout the app.
+
+## Getting started
+
+### 1. Check the requirements
+
+- An **Apple-silicon Mac** running **macOS 26 or later**
+- [Apple Container](https://github.com/apple/container/releases) CLI version
+  **0.12.0 or later and earlier than 2.0.0**
+- Xcode, when building Container GUI from source
+
+### 2. Install Apple Container
+
+Download Apple Container from its
+[official releases](https://github.com/apple/container/releases) and complete
+its installation. Container GUI normally discovers the executable at
+`/usr/local/bin/container` or `/opt/homebrew/bin/container`; you can also choose
+a custom executable during onboarding.
+
+### 3. Build and launch
+
+```sh
+git clone https://github.com/Bramgus12/container-gui.git
+cd container-gui
+open container-gui.xcodeproj
+```
+
+In Xcode, select the **Container GUI** scheme and press <kbd>⌘</kbd><kbd>R</kbd>.
+On first launch, the app verifies the platform, executable, CLI version, and
+service health before opening the main interface. If the service is installed
+but stopped, it can be started directly from onboarding.
+
+## How it works
+
+```mermaid
+flowchart LR
+    UI["Native SwiftUI interface"]
+    MODEL["Typed app models"]
+    CLIENT["ContainerCLI protocol"]
+    PROCESS["Async process runner"]
+    CLI["Apple container CLI"]
+    SERVICE["Apple Container service"]
+
+    UI --> MODEL --> CLIENT --> PROCESS --> CLI --> SERVICE
+    CLI -->|"JSON, logs & progress"| PROCESS
+    PROCESS -->|"Decoded results"| MODEL
+```
+
+Views never construct shell commands. Typed operations become discrete process
+arguments, and JSON responses are decoded into app-owned models before they
+reach the interface. The CLI layer is protocol-based, so tests can exercise the
+complete workflow without touching real containers.
+
+## Safety by design
+
+Container management includes destructive and long-running operations, so the
+app treats safety as a product feature:
+
+- **No shell invocation.** The resolved executable is launched directly with
+  validated, discrete arguments.
+- **Confirmation before destructive actions.** Delete, force delete, image
+  delete, and service stop explain their impact before proceeding.
+- **Cancellable work.** Long-running child processes are terminated when their
+  operation is cancelled.
+- **Bounded output.** Retained command output and logs are capped to prevent
+  unbounded memory growth.
+- **Sanitized diagnostics.** Environment values are excluded and common secret,
+  token, password, credential, authorization, private-key, and URL-userinfo
+  patterns are redacted.
+
+## Development
+
+Open [`container-gui.xcodeproj`](container-gui.xcodeproj) and use the
+**Container GUI** scheme. The project includes:
+
+- unit tests for command construction, decoding, validation, and feature models;
+- fake-process integration tests for streaming, cancellation, and failures; and
+- UI tests backed by an in-process fake CLI that never modifies real containers.
+
+Run the full automated suite from Terminal:
+
+```sh
+xcodebuild test \
+  -project container-gui.xcodeproj \
+  -scheme "Container GUI" \
+  -destination "platform=macOS"
+```
+
+### Opt-in real smoke test
+
+> [!CAUTION]
+> Run this only on a disposable test Mac. It creates and removes a real
+> container and may pull the configured image.
+
+```sh
+CONTAINER_GUI_RUN_REAL_SMOKE=1 \
+CONTAINER_GUI_SMOKE_IMAGE=alpine:3.21 \
+./scripts/real-smoke-test.sh
+```
+
+The script uses a unique container name and targeted best-effort cleanup. It
+deletes the image only if the image was not present before the test, and it
+never invokes prune or another bulk deletion command.
+
+## Current scope
+
+Container GUI 1.0 intentionally focuses on local container, image, and service
+workflows. It does not yet manage:
+
+- networks, volumes, or builds;
+- registry authentication;
+- interactive terminals;
+- import and export;
+- DNS or kernel settings;
+- prune operations; or
+- remote container hosts.
+
+Image deletion may fail while a container still depends on the image. New major
+Apple Container CLI versions remain unsupported until their JSON formats have
+fixture and smoke-test coverage.
+
+## Project resources
+
+| Resource | Description |
+| --- | --- |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Setup, service, upgrade, pull, and deletion help |
+| [Release notes](docs/RELEASE_NOTES.md) | Container GUI 1.0 feature and compatibility summary |
+| [Release checklist](docs/RELEASE_CHECKLIST.md) | Testing, accessibility, signing, and notarization gates |
+| [Architecture decision](docs/decisions/0001-cli-wrapper-and-distribution.md) | Why the app wraps the CLI and ships outside the Mac App Store |
+
+---
+
+<div align="center">
+
+Built with SwiftUI for Apple silicon.
+
+</div>

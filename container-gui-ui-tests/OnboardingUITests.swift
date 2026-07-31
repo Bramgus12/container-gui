@@ -34,6 +34,47 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Retry"].exists)
     }
 
+    func testMainContainerLifecycleWithFakeCLI() {
+        let app = launch(scenario: "lifecycle")
+
+        app.buttons["containers.run"].click()
+        XCTAssertTrue(app.otherElements["run.sheet"].waitForExistence(timeout: 2))
+        app.textFields["run.image"].click()
+        app.textFields["run.image"].typeText("alpine:3.21")
+        app.textFields["run.name"].click()
+        app.textFields["run.name"].typeText("created-by-ui-test")
+        app.buttons["run.submit"].click()
+        XCTAssertTrue(
+            app.staticTexts["created-by-ui-test"].waitForExistence(timeout: 3),
+            "Running a container should refresh the list with the created container."
+        )
+
+        let fixture = app.staticTexts["demo-stopped"]
+        XCTAssertTrue(fixture.waitForExistence(timeout: 3))
+        fixture.click()
+
+        let start = app.buttons["containers.start"]
+        XCTAssertTrue(start.isEnabled)
+        start.click()
+        XCTAssertTrue(waitUntil(timeout: 3) {
+            app.staticTexts["Running"].exists
+        })
+
+        let stop = app.buttons["containers.stop"]
+        XCTAssertTrue(stop.isEnabled)
+        stop.click()
+        XCTAssertTrue(waitUntil(timeout: 3) {
+            app.staticTexts["Stopped"].exists
+        })
+
+        app.buttons["containers.moreActions"].click()
+        app.menuItems["Delete…"].click()
+        XCTAssertTrue(app.alerts["Delete Container?"].waitForExistence(timeout: 2))
+        XCTAssertTrue(fixture.exists, "The container must remain until deletion is confirmed.")
+        app.alerts["Delete Container?"].buttons["Delete"].click()
+        XCTAssertTrue(waitUntil(timeout: 3) { !fixture.exists })
+    }
+
     private func launch(scenario: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
@@ -42,5 +83,19 @@ final class OnboardingUITests: XCTestCase {
         ]
         app.launch()
         return app
+    }
+
+    private func waitUntil(
+        timeout: TimeInterval,
+        condition: () -> Bool
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if condition() {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        } while Date() < deadline
+        return condition()
     }
 }

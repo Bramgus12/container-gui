@@ -192,6 +192,11 @@ struct RunContainerSheet: View {
             LabeledContent(title) {
                 TextField(prompt, text: text)
                     .multilineTextAlignment(.leading)
+                    .accessibilityIdentifier(
+                        "run." + title
+                            .lowercased()
+                            .replacingOccurrences(of: " ", with: "-")
+                    )
             }
             validationText(error)
         }

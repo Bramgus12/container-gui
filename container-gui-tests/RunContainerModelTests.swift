@@ -90,11 +90,11 @@ final class RunContainerModelTests: XCTestCase {
 
     func testFailedRunPreservesDraftAndExposesActionableError() async {
         let runner = StubContainerRunner(
-            events: [.standardError("pull failed\n")],
+            events: [.standardError("pull failed token=progress-secret\n")],
             error: .nonZeroExit(
                 invocation: "container run alpine:3.21",
                 exitCode: 9,
-                standardError: "registry unavailable"
+                standardError: "registry unavailable token=error-secret"
             )
         )
         let lister = RunContainerLister(containers: [])
@@ -115,7 +115,11 @@ final class RunContainerModelTests: XCTestCase {
         XCTAssertEqual(form.name, "keep-this")
         XCTAssertEqual(form.environment.first?.value, "debug")
         XCTAssertTrue(form.progress.contains("pull failed"))
+        XCTAssertTrue(form.progress.contains("token=<redacted>"))
+        XCTAssertFalse(form.progress.contains("progress-secret"))
         XCTAssertTrue(form.errorMessage?.contains("registry unavailable") == true)
+        XCTAssertTrue(form.errorMessage?.contains("token=<redacted>") == true)
+        XCTAssertFalse(form.errorMessage?.contains("error-secret") == true)
         let refreshCount = await lister.callCount
         XCTAssertEqual(refreshCount, 0)
     }

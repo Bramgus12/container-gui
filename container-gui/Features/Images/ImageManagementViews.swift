@@ -240,11 +240,11 @@ struct ImageListView: View {
         }
     }
 
-    private static func formatBytes(_ bytes: UInt64) -> String {
+    nonisolated private static func formatBytes(_ bytes: UInt64) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file)
     }
 
-    private static func platformDescription(_ image: ImageSummary) -> String {
+    nonisolated private static func platformDescription(_ image: ImageSummary) -> String {
         let values = [image.operatingSystem, image.architecture].compactMap { $0 }
         return values.isEmpty ? "—" : values.joined(separator: " / ")
     }

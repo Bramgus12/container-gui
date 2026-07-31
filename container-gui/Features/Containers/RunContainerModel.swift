@@ -178,7 +178,7 @@ final class RunContainerModel: Identifiable {
         } catch CLIError.cancelled {
             return false
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = DiagnosticSanitizer.sanitize(error.localizedDescription)
             return false
         }
     }
@@ -238,7 +238,7 @@ final class RunContainerModel: Identifiable {
             text = "Process exited with status \(exitCode).\n"
         }
 
-        progress.append(text)
+        progress.append(DiagnosticSanitizer.sanitize(text))
         let maximumCharacters = 32_768
         if progress.count > maximumCharacters {
             progress = String(progress.suffix(maximumCharacters))
@@ -250,7 +250,7 @@ final class RunContainerModel: Identifiable {
             try operation()
             return nil
         } catch {
-            return error.localizedDescription
+            return DiagnosticSanitizer.sanitize(error.localizedDescription)
         }
     }
 

@@ -210,7 +210,7 @@ final class ContainerDetailModel {
         } catch CLIError.cancelled {
             return
         } catch {
-            inspectionState = .failed(error.localizedDescription)
+            inspectionState = .failed(DiagnosticSanitizer.sanitize(error.localizedDescription))
         }
     }
 
@@ -259,7 +259,7 @@ final class ContainerDetailModel {
             } catch CLIError.cancelled {
                 // ProcessContainerCLI normalizes stream cancellation.
             } catch {
-                self.logError = error.localizedDescription
+                self.logError = DiagnosticSanitizer.sanitize(error.localizedDescription)
             }
             if !Task.isCancelled {
                 self.isLogStreaming = false
@@ -323,7 +323,7 @@ final class ContainerDetailModel {
                 } catch CLIError.cancelled {
                     break
                 } catch {
-                    self.statsError = error.localizedDescription
+                    self.statsError = DiagnosticSanitizer.sanitize(error.localizedDescription)
                 }
                 self.isStatsLoading = false
 

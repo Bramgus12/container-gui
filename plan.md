@@ -489,14 +489,14 @@ Build the app as a sequence of small, independently testable increments. Each st
 
 **Tasks:**
 
-- [ ] Add UI tests for onboarding and the main lifecycle using a fake CLI dependency.
+- [x] Add UI tests for onboarding and the main lifecycle using a fake CLI dependency.
 - [ ] Run real smoke tests on clean Apple-silicon Macs with the minimum and current supported CLI versions.
 - [ ] Test missing services, changed JSON, slow commands, network loss, corrupted output, and CLI upgrades.
 - [ ] Verify VoiceOver, keyboard navigation, focus behavior, contrast, reduced motion, and large text.
-- [ ] Confirm destructive operations always require appropriate confirmation.
-- [ ] Audit output and diagnostics redaction.
+- [x] Confirm destructive operations always require appropriate confirmation.
+- [x] Audit output and diagnostics redaction.
 - [ ] Archive with Developer ID, notarize, staple, and install on a second Mac.
-- [ ] Document supported OS/CLI versions, install requirements, limitations, and troubleshooting.
+- [x] Document supported OS/CLI versions, install requirements, limitations, and troubleshooting.
 
 **Deliverable:** a signed, notarized v1 application and release notes.
 

@@ -139,7 +139,7 @@ final class AppModelTests: XCTestCase {
         let error = CLIError.nonZeroExit(
             invocation: "container start web",
             exitCode: 17,
-            standardError: "service unavailable"
+            standardError: "service unavailable token=mutation-secret"
         )
         let mutator = ControllableContainerMutator(error: error)
         let model = AppModel(
@@ -155,6 +155,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.mutationFailure?.containerID, "web")
         XCTAssertEqual(model.mutationFailure?.mutation, .start)
         XCTAssertTrue(model.mutationFailure?.message.contains("service unavailable") == true)
+        XCTAssertTrue(model.mutationFailure?.message.contains("token=<redacted>") == true)
+        XCTAssertFalse(model.mutationFailure?.message.contains("mutation-secret") == true)
         XCTAssertEqual(refreshCount, 2)
     }
 

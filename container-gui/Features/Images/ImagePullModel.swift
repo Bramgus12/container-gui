@@ -16,7 +16,7 @@ final class ImagePullModel: Identifiable {
             _ = try ImageReference(validating: trimmedReference)
             return nil
         } catch {
-            return error.localizedDescription
+            return DiagnosticSanitizer.sanitize(error.localizedDescription)
         }
     }
 
@@ -41,7 +41,7 @@ final class ImagePullModel: Identifiable {
         } catch CLIError.cancelled {
             errorMessage = "Pull cancelled."
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = DiagnosticSanitizer.sanitize(error.localizedDescription)
         }
     }
 
@@ -52,7 +52,7 @@ final class ImagePullModel: Identifiable {
     private func record(_ event: ProcessEvent) {
         switch event {
         case .standardOutput(let output), .standardError(let output):
-            progress.append(output)
+            progress.append(DiagnosticSanitizer.sanitize(output))
         case .terminated(let exitCode):
             progress.append("Process exited with status \(exitCode).\n")
         }

@@ -220,7 +220,7 @@ final class SystemModel {
                 snapshotState = diskUsage == nil ? .idle : .loaded
             } else {
                 failureLog.record(operation: "Refresh system information", error: error)
-                snapshotState = .failed(error.localizedDescription)
+                snapshotState = .failed(DiagnosticSanitizer.sanitize(error.localizedDescription))
             }
         }
 
@@ -233,7 +233,7 @@ final class SystemModel {
                 logsState = logs.isEmpty ? .idle : .loaded
             } else {
                 failureLog.record(operation: "Load service logs", error: error)
-                logsState = .failed(error.localizedDescription)
+                logsState = .failed(DiagnosticSanitizer.sanitize(error.localizedDescription))
             }
         }
     }
@@ -262,7 +262,7 @@ final class SystemModel {
         } catch {
             guard !isCancellation(error) else { return }
             failureLog.record(operation: operation.rawValue, error: error)
-            actionError = error.localizedDescription
+            actionError = DiagnosticSanitizer.sanitize(error.localizedDescription)
         }
     }
 
