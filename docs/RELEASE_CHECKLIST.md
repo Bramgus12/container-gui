@@ -47,13 +47,14 @@ Create the current ad-hoc signed distribution:
 ./scripts/release.sh
 ```
 
-The script archives with an ad-hoc signature, creates `Container-GUI.zip`, and
-verifies the signature with `codesign`. It does not use a Developer ID
-certificate, submit the app to Apple's notary service, or staple a notarization
-ticket. Confirm the README warning and installation instructions are present.
-Install the exported app on a second clean Mac, approve it through Privacy &
-Security, complete onboarding, and repeat the lifecycle smoke test through the
-GUI.
+The script archives with an ad-hoc signature, creates `Container-GUI.dmg`,
+verifies the app signature with `codesign`, verifies the disk image, and prints
+its SHA-256 checksum. Confirm the DMG contains both `Container GUI.app` and the
+Applications shortcut. It does not use a Developer ID certificate, submit the
+app to Apple's notary service, or staple a notarization ticket. Confirm the
+README warning and installation instructions are present. Install the app from
+the DMG on a second clean Mac, approve it through Privacy & Security, complete
+onboarding, and repeat the lifecycle smoke test through the GUI.
 
 ## Release notes
 

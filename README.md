@@ -155,15 +155,16 @@ xcodebuild test \
   -destination "platform=macOS"
 ```
 
-Create an ad-hoc signed Release build and zip archive with:
+Create an ad-hoc signed Release build and DMG with:
 
 ```sh
 ./scripts/release.sh
 ```
 
 The outputs are written to `build/export/Container GUI.app` and
-`build/export/Container-GUI.zip`. These artifacts are not notarized; see the
-[installation warning](#installing-a-prebuilt-release) above.
+`build/export/Container-GUI.dmg`. The disk image includes an Applications
+shortcut for drag-and-drop installation. These artifacts are not notarized;
+see the [installation warning](#installing-a-prebuilt-release) above.
 
 ### Opt-in real smoke test
 

@@ -8,7 +8,10 @@ export_path="${CONTAINER_GUI_EXPORT_PATH:-$project_root/build/export}"
 derived_data_path="${CONTAINER_GUI_DERIVED_DATA_PATH:-$project_root/build/DerivedData}"
 app_path="$export_path/Container GUI.app"
 archive_app_path="$archive_path/Products/Applications/Container GUI.app"
-distribution_path="$export_path/Container-GUI.zip"
+dmg_staging_path="$project_root/build/dmg-staging"
+distribution_path="$export_path/Container-GUI.dmg"
+legacy_distribution_path="$export_path/Container-GUI.zip"
+legacy_checksum_path="$export_path/SHA256SUMS.txt"
 
 # Prefer the selected Xcode, but fall back to the beta when only Command Line
 # Tools are selected on a development machine.
@@ -38,14 +41,37 @@ if [[ ! -d "$archive_app_path" ]]; then
 fi
 
 mkdir -p "$export_path"
-rm -rf "$app_path"
-rm -f "$distribution_path"
+rm -rf "$app_path" "$dmg_staging_path"
+rm -f "$distribution_path" "$legacy_distribution_path" "$legacy_checksum_path"
 /usr/bin/ditto "$archive_app_path" "$app_path"
-/usr/bin/ditto -c -k --keepParent "$app_path" "$distribution_path"
 
 codesign --verify --deep --strict --verbose=2 "$app_path"
 codesign --display --verbose=2 "$app_path"
 
+mkdir -p "$dmg_staging_path"
+/usr/bin/ditto "$app_path" "$dmg_staging_path/Container GUI.app"
+/bin/ln -s /Applications "$dmg_staging_path/Applications"
+
+if /usr/sbin/diskutil image create from --help >/dev/null 2>&1; then
+    /usr/sbin/diskutil image create from \
+        --volumeName "Container GUI" \
+        --format UDZO \
+        "$dmg_staging_path" \
+        "$distribution_path"
+else
+    /usr/bin/hdiutil create \
+        -volname "Container GUI" \
+        -srcfolder "$dmg_staging_path" \
+        -format UDZO \
+        -ov \
+        "$distribution_path"
+fi
+
+/usr/bin/hdiutil verify "$distribution_path"
+rm -rf "$dmg_staging_path"
+
 print "Ad-hoc signed app: $app_path"
-print "Distribution archive: $distribution_path"
+print "Distribution image: $distribution_path"
+print "SHA-256:"
+/usr/bin/shasum -a 256 "$distribution_path"
 print "Warning: this build is not Developer ID signed or notarized by Apple."
