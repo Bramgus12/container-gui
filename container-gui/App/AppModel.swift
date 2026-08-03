@@ -172,7 +172,6 @@ enum AppDestination: String, CaseIterable, Identifiable, Sendable {
     case containers = "Containers"
     case images = "Images"
     case system = "System"
-    case settings = "Settings"
 
     var id: Self { self }
 
@@ -181,7 +180,6 @@ enum AppDestination: String, CaseIterable, Identifiable, Sendable {
         case .containers: "shippingbox"
         case .images: "square.stack.3d.up"
         case .system: "gauge.with.dots.needle.67percent"
-        case .settings: "gearshape"
         }
     }
 }

@@ -338,8 +338,6 @@ private struct MainNavigationView: View {
                 ImageListView(model: model)
             case .system:
                 SystemView(model: model.makeSystemModel(context: context))
-            case .settings:
-                placeholder
             case nil:
                 ContentUnavailableView(
                     "Select a Section",
@@ -351,17 +349,6 @@ private struct MainNavigationView: View {
             await model.activate(context)
         }
         .accessibilityIdentifier("main.navigation")
-    }
-
-    private var placeholder: some View {
-        ContentUnavailableView {
-            Label(
-                model.destination?.rawValue ?? "Container GUI",
-                systemImage: model.destination?.systemImage ?? "shippingbox"
-            )
-        } description: {
-            Text("Apple Container \(context.versions.cli?.version ?? "") is ready.")
-        }
     }
 }
 
