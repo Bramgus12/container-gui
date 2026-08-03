@@ -1,6 +1,19 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "" : {
+
+    },
+    "—" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "—"
+          }
+        }
+      }
+    },
     "%@ failed for %@" : {
       "localizations" : {
         "nl" : {
@@ -111,16 +124,6 @@
         }
       }
     },
-    "CLI version" : {
-      "localizations" : {
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CLI-versie"
-          }
-        }
-      }
-    },
     "Cancel" : {
       "localizations" : {
         "nl" : {
@@ -151,16 +154,6 @@
         }
       }
     },
-    "Choose Executable…" : {
-      "localizations" : {
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uitvoerbaar bestand kiezen…"
-          }
-        }
-      }
-    },
     "Choose a compatible executable before continuing." : {
       "localizations" : {
         "nl" : {
@@ -181,12 +174,32 @@
         }
       }
     },
+    "Choose Executable…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uitvoerbaar bestand kiezen…"
+          }
+        }
+      }
+    },
     "Clear" : {
       "localizations" : {
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Wis"
+          }
+        }
+      }
+    },
+    "CLI version" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CLI-versie"
           }
         }
       }
@@ -341,6 +354,16 @@
         }
       }
     },
+    "Delete failed for %@" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijderen mislukt voor %@"
+          }
+        }
+      }
+    },
     "Delete Image" : {
       "localizations" : {
         "nl" : {
@@ -357,16 +380,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Image verwijderen?"
-          }
-        }
-      }
-    },
-    "Delete failed for %@" : {
-      "localizations" : {
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Verwijderen mislukt voor %@"
           }
         }
       }
@@ -971,6 +984,16 @@
         }
       }
     },
+    "Pull an image to run your first container." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Haal een image op om je eerste container uit te voeren."
+          }
+        }
+      }
+    },
     "Pull Image" : {
       "localizations" : {
         "nl" : {
@@ -987,16 +1010,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Image ophalen…"
-          }
-        }
-      }
-    },
-    "Pull an image to run your first container." : {
-      "localizations" : {
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Haal een image op om je eerste container uit te voeren."
           }
         }
       }
@@ -1171,6 +1184,16 @@
         }
       }
     },
+    "Run detached" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Op de achtergrond uitvoeren"
+          }
+        }
+      }
+    },
     "Run Image" : {
       "localizations" : {
         "nl" : {
@@ -1187,16 +1210,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Image uitvoeren…"
-          }
-        }
-      }
-    },
-    "Run detached" : {
-      "localizations" : {
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Op de achtergrond uitvoeren"
           }
         }
       }
@@ -1511,22 +1524,22 @@
         }
       }
     },
-    "This Mac isn’t supported" : {
-      "localizations" : {
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deze Mac wordt niet ondersteund"
-          }
-        }
-      }
-    },
     "This immediately stops and permanently deletes “%@”. This action cannot be undone." : {
       "localizations" : {
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hiermee wordt ‘%@’ onmiddellijk gestopt en permanent verwijderd. Deze actie kan niet ongedaan worden gemaakt."
+          }
+        }
+      }
+    },
+    "This Mac isn’t supported" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze Mac wordt niet ondersteund"
           }
         }
       }
@@ -1607,16 +1620,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Je Mac, het uitvoerbare containerbestand en de bijbehorende service controleren."
-          }
-        }
-      }
-    },
-    "—" : {
-      "localizations" : {
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "—"
           }
         }
       }
