@@ -89,6 +89,26 @@ final class ContainerDetailModelTests: XCTestCase {
         model.disappear()
     }
 
+    func testNewerInspectionWinsWhenOlderRequestFinishesLast() async throws {
+        let service = SequencedInspectionService(responses: [
+            .init(delay: .milliseconds(120), id: "older"),
+            .init(delay: .milliseconds(10), id: "newer"),
+        ])
+        let model = ContainerDetailModel(containerID: "web", service: service)
+
+        let olderLoad = Task { await model.appear() }
+        try await Task.sleep(for: .milliseconds(20))
+        let newerLoad = Task { await model.reloadInspection() }
+        await newerLoad.value
+        await olderLoad.value
+
+        guard case .loaded(let inspection) = model.inspectionState else {
+            return XCTFail("Expected the latest inspection to be loaded.")
+        }
+        XCTAssertEqual(inspection.details.id, "newer")
+        model.disappear()
+    }
+
     private func eventually(
         timeout: Duration = .seconds(1),
         condition: @escaping @MainActor () -> Bool
@@ -99,6 +119,52 @@ final class ContainerDetailModelTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertTrue(condition())
+    }
+}
+
+private actor SequencedInspectionService: ContainerDiagnosing {
+    struct Response: Sendable {
+        let delay: Duration
+        let id: String
+    }
+
+    private var responses: [Response]
+
+    init(responses: [Response]) {
+        self.responses = responses
+    }
+
+    func inspect(containerID: String) async throws -> ContainerInspection {
+        let response = responses.removeFirst()
+        try await Task.sleep(for: response.delay)
+        let data = Data(
+            """
+            {
+              "configuration": { "id": "\(response.id)", "image": "alpine:3.21" },
+              "status": { "status": "running" }
+            }
+            """.utf8
+        )
+        let dto = try JSONDecoder().decode(ContainerDTO.self, from: data)
+        guard let details = ContainerDetails(dto: dto) else {
+            throw CLIError.invalidOutput(description: "Missing fixture container identifier.")
+        }
+        return ContainerInspection(
+            details: details,
+            formattedJSON: String(decoding: data, as: UTF8.self)
+        )
+    }
+
+    nonisolated func streamLogs(
+        containerID: String,
+        follow: Bool,
+        tail: Int
+    ) -> AsyncThrowingStream<ProcessEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
+
+    func stats(containerID: String) async throws -> ContainerStats {
+        throw CLIError.invalidOutput(description: "Stats are not used by this test.")
     }
 }
 

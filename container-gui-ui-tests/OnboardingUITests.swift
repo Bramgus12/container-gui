@@ -38,12 +38,13 @@ final class OnboardingUITests: XCTestCase {
         let app = launch(scenario: "lifecycle")
 
         app.buttons["containers.run"].click()
-        XCTAssertTrue(app.otherElements["run.sheet"].waitForExistence(timeout: 2))
-        app.textFields["run.image"].click()
-        app.textFields["run.image"].typeText("alpine:3.21")
-        app.textFields["run.name"].click()
-        app.textFields["run.name"].typeText("created-by-ui-test")
-        app.buttons["run.submit"].click()
+        let runSheet = app.sheets.firstMatch
+        XCTAssertTrue(runSheet.waitForExistence(timeout: 2))
+        runSheet.textFields["run.image"].click()
+        runSheet.textFields["run.image"].typeText("alpine:3.21")
+        runSheet.textFields["run.name"].click()
+        runSheet.textFields["run.name"].typeText("created-by-ui-test")
+        runSheet.buttons["run.submit"].click()
         XCTAssertTrue(
             app.staticTexts["created-by-ui-test"].waitForExistence(timeout: 3),
             "Running a container should refresh the list with the created container."
@@ -67,11 +68,14 @@ final class OnboardingUITests: XCTestCase {
             app.staticTexts["Stopped"].exists
         })
 
-        app.buttons["containers.moreActions"].click()
+        app.menuButtons["containers.moreActions"].click()
         app.menuItems["Delete…"].click()
-        XCTAssertTrue(app.alerts["Delete Container?"].waitForExistence(timeout: 2))
+        let deletionConfirmation = app.sheets
+            .containing(.staticText, identifier: "Delete Container?")
+            .firstMatch
+        XCTAssertTrue(deletionConfirmation.waitForExistence(timeout: 2))
         XCTAssertTrue(fixture.exists, "The container must remain until deletion is confirmed.")
-        app.alerts["Delete Container?"].buttons["Delete"].click()
+        deletionConfirmation.buttons["Delete"].click()
         XCTAssertTrue(waitUntil(timeout: 3) { !fixture.exists })
     }
 

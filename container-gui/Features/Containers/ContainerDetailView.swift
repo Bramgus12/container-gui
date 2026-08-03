@@ -38,7 +38,7 @@ private struct ContainerDetailView: View {
         VStack(spacing: 0) {
             Picker("Detail", selection: $model.selectedTab) {
                 ForEach(ContainerDetailTab.allCases) { tab in
-                    Text(tab.rawValue).tag(tab)
+                    Text(tab.title).tag(tab)
                 }
             }
             .pickerStyle(.segmented)
@@ -112,10 +112,7 @@ private struct ContainerDetailView: View {
                             Text("No networks")
                                 .foregroundStyle(.secondary)
                         } else {
-                            ForEach(
-                                Array(inspection.details.networks.enumerated()),
-                                id: \.offset
-                            ) { _, network in
+                            ForEach(inspection.details.networks) { network in
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(network.name ?? "Network")
                                         .fontWeight(.medium)
@@ -141,10 +138,7 @@ private struct ContainerDetailView: View {
                             Text("No published ports")
                                 .foregroundStyle(.secondary)
                         } else {
-                            ForEach(
-                                Array(inspection.details.ports.enumerated()),
-                                id: \.offset
-                            ) { _, port in
+                            ForEach(inspection.details.ports) { port in
                                 detailRow(
                                     "\(port.containerPort.map(String.init) ?? "—")/\(port.proto ?? "tcp")",
                                     "\(port.hostAddress ?? "0.0.0.0"):\(port.hostPort.map(String.init) ?? "—")"
@@ -158,10 +152,7 @@ private struct ContainerDetailView: View {
                             Text("No mounts")
                                 .foregroundStyle(.secondary)
                         } else {
-                            ForEach(
-                                Array(inspection.details.mounts.enumerated()),
-                                id: \.offset
-                            ) { _, mount in
+                            ForEach(inspection.details.mounts) { mount in
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(mount.destination ?? "—")
                                         .fontWeight(.medium)
@@ -185,13 +176,7 @@ private struct ContainerDetailView: View {
     private var logs: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Toggle(
-                    "Follow",
-                    isOn: Binding(
-                        get: { model.followsLogs },
-                        set: { model.setFollowLogs($0) }
-                    )
-                )
+                Toggle("Follow", isOn: $model.followsLogs)
                 .toggleStyle(.switch)
 
                 Toggle("Autoscroll", isOn: $model.autoscrollsLogs)

@@ -103,6 +103,7 @@ actor ProcessContainerCLI: ContainerCLI {
         let standardOutput = Pipe()
         let standardError = Pipe()
         let session = ProcessSession(process: process)
+        let drainQueue = DispatchQueue(label: "ProcessContainerCLI.streaming-pipe-drain")
 
         process.executableURL = request.executableURL
         process.arguments = request.arguments
@@ -112,14 +113,18 @@ actor ProcessContainerCLI: ContainerCLI {
         process.standardError = standardError
 
         standardOutput.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-            continuation.yield(.standardOutput(String(decoding: data, as: UTF8.self)))
+            drainQueue.async {
+                let data = handle.availableData
+                guard !data.isEmpty else { return }
+                continuation.yield(.standardOutput(String(decoding: data, as: UTF8.self)))
+            }
         }
         standardError.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-            continuation.yield(.standardError(String(decoding: data, as: UTF8.self)))
+            drainQueue.async {
+                let data = handle.availableData
+                guard !data.isEmpty else { return }
+                continuation.yield(.standardError(String(decoding: data, as: UTF8.self)))
+            }
         }
 
         do {
@@ -129,19 +134,21 @@ actor ProcessContainerCLI: ContainerCLI {
                         standardOutput.fileHandleForReading.readabilityHandler = nil
                         standardError.fileHandleForReading.readabilityHandler = nil
 
-                        if let remaining = try? standardOutput.fileHandleForReading.readToEnd(),
-                           !remaining.isEmpty {
-                            continuation.yield(
-                                .standardOutput(String(decoding: remaining, as: UTF8.self))
-                            )
+                        drainQueue.async {
+                            if let remaining = try? standardOutput.fileHandleForReading.readToEnd(),
+                               !remaining.isEmpty {
+                                continuation.yield(
+                                    .standardOutput(String(decoding: remaining, as: UTF8.self))
+                                )
+                            }
+                            if let remaining = try? standardError.fileHandleForReading.readToEnd(),
+                               !remaining.isEmpty {
+                                continuation.yield(
+                                    .standardError(String(decoding: remaining, as: UTF8.self))
+                                )
+                            }
+                            processContinuation.resume(returning: process.terminationStatus)
                         }
-                        if let remaining = try? standardError.fileHandleForReading.readToEnd(),
-                           !remaining.isEmpty {
-                            continuation.yield(
-                                .standardError(String(decoding: remaining, as: UTF8.self))
-                            )
-                        }
-                        processContinuation.resume(returning: process.terminationStatus)
                     }
 
                     do {
@@ -211,6 +218,7 @@ actor ProcessContainerCLI: ContainerCLI {
         let standardError = Pipe()
         let output = BoundedProcessOutput(limit: request.outputLimit)
         let session = ProcessSession(process: process)
+        let drainQueue = DispatchQueue(label: "ProcessContainerCLI.pipe-drain")
         let clock = ContinuousClock()
         let start = clock.now
 
@@ -222,17 +230,21 @@ actor ProcessContainerCLI: ContainerCLI {
         process.standardError = standardError
 
         standardOutput.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-            if output.append(data, to: .standardOutput) {
-                session.cancel()
+            drainQueue.async {
+                let data = handle.availableData
+                guard !data.isEmpty else { return }
+                if output.append(data, to: .standardOutput) {
+                    session.cancel()
+                }
             }
         }
         standardError.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-            if output.append(data, to: .standardError) {
-                session.cancel()
+            drainQueue.async {
+                let data = handle.availableData
+                guard !data.isEmpty else { return }
+                if output.append(data, to: .standardError) {
+                    session.cancel()
+                }
             }
         }
 
@@ -244,13 +256,15 @@ actor ProcessContainerCLI: ContainerCLI {
                         standardOutput.fileHandleForReading.readabilityHandler = nil
                         standardError.fileHandleForReading.readabilityHandler = nil
 
-                        if let remaining = try? standardOutput.fileHandleForReading.readToEnd() {
-                            _ = output.append(remaining, to: .standardOutput)
+                        drainQueue.async {
+                            if let remaining = try? standardOutput.fileHandleForReading.readToEnd() {
+                                _ = output.append(remaining, to: .standardOutput)
+                            }
+                            if let remaining = try? standardError.fileHandleForReading.readToEnd() {
+                                _ = output.append(remaining, to: .standardError)
+                            }
+                            continuation.resume(returning: process.terminationStatus)
                         }
-                        if let remaining = try? standardError.fileHandleForReading.readToEnd() {
-                            _ = output.append(remaining, to: .standardError)
-                        }
-                        continuation.resume(returning: process.terminationStatus)
                     }
 
                     do {

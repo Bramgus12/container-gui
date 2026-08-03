@@ -8,6 +8,8 @@ nonisolated struct ImageDTO: Decodable, Equatable, Sendable {
     let createdAt: String?
     let platform: PlatformDTO?
     let descriptor: ImageDescriptorDTO?
+    let configuration: ImageConfigurationDTO?
+    let variants: [ImageVariantDTO]?
 
     private enum CodingKeys: String, CodingKey {
         case reference
@@ -18,6 +20,8 @@ nonisolated struct ImageDTO: Decodable, Equatable, Sendable {
         case creationDate
         case platform
         case descriptor
+        case configuration
+        case variants
     }
 
     init(from decoder: Decoder) throws {
@@ -30,13 +34,29 @@ nonisolated struct ImageDTO: Decodable, Equatable, Sendable {
             ?? container.decodeIfPresent(String.self, forKey: .creationDate)
         platform = try container.decodeIfPresent(PlatformDTO.self, forKey: .platform)
         descriptor = try container.decodeIfPresent(ImageDescriptorDTO.self, forKey: .descriptor)
+        configuration = try container.decodeIfPresent(ImageConfigurationDTO.self, forKey: .configuration)
+        variants = try container.decodeIfPresent([ImageVariantDTO].self, forKey: .variants)
     }
+}
+
+nonisolated struct ImageConfigurationDTO: Decodable, Equatable, Sendable {
+    let reference: String?
+    let name: String?
+    let descriptor: ImageDescriptorDTO?
+    let createdAt: String?
+    let creationDate: String?
 }
 
 nonisolated struct ImageDescriptorDTO: Decodable, Equatable, Sendable {
     let digest: String?
     let size: UInt64?
     let mediaType: String?
+}
+
+nonisolated struct ImageVariantDTO: Decodable, Equatable, Sendable {
+    let digest: String?
+    let size: UInt64?
+    let platform: PlatformDTO?
 }
 
 nonisolated struct ImageSummary: Identifiable, Equatable, Sendable {
@@ -52,20 +72,32 @@ nonisolated struct ImageSummary: Identifiable, Equatable, Sendable {
     let architecture: String?
 
     init?(dto: ImageDTO) {
-        guard let reference = dto.reference ?? dto.name, !reference.isEmpty else {
+        let configuration = dto.configuration
+        guard let reference = dto.reference ?? dto.name ?? configuration?.reference ?? configuration?.name,
+              !reference.isEmpty else {
             return nil
         }
+
+        let descriptor = dto.descriptor ?? configuration?.descriptor
+        let platform = dto.platform ?? dto.variants?.first { variant in
+            variant.platform?.os != "unknown" && variant.platform?.architecture != "unknown"
+        }?.platform
+
         self.reference = reference
-        digest = dto.digest ?? dto.descriptor?.digest
-        size = dto.size ?? dto.descriptor?.size
-        if let value = dto.createdAt {
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            createdAt = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
-        } else {
-            createdAt = nil
-        }
-        operatingSystem = dto.platform?.os
-        architecture = dto.platform?.architecture
+        digest = dto.digest ?? descriptor?.digest
+        size = dto.size ?? descriptor?.size
+        createdAt = parseImageDate(dto.createdAt ?? configuration?.createdAt ?? configuration?.creationDate)
+        operatingSystem = platform?.os
+        architecture = platform?.architecture
     }
+}
+
+nonisolated private func parseImageDate(_ value: String?) -> Date? {
+    guard let value else {
+        return nil
+    }
+    if let date = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(value) {
+        return date
+    }
+    return try? Date.ISO8601FormatStyle().parse(value)
 }

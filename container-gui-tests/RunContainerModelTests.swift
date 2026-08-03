@@ -66,10 +66,12 @@ final class RunContainerModelTests: XCTestCase {
         let lister = RunContainerLister(
             containers: [makeSummary(id: "web", state: "running")]
         )
+        let imageService = RunContainerImageService()
         let appModel = AppModel(
             setup: SetupModel(),
             containerLister: lister,
-            containerRunner: runner
+            containerRunner: runner,
+            imageService: imageService
         )
         let form = RunContainerModel()
         form.image = "alpine:3.21"
@@ -83,8 +85,10 @@ final class RunContainerModelTests: XCTestCase {
         XCTAssertTrue(form.progress.contains("Process exited with status 0."))
         XCTAssertEqual(appModel.selectedContainerID, "web")
         let refreshCount = await lister.callCount
+        let imageRefreshCount = await imageService.listCallCount
         let expectedConfiguration = try? RunConfiguration(image: "alpine:3.21", name: "web")
         XCTAssertEqual(refreshCount, 1)
+        XCTAssertEqual(imageRefreshCount, 1)
         XCTAssertEqual(runner.configurations, [expectedConfiguration].compactMap { $0 })
     }
 
@@ -171,6 +175,27 @@ private actor RunContainerLister: ContainerListing {
         callCount += 1
         return containers
     }
+}
+
+private actor RunContainerImageService: ImageManaging {
+    private(set) var listCallCount = 0
+
+    func listImages() -> [ImageSummary] {
+        listCallCount += 1
+        return []
+    }
+
+    func inspectImage(reference: String) -> String {
+        #"{}"#
+    }
+
+    nonisolated func pullImage(
+        reference: String
+    ) -> AsyncThrowingStream<ProcessEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
+
+    func deleteImage(reference: String) {}
 }
 
 private func makeSummary(id: String, state: String) -> ContainerSummary {

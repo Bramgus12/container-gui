@@ -113,6 +113,15 @@ enum ContainerDetailTab: String, CaseIterable, Identifiable {
     case stats = "Stats"
 
     var id: Self { self }
+
+    var title: LocalizedStringResource {
+        switch self {
+        case .overview: "Overview"
+        case .logs: "Logs"
+        case .inspect: "Inspect"
+        case .stats: "Stats"
+        }
+    }
 }
 
 enum ContainerInspectionState: Equatable {
@@ -128,7 +137,12 @@ final class ContainerDetailModel {
     var selectedTab: ContainerDetailTab = .overview {
         didSet { updateVisibleWork() }
     }
-    var followsLogs = true
+    var followsLogs = true {
+        didSet {
+            guard followsLogs != oldValue, isVisible, selectedTab == .logs else { return }
+            startLogs()
+        }
+    }
     var autoscrollsLogs = true
 
     private(set) var inspectionState: ContainerInspectionState = .loading
@@ -149,6 +163,9 @@ final class ContainerDetailModel {
     private var pendingLogText = ""
     private var logTask: Task<Void, Never>?
     private var statsTask: Task<Void, Never>?
+    private var inspectionGeneration = 0
+    private var logGeneration = 0
+    private var statsGeneration = 0
 
     init(
         containerID: String,
@@ -172,6 +189,7 @@ final class ContainerDetailModel {
 
     func disappear() {
         isVisible = false
+        inspectionGeneration += 1
         cancelLogs()
         cancelStats()
     }
@@ -179,14 +197,6 @@ final class ContainerDetailModel {
     func reloadInspection() async {
         inspectionState = .loading
         await loadInspection()
-    }
-
-    func setFollowLogs(_ follows: Bool) {
-        guard followsLogs != follows else { return }
-        followsLogs = follows
-        if isVisible, selectedTab == .logs {
-            startLogs()
-        }
     }
 
     func toggleLogPause() {
@@ -203,13 +213,18 @@ final class ContainerDetailModel {
     }
 
     private func loadInspection() async {
+        inspectionGeneration += 1
+        let generation = inspectionGeneration
         do {
-            inspectionState = .loaded(try await service.inspect(containerID: containerID))
+            let inspection = try await service.inspect(containerID: containerID)
+            guard generation == inspectionGeneration else { return }
+            inspectionState = .loaded(inspection)
         } catch is CancellationError {
             return
         } catch CLIError.cancelled {
             return
         } catch {
+            guard generation == inspectionGeneration else { return }
             inspectionState = .failed(DiagnosticSanitizer.sanitize(error.localizedDescription))
         }
     }
@@ -232,6 +247,7 @@ final class ContainerDetailModel {
 
     private func startLogs() {
         cancelLogs()
+        let generation = logGeneration
         logError = nil
         isLogStreaming = true
         let stream = service.streamLogs(
@@ -245,6 +261,7 @@ final class ContainerDetailModel {
             do {
                 for try await event in stream {
                     try Task.checkCancellation()
+                    guard generation == self.logGeneration else { return }
                     switch event {
                     case .standardOutput(let text), .standardError(let text):
                         self.appendLog(text)
@@ -259,15 +276,18 @@ final class ContainerDetailModel {
             } catch CLIError.cancelled {
                 // ProcessContainerCLI normalizes stream cancellation.
             } catch {
-                self.logError = DiagnosticSanitizer.sanitize(error.localizedDescription)
+                if generation == self.logGeneration {
+                    self.logError = DiagnosticSanitizer.sanitize(error.localizedDescription)
+                }
             }
-            if !Task.isCancelled {
+            if !Task.isCancelled, generation == self.logGeneration {
                 self.isLogStreaming = false
             }
         }
     }
 
     private func cancelLogs() {
+        logGeneration += 1
         logTask?.cancel()
         logTask = nil
         isLogStreaming = false
@@ -310,19 +330,23 @@ final class ContainerDetailModel {
 
     private func startStats() {
         cancelStats()
+        let generation = statsGeneration
         statsError = nil
         statsTask = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
                 self.isStatsLoading = self.stats == nil
                 do {
-                    self.stats = try await self.service.stats(containerID: self.containerID)
+                    let stats = try await self.service.stats(containerID: self.containerID)
+                    guard generation == self.statsGeneration else { return }
+                    self.stats = stats
                     self.statsError = nil
                 } catch is CancellationError {
                     break
                 } catch CLIError.cancelled {
                     break
                 } catch {
+                    guard generation == self.statsGeneration else { return }
                     self.statsError = DiagnosticSanitizer.sanitize(error.localizedDescription)
                 }
                 self.isStatsLoading = false
@@ -333,11 +357,14 @@ final class ContainerDetailModel {
                     break
                 }
             }
-            self.isStatsLoading = false
+            if generation == self.statsGeneration {
+                self.isStatsLoading = false
+            }
         }
     }
 
     private func cancelStats() {
+        statsGeneration += 1
         statsTask?.cancel()
         statsTask = nil
         isStatsLoading = false

@@ -136,11 +136,27 @@ nonisolated struct ContainerNetworkDTO: Decodable, Equatable, Sendable {
     let mtu: Int?
 }
 
-nonisolated struct PublishedPortDTO: Decodable, Equatable, Sendable {
+nonisolated struct PublishedPortDTO: Decodable, Equatable, Identifiable, Sendable {
+    struct ID: Hashable, Sendable {
+        let hostAddress: String?
+        let hostPort: Int?
+        let containerPort: Int?
+        let proto: String?
+    }
+
     let hostAddress: String?
     let hostPort: Int?
     let containerPort: Int?
     let proto: String?
+
+    var id: ID {
+        ID(
+            hostAddress: hostAddress,
+            hostPort: hostPort,
+            containerPort: containerPort,
+            proto: proto
+        )
+    }
 
     private enum CodingKeys: String, CodingKey {
         case hostAddress
@@ -160,11 +176,27 @@ nonisolated struct PublishedPortDTO: Decodable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ContainerMountDTO: Decodable, Equatable, Sendable {
+nonisolated struct ContainerMountDTO: Decodable, Equatable, Identifiable, Sendable {
+    enum ID: Hashable, Sendable {
+        case destination(String)
+        case source(String)
+        case anonymous(options: [String]?, type: String?)
+    }
+
     let source: String?
     let destination: String?
     let options: [String]?
     let type: String?
+
+    var id: ID {
+        if let destination {
+            return .destination(destination)
+        }
+        if let source {
+            return .source(source)
+        }
+        return .anonymous(options: options, type: type)
+    }
 
     private enum CodingKeys: String, CodingKey {
         case source
@@ -233,12 +265,30 @@ nonisolated struct ContainerSummary: Identifiable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ContainerNetwork: Equatable, Sendable {
+nonisolated struct ContainerNetwork: Equatable, Identifiable, Sendable {
+    enum ID: Hashable, Sendable {
+        case name(String)
+        case macAddress(String)
+        case ipv4Address(String)
+        case ipv6Address(String)
+        case hostname(String)
+        case unknown
+    }
+
     let name: String?
     let hostname: String?
     let ipv4Address: String?
     let ipv6Address: String?
     let macAddress: String?
+
+    var id: ID {
+        if let name { return .name(name) }
+        if let macAddress { return .macAddress(macAddress) }
+        if let ipv4Address { return .ipv4Address(ipv4Address) }
+        if let ipv6Address { return .ipv6Address(ipv6Address) }
+        if let hostname { return .hostname(hostname) }
+        return .unknown
+    }
 }
 
 nonisolated struct ContainerDetails: Identifiable, Equatable, Sendable {
@@ -275,9 +325,10 @@ nonisolated private func parseCLIDate(_ value: String?) -> Date? {
     guard let value else {
         return nil
     }
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+    if let date = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(value) {
+        return date
+    }
+    return try? Date.ISO8601FormatStyle().parse(value)
 }
 
 nonisolated private extension KeyedDecodingContainer {

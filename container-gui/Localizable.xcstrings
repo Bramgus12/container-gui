@@ -1,0 +1,1626 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@ failed for %@" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mislukt voor %@"
+          }
+        }
+      }
+    },
+    "%@…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@…"
+          }
+        }
+      }
+    },
+    "Active" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actief"
+          }
+        }
+      }
+    },
+    "Add Argument" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Argument toevoegen"
+          }
+        }
+      }
+    },
+    "Add Port" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poort toevoegen"
+          }
+        }
+      }
+    },
+    "Add Variable" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Variabele toevoegen"
+          }
+        }
+      }
+    },
+    "Address" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adres"
+          }
+        }
+      }
+    },
+    "All" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle"
+          }
+        }
+      }
+    },
+    "Architecture" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Architectuur"
+          }
+        }
+      }
+    },
+    "Argument" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Argument"
+          }
+        }
+      }
+    },
+    "Autoscroll" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisch scrollen"
+          }
+        }
+      }
+    },
+    "CLI version" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CLI-versie"
+          }
+        }
+      }
+    },
+    "Cancel" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuleer"
+          }
+        }
+      }
+    },
+    "Cancel Pull" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ophalen annuleren"
+          }
+        }
+      }
+    },
+    "Checking Apple Container…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Container controleren…"
+          }
+        }
+      }
+    },
+    "Choose Executable…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uitvoerbaar bestand kiezen…"
+          }
+        }
+      }
+    },
+    "Choose a compatible executable before continuing." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies een compatibel uitvoerbaar bestand voordat je doorgaat."
+          }
+        }
+      }
+    },
+    "Choose another state filter to see more containers." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies een ander statusfilter om meer containers te zien."
+          }
+        }
+      }
+    },
+    "Clear" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wis"
+          }
+        }
+      }
+    },
+    "Command" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opdracht"
+          }
+        }
+      }
+    },
+    "Command Preview" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opdrachtvoorbeeld"
+          }
+        }
+      }
+    },
+    "Container" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container"
+          }
+        }
+      }
+    },
+    "Container GUI" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container GUI"
+          }
+        }
+      }
+    },
+    "Container GUI requires Apple silicon and a supported version of macOS." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container GUI vereist Apple silicon en een ondersteunde versie van macOS."
+          }
+        }
+      }
+    },
+    "Container port" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Containerpoort"
+          }
+        }
+      }
+    },
+    "Containers" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Containers"
+          }
+        }
+      }
+    },
+    "Containers Couldn’t Be Loaded" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Containers konden niet worden geladen"
+          }
+        }
+      }
+    },
+    "Containers you create will appear here." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Containers die je aanmaakt, verschijnen hier."
+          }
+        }
+      }
+    },
+    "Copied" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gekopieerd"
+          }
+        }
+      }
+    },
+    "Copy" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopieer"
+          }
+        }
+      }
+    },
+    "Copy Diagnostics" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnostiek kopiëren"
+          }
+        }
+      }
+    },
+    "Created" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aangemaakt"
+          }
+        }
+      }
+    },
+    "Delete" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijder"
+          }
+        }
+      }
+    },
+    "Delete Container?" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container verwijderen?"
+          }
+        }
+      }
+    },
+    "Delete Image" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image verwijderen"
+          }
+        }
+      }
+    },
+    "Delete Image?" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image verwijderen?"
+          }
+        }
+      }
+    },
+    "Delete failed for %@" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijderen mislukt voor %@"
+          }
+        }
+      }
+    },
+    "Delete…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijder…"
+          }
+        }
+      }
+    },
+    "Detail" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detail"
+          }
+        }
+      }
+    },
+    "Details Unavailable" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Details niet beschikbaar"
+          }
+        }
+      }
+    },
+    "Detected architecture: %@. An Apple silicon Mac is required." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gedetecteerde architectuur: %@. Een Mac met Apple silicon is vereist."
+          }
+        }
+      }
+    },
+    "Detected macOS %lld.%lld.%lld. macOS %lld or later is required." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gedetecteerd: macOS %lld.%lld.%lld. macOS %lld of nieuwer is vereist."
+          }
+        }
+      }
+    },
+    "Detected version" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gedetecteerde versie"
+          }
+        }
+      }
+    },
+    "Diagnostics" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnostiek"
+          }
+        }
+      }
+    },
+    "Digest" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Digest"
+          }
+        }
+      }
+    },
+    "Disk Usage" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schijfgebruik"
+          }
+        }
+      }
+    },
+    "Disk Usage Unavailable" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schijfgebruik niet beschikbaar"
+          }
+        }
+      }
+    },
+    "Dismiss" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sluit"
+          }
+        }
+      }
+    },
+    "Done" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gereed"
+          }
+        }
+      }
+    },
+    "Environment" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Omgeving"
+          }
+        }
+      }
+    },
+    "Executable" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uitvoerbaar bestand"
+          }
+        }
+      }
+    },
+    "Exit code" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afsluitcode"
+          }
+        }
+      }
+    },
+    "Expected location: /usr/local/bin/container" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwachte locatie: /usr/local/bin/container"
+          }
+        }
+      }
+    },
+    "Follow" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volgen"
+          }
+        }
+      }
+    },
+    "Force Delete Container?" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container geforceerd verwijderen?"
+          }
+        }
+      }
+    },
+    "Force Delete…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geforceerd verwijderen…"
+          }
+        }
+      }
+    },
+    "Forget Saved Path" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opgeslagen pad vergeten"
+          }
+        }
+      }
+    },
+    "Formatting inspection JSON…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inspectie-JSON formatteren…"
+          }
+        }
+      }
+    },
+    "Getting things ready" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alles gereedmaken"
+          }
+        }
+      }
+    },
+    "Host address (optional)" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hostadres (optioneel)"
+          }
+        }
+      }
+    },
+    "Host port" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hostpoort"
+          }
+        }
+      }
+    },
+    "ID / Name" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ID / naam"
+          }
+        }
+      }
+    },
+    "Image" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image"
+          }
+        }
+      }
+    },
+    "Image pulled successfully" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image is opgehaald"
+          }
+        }
+      }
+    },
+    "Images" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Images"
+          }
+        }
+      }
+    },
+    "Images Couldn’t Be Loaded" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Images konden niet worden geladen"
+          }
+        }
+      }
+    },
+    "Inspect" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inspecteren"
+          }
+        }
+      }
+    },
+    "Inspecting container…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container inspecteren…"
+          }
+        }
+      }
+    },
+    "Inspecting image…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image inspecteren…"
+          }
+        }
+      }
+    },
+    "Inspection Failed" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inspectie mislukt"
+          }
+        }
+      }
+    },
+    "Install Apple Container" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Container installeren"
+          }
+        }
+      }
+    },
+    "Install Apple Container, or choose an existing container executable." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installeer Apple Container of kies een bestaand uitvoerbaar containerbestand."
+          }
+        }
+      }
+    },
+    "Key" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sleutel"
+          }
+        }
+      }
+    },
+    "Last 15 minutes" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afgelopen 15 minuten"
+          }
+        }
+      }
+    },
+    "Loading containers…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Containers laden…"
+          }
+        }
+      }
+    },
+    "Loading disk usage…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schijfgebruik laden…"
+          }
+        }
+      }
+    },
+    "Loading images…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Images laden…"
+          }
+        }
+      }
+    },
+    "Loading recent logs…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recente logs laden…"
+          }
+        }
+      }
+    },
+    "Loading stats…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Statistieken laden…"
+          }
+        }
+      }
+    },
+    "Logs" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logs"
+          }
+        }
+      }
+    },
+    "Message" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bericht"
+          }
+        }
+      }
+    },
+    "More Actions" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meer acties"
+          }
+        }
+      }
+    },
+    "No %@ Containers" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen containers met status %@"
+          }
+        }
+      }
+    },
+    "No Containers" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen containers"
+          }
+        }
+      }
+    },
+    "No Images" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen images"
+          }
+        }
+      }
+    },
+    "No mounts" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen mounts"
+          }
+        }
+      }
+    },
+    "No networks" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen netwerken"
+          }
+        }
+      }
+    },
+    "No published ports" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen gepubliceerde poorten"
+          }
+        }
+      }
+    },
+    "No service log messages were found in the last 15 minutes." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Er zijn in de afgelopen 15 minuten geen servicelogberichten gevonden."
+          }
+        }
+      }
+    },
+    "Open Apple Container installation instructions" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installatie-instructies voor Apple Container openen"
+          }
+        }
+      }
+    },
+    "Overview" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overzicht"
+          }
+        }
+      }
+    },
+    "Pause" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pauzeer"
+          }
+        }
+      }
+    },
+    "Platform" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Platform"
+          }
+        }
+      }
+    },
+    "Progress" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voortgang"
+          }
+        }
+      }
+    },
+    "Protocol" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protocol"
+          }
+        }
+      }
+    },
+    "Published Ports" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gepubliceerde poorten"
+          }
+        }
+      }
+    },
+    "Pull" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ophalen"
+          }
+        }
+      }
+    },
+    "Pull Image" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image ophalen"
+          }
+        }
+      }
+    },
+    "Pull Image…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image ophalen…"
+          }
+        }
+      }
+    },
+    "Pull an image to run your first container." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Haal een image op om je eerste container uit te voeren."
+          }
+        }
+      }
+    },
+    "Pulling image and starting container…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image ophalen en container starten…"
+          }
+        }
+      }
+    },
+    "Pulling image…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image ophalen…"
+          }
+        }
+      }
+    },
+    "Ready" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gereed"
+          }
+        }
+      }
+    },
+    "Recent Service Logs" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recente servicelogs"
+          }
+        }
+      }
+    },
+    "Reclaimable" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vrij te maken"
+          }
+        }
+      }
+    },
+    "Reference" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Referentie"
+          }
+        }
+      }
+    },
+    "Reference, for example alpine:3.21" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Referentie, bijvoorbeeld alpine:3.21"
+          }
+        }
+      }
+    },
+    "Refresh" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vernieuw"
+          }
+        }
+      }
+    },
+    "Remove" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijder"
+          }
+        }
+      }
+    },
+    "Remove when stopped" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijderen na stoppen"
+          }
+        }
+      }
+    },
+    "Resource" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bron"
+          }
+        }
+      }
+    },
+    "Resources" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resources"
+          }
+        }
+      }
+    },
+    "Resume" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hervat"
+          }
+        }
+      }
+    },
+    "Retry" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opnieuw"
+          }
+        }
+      }
+    },
+    "Review the diagnostic below, then retry or choose another executable." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bekijk de diagnostiek hieronder en probeer het opnieuw of kies een ander uitvoerbaar bestand."
+          }
+        }
+      }
+    },
+    "Run" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uitvoeren"
+          }
+        }
+      }
+    },
+    "Run Container" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container uitvoeren"
+          }
+        }
+      }
+    },
+    "Run Image" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image uitvoeren"
+          }
+        }
+      }
+    },
+    "Run Image…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image uitvoeren…"
+          }
+        }
+      }
+    },
+    "Run detached" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Op de achtergrond uitvoeren"
+          }
+        }
+      }
+    },
+    "Running" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actief"
+          }
+        }
+      }
+    },
+    "Running containers will stop and Container GUI will be unavailable until the services are started again." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actieve containers worden gestopt en Container GUI is niet beschikbaar totdat de services opnieuw zijn gestart."
+          }
+        }
+      }
+    },
+    "Search containers" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Containers zoeken"
+          }
+        }
+      }
+    },
+    "Search images" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Images zoeken"
+          }
+        }
+      }
+    },
+    "Select a Section" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selecteer een onderdeel"
+          }
+        }
+      }
+    },
+    "Server version" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serverversie"
+          }
+        }
+      }
+    },
+    "Service" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service"
+          }
+        }
+      }
+    },
+    "Service Health" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servicestatus"
+          }
+        }
+      }
+    },
+    "Service Logs Unavailable" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servicelogs niet beschikbaar"
+          }
+        }
+      }
+    },
+    "Setup couldn’t finish" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configuratie kon niet worden voltooid"
+          }
+        }
+      }
+    },
+    "Setup operation in progress" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configuratie wordt uitgevoerd"
+          }
+        }
+      }
+    },
+    "Size" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grootte"
+          }
+        }
+      }
+    },
+    "Standard error" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standaardfoutuitvoer"
+          }
+        }
+      }
+    },
+    "Start" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start"
+          }
+        }
+      }
+    },
+    "Start Service" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service starten"
+          }
+        }
+      }
+    },
+    "Start the Container service" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De Container-service starten"
+          }
+        }
+      }
+    },
+    "Starting service" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service wordt gestart"
+          }
+        }
+      }
+    },
+    "State" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status"
+          }
+        }
+      }
+    },
+    "Stats" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Statistieken"
+          }
+        }
+      }
+    },
+    "Stop" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop"
+          }
+        }
+      }
+    },
+    "Stop Container Services?" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container-services stoppen?"
+          }
+        }
+      }
+    },
+    "Stop Service" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service stoppen"
+          }
+        }
+      }
+    },
+    "Stop Service…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service stoppen…"
+          }
+        }
+      }
+    },
+    "Stopped" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestopt"
+          }
+        }
+      }
+    },
+    "Stopping service" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service wordt gestopt"
+          }
+        }
+      }
+    },
+    "Supported versions" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ondersteunde versies"
+          }
+        }
+      }
+    },
+    "System" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Systeem"
+          }
+        }
+      }
+    },
+    "TCP" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TCP"
+          }
+        }
+      }
+    },
+    "The CLI is valid, but its background service is not running." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De CLI is geldig, maar de achtergrondservice is niet actief."
+          }
+        }
+      }
+    },
+    "The container executable is not ready." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het uitvoerbare containerbestand is niet gereed."
+          }
+        }
+      }
+    },
+    "The saved executable is no longer available at %@." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het opgeslagen uitvoerbare bestand is niet meer beschikbaar op %@."
+          }
+        }
+      }
+    },
+    "This Mac isn’t supported" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze Mac wordt niet ondersteund"
+          }
+        }
+      }
+    },
+    "This immediately stops and permanently deletes “%@”. This action cannot be undone." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hiermee wordt ‘%@’ onmiddellijk gestopt en permanent verwijderd. Deze actie kan niet ongedaan worden gemaakt."
+          }
+        }
+      }
+    },
+    "This permanently deletes “%@”. Containers that use the image can cause this operation to fail." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hiermee wordt ‘%@’ permanent verwijderd. Containers die deze image gebruiken, kunnen ervoor zorgen dat deze bewerking mislukt."
+          }
+        }
+      }
+    },
+    "This permanently deletes “%@”. This action cannot be undone." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hiermee wordt ‘%@’ permanent verwijderd. Deze actie kan niet ongedaan worden gemaakt."
+          }
+        }
+      }
+    },
+    "Total" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Totaal"
+          }
+        }
+      }
+    },
+    "Try Again" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opnieuw proberen"
+          }
+        }
+      }
+    },
+    "UDP" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UDP"
+          }
+        }
+      }
+    },
+    "Unsupported CLI version" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niet-ondersteunde CLI-versie"
+          }
+        }
+      }
+    },
+    "Value" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waarde"
+          }
+        }
+      }
+    },
+    "Verifying your Mac, the container executable, and its service." : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je Mac, het uitvoerbare containerbestand en de bijbehorende service controleren."
+          }
+        }
+      }
+    },
+    "—" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "—"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

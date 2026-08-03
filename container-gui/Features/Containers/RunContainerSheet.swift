@@ -178,7 +178,6 @@ struct RunContainerSheet: View {
         }
         .frame(minWidth: 720, minHeight: 680)
         .interactiveDismissDisabled(model.isRunning)
-        .accessibilityIdentifier("run.sheet")
     }
 
     @ViewBuilder

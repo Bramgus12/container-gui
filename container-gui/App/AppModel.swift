@@ -175,6 +175,14 @@ enum AppDestination: String, CaseIterable, Identifiable, Sendable {
 
     var id: Self { self }
 
+    var title: LocalizedStringResource {
+        switch self {
+        case .containers: "Containers"
+        case .images: "Images"
+        case .system: "System"
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .containers: "shippingbox"
@@ -190,6 +198,14 @@ enum ContainerFilter: String, CaseIterable, Identifiable, Sendable {
     case stopped = "Stopped"
 
     var id: Self { self }
+
+    var title: LocalizedStringResource {
+        switch self {
+        case .all: "All"
+        case .running: "Running"
+        case .stopped: "Stopped"
+        }
+    }
 }
 
 enum ContainerListState: Equatable, Sendable {
@@ -225,17 +241,29 @@ final class AppModel {
     let setup: SetupModel
 
     var destination: AppDestination? = .containers
-    var searchText = ""
-    var containerFilter: ContainerFilter = .all
+    var searchText = "" {
+        didSet { updateFilteredContainers() }
+    }
+    var containerFilter: ContainerFilter = .all {
+        didSet { updateFilteredContainers() }
+    }
     var selectedContainerID: String?
-    var imageSearchText = ""
+    var imageSearchText = "" {
+        didSet { updateFilteredImages() }
+    }
     var selectedImageID: String?
 
-    private(set) var containers: [ContainerSummary] = []
+    private(set) var containers: [ContainerSummary] = [] {
+        didSet { updateFilteredContainers() }
+    }
+    private(set) var filteredContainers: [ContainerSummary] = []
     private(set) var containerListState: ContainerListState = .idle
     private(set) var containerMutations: [String: ContainerMutation] = [:]
     private(set) var mutationFailure: ContainerMutationFailure?
-    private(set) var images: [ImageSummary] = []
+    private(set) var images: [ImageSummary] = [] {
+        didSet { updateFilteredImages() }
+    }
+    private(set) var filteredImages: [ImageSummary] = []
     private(set) var imageListState: ImageListState = .idle
     private(set) var imageInspectionState: ImageInspectionState = .idle
     private(set) var deletingImageReference: String?
@@ -278,16 +306,37 @@ final class AppModel {
         self.failureLog = failureLog ?? OperationFailureLog()
     }
 
-    var filteredContainers: [ContainerSummary] {
-        containers.filter { container in
+    var isContainerInspectorPresented: Bool {
+        get { selectedContainerID != nil }
+        set {
+            if !newValue {
+                selectedContainerID = nil
+            }
+        }
+    }
+
+    var isImageInspectorPresented: Bool {
+        get { selectedImageID != nil }
+        set {
+            if !newValue {
+                selectedImageID = nil
+            }
+        }
+    }
+
+    private func updateFilteredContainers() {
+        filteredContainers = containers.filter { container in
             matchesFilter(container) && matchesSearch(container)
         }
     }
 
-    var filteredImages: [ImageSummary] {
+    private func updateFilteredImages() {
         let query = imageSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return images }
-        return images.filter { image in
+        guard !query.isEmpty else {
+            filteredImages = images
+            return
+        }
+        filteredImages = images.filter { image in
             [
                 image.reference,
                 image.digest,
@@ -613,6 +662,9 @@ final class AppModel {
             }
 
             await refreshContainers()
+            if imageService != nil {
+                await refreshImages()
+            }
         } catch {
             failureLog.record(operation: "Run container", error: error)
             throw error

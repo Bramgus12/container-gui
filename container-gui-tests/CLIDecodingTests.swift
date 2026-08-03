@@ -40,6 +40,39 @@ final class CLIDecodingTests: XCTestCase {
         XCTAssertEqual(new.size, 42_000_000)
     }
 
+    func testDecodesCurrentNestedImageListShape() throws {
+        let data = Data(
+            #"""
+            [{
+              "configuration": {
+                "creationDate": "2026-06-16T00:00:15Z",
+                "descriptor": {
+                  "digest": "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+                  "mediaType": "application/vnd.oci.image.index.v1+json",
+                  "size": 9218
+                },
+                "name": "docker.io/library/alpine:latest"
+              },
+              "id": "28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+              "variants": [{
+                "digest": "sha256:e7a1a92a5bfeee40966aea60f0796b0e7917cc35591542701834f03a68fa3d18",
+                "platform": { "architecture": "arm64", "os": "linux", "variant": "v8" },
+                "size": 4184689
+              }]
+            }]
+            """#.utf8
+        )
+
+        let dtos = try JSONDecoder().decode([ImageDTO].self, from: data)
+        let image = try XCTUnwrap(dtos.first.flatMap(ImageSummary.init(dto:)))
+
+        XCTAssertEqual(image.reference, "docker.io/library/alpine:latest")
+        XCTAssertEqual(image.digest, "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b")
+        XCTAssertEqual(image.size, 9218)
+        XCTAssertEqual(image.operatingSystem, "linux")
+        XCTAssertEqual(image.architecture, "arm64")
+    }
+
     func testDecodesVersionStatusAndStatsFixtures() throws {
         let versions: [SystemVersionDTO] = try decodeFixture("1.0.0/system-version.json")
         let version = SystemVersion(components: versions)

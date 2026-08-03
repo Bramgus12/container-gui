@@ -72,12 +72,34 @@ nonisolated struct ContainerStats: Identifiable, Equatable, Sendable {
     }
 }
 
-nonisolated struct SystemDiskUsageDTO: Equatable, Sendable {
+nonisolated struct SystemDiskUsageDTO: Equatable, Identifiable, Sendable {
+    enum ID: Hashable, Sendable {
+        case type(String)
+        case anonymous(
+            totalCount: Int?,
+            activeCount: Int?,
+            sizeBytes: UInt64?,
+            reclaimableBytes: UInt64?
+        )
+    }
+
     let type: String?
     let totalCount: Int?
     let activeCount: Int?
     let sizeBytes: UInt64?
     let reclaimableBytes: UInt64?
+
+    var id: ID {
+        if let type {
+            return .type(type)
+        }
+        return .anonymous(
+            totalCount: totalCount,
+            activeCount: activeCount,
+            sizeBytes: sizeBytes,
+            reclaimableBytes: reclaimableBytes
+        )
+    }
 }
 
 nonisolated struct SystemDiskUsage: Equatable, Sendable {

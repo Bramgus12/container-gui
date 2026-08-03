@@ -33,6 +33,10 @@ struct ContentView: View {
 }
 
 private struct SetupView: View {
+    private static let installationInstructionsURL = URL(
+        string: "https://github.com/apple/container/releases/latest"
+    )
+
     let model: SetupModel
     @State private var isChoosingExecutable = false
 
@@ -105,11 +109,13 @@ private struct SetupView: View {
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
                     }
-                    Link(
-                        "Open Apple Container installation instructions",
-                        destination: URL(string: "https://github.com/apple/container/releases/latest")!
-                    )
-                    .accessibilityIdentifier("setup.installationInstructions")
+                    if let installationInstructionsURL = Self.installationInstructionsURL {
+                        Link(
+                            "Open Apple Container installation instructions",
+                            destination: installationInstructionsURL
+                        )
+                        .accessibilityIdentifier("setup.installationInstructions")
+                    }
                 }
             }
 
@@ -246,7 +252,7 @@ private struct SetupView: View {
             .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private var title: String {
+    private var title: LocalizedStringResource {
         switch model.readiness {
         case .checking: "Getting things ready"
         case .unsupportedPlatform: "This Mac isn’t supported"
@@ -258,7 +264,7 @@ private struct SetupView: View {
         }
     }
 
-    private var message: String {
+    private var message: LocalizedStringResource {
         switch model.readiness {
         case .checking:
             "Verifying your Mac, the container executable, and its service."
@@ -309,12 +315,15 @@ private struct SetupView: View {
         }
     }
 
-    private func platformIssueText(_ issue: PlatformIssue) -> String {
+    private func platformIssueText(_ issue: PlatformIssue) -> LocalizedStringResource {
         switch issue {
         case .requiresAppleSilicon(let architecture):
             "Detected architecture: \(architecture). An Apple silicon Mac is required."
         case .requiresMacOS(let minimum, let detected):
-            "Detected macOS \(detected.major).\(detected.minor).\(detected.patch). macOS \(minimum) or later is required."
+            """
+            Detected macOS \(detected.major).\(detected.minor).\(detected.patch). \
+            macOS \(minimum) or later is required.
+            """
         }
     }
 }
@@ -326,7 +335,7 @@ private struct MainNavigationView: View {
     var body: some View {
         NavigationSplitView {
             List(AppDestination.allCases, selection: $model.destination) { destination in
-                Label(destination.rawValue, systemImage: destination.systemImage)
+                Label(destination.title, systemImage: destination.systemImage)
                     .tag(destination)
             }
             .navigationTitle("Container GUI")
@@ -369,7 +378,7 @@ private struct ContainerListView: View {
                 ToolbarItem {
                     Picker("State", selection: $model.containerFilter) {
                         ForEach(ContainerFilter.allCases) { filter in
-                            Text(filter.rawValue).tag(filter)
+                            Text(filter.title).tag(filter)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -461,7 +470,12 @@ private struct ContainerListView: View {
                 }
             } message: { deletion in
                 if deletion.mutation == .delete(force: true) {
-                    Text("This immediately stops and permanently deletes “\(deletion.containerID)”. This action cannot be undone.")
+                    Text(
+                        """
+                        This immediately stops and permanently deletes “\(deletion.containerID)”. \
+                        This action cannot be undone.
+                        """
+                    )
                 } else {
                     Text("This permanently deletes “\(deletion.containerID)”. This action cannot be undone.")
                 }
@@ -469,12 +483,7 @@ private struct ContainerListView: View {
             .sheet(item: $runContainerModel) { runModel in
                 RunContainerSheet(model: runModel, appModel: model)
             }
-            .inspector(
-                isPresented: Binding(
-                    get: { model.selectedContainerID != nil },
-                    set: { if !$0 { model.selectedContainerID = nil } }
-                )
-            ) {
+            .inspector(isPresented: $model.isContainerInspectorPresented) {
                 if let containerID = model.selectedContainerID {
                     ContainerDetailHost(appModel: model, containerID: containerID)
                         .id(containerID)
@@ -538,18 +547,12 @@ private struct ContainerListView: View {
                 Divider()
 
                 Button("Delete…", role: .destructive) {
-                    pendingDeletion = PendingContainerDeletion(
-                        containerID: container.id,
-                        mutation: .delete(force: false)
-                    )
+                    requestDeletion(of: container, force: false)
                 }
                 .disabled(!model.canPerform(.delete(force: false), on: container))
 
                 Button("Force Delete…", role: .destructive) {
-                    pendingDeletion = PendingContainerDeletion(
-                        containerID: container.id,
-                        mutation: .delete(force: true)
-                    )
+                    requestDeletion(of: container, force: true)
                 }
                 .disabled(!model.canPerform(.delete(force: true), on: container))
             }
@@ -664,8 +667,12 @@ private struct ContainerListView: View {
 
     private func requestDeletion(force: Bool) {
         guard let selectedContainer else { return }
+        requestDeletion(of: selectedContainer, force: force)
+    }
+
+    private func requestDeletion(of container: ContainerSummary, force: Bool) {
         pendingDeletion = PendingContainerDeletion(
-            containerID: selectedContainer.id,
+            containerID: container.id,
             mutation: .delete(force: force)
         )
     }

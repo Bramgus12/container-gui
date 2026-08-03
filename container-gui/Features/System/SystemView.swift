@@ -8,9 +8,9 @@ struct SystemView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                healthSection
-                diskUsageSection
-                logsSection
+                SystemHealthSection(model: model, confirmsStop: $confirmsStop)
+                SystemDiskUsageSection(model: model)
+                SystemLogsSection(model: model)
             }
             .padding(24)
             .frame(maxWidth: 1_000, alignment: .leading)
@@ -57,12 +57,14 @@ struct SystemView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "Running containers will stop and Container GUI will be unavailable "
-                    + "until the services are started again."
+                """
+                Running containers will stop and Container GUI will be unavailable \
+                until the services are started again.
+                """
             )
         }
         .sheet(isPresented: $showsDiagnostics) {
-            diagnosticsSheet
+            SystemDiagnosticsSheet(model: model, isPresented: $showsDiagnostics)
         }
         .task {
             if model.snapshotState == .idle {
@@ -72,19 +74,25 @@ struct SystemView: View {
         .accessibilityIdentifier("system.screen")
     }
 
-    private var healthSection: some View {
+}
+
+private struct SystemHealthSection: View {
+    let model: SystemModel
+    @Binding var confirmsStop: Bool
+
+    var body: some View {
         GroupBox {
             Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
                 GridRow {
                     Text("Service")
                         .foregroundStyle(.secondary)
-                    Label(
-                        model.status.isRunning ? "Running" : "Stopped",
-                        systemImage: model.status.isRunning
-                            ? "checkmark.circle.fill"
-                            : "stop.circle.fill"
-                    )
-                    .foregroundStyle(model.status.isRunning ? .green : .orange)
+                    if model.status.isRunning {
+                        Label("Running", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else {
+                        Label("Stopped", systemImage: "stop.circle.fill")
+                            .foregroundStyle(.orange)
+                    }
                 }
                 GridRow {
                     Text("CLI version").foregroundStyle(.secondary)
@@ -110,7 +118,7 @@ struct SystemView: View {
                     .font(.headline)
                 Spacer()
                 if let operation = model.serviceOperation {
-                    ProgressView(operation.rawValue)
+                    ProgressView(operation.localizedDescription)
                         .controlSize(.small)
                 } else if model.status.isRunning {
                     Button("Stop Service…", role: .destructive) {
@@ -127,9 +135,12 @@ struct SystemView: View {
             }
         }
     }
+}
 
-    @ViewBuilder
-    private var diskUsageSection: some View {
+private struct SystemDiskUsageSection: View {
+    let model: SystemModel
+
+    var body: some View {
         GroupBox {
             switch model.snapshotState {
             case .idle where model.diskUsage == nil,
@@ -137,7 +148,11 @@ struct SystemView: View {
                 ProgressView("Loading disk usage…")
                     .frame(maxWidth: .infinity, minHeight: 80)
             case .failed(let error) where model.diskUsage == nil:
-                unavailable("Disk Usage Unavailable", error: error)
+                SystemUnavailableView(
+                    title: "Disk Usage Unavailable",
+                    error: error,
+                    model: model
+                )
             default:
                 if let resources = model.diskUsage?.resources {
                     Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
@@ -149,13 +164,13 @@ struct SystemView: View {
                             Text("Reclaimable").fontWeight(.semibold)
                         }
                         Divider().gridCellColumns(5)
-                        ForEach(Array(resources.enumerated()), id: \.offset) { _, resource in
+                        ForEach(resources) { resource in
                             GridRow {
                                 Text(resource.type?.capitalized ?? "Unknown")
                                 Text(resource.totalCount.map(String.init) ?? "—")
                                 Text(resource.activeCount.map(String.init) ?? "—")
-                                Text(formatBytes(resource.sizeBytes))
-                                Text(formatBytes(resource.reclaimableBytes))
+                                Text(Self.formatBytes(resource.sizeBytes))
+                                Text(Self.formatBytes(resource.reclaimableBytes))
                             }
                         }
                     }
@@ -168,8 +183,19 @@ struct SystemView: View {
         }
     }
 
-    @ViewBuilder
-    private var logsSection: some View {
+    private static func formatBytes(_ value: UInt64?) -> String {
+        guard let value else { return "—" }
+        return ByteCountFormatter.string(
+            fromByteCount: Int64(clamping: value),
+            countStyle: .file
+        )
+    }
+}
+
+private struct SystemLogsSection: View {
+    let model: SystemModel
+
+    var body: some View {
         GroupBox {
             switch model.logsState {
             case .idle where model.logs.isEmpty,
@@ -177,7 +203,11 @@ struct SystemView: View {
                 ProgressView("Loading recent logs…")
                     .frame(maxWidth: .infinity, minHeight: 120)
             case .failed(let error) where model.logs.isEmpty:
-                unavailable("Service Logs Unavailable", error: error)
+                SystemUnavailableView(
+                    title: "Service Logs Unavailable",
+                    error: error,
+                    model: model
+                )
             default:
                 if model.logs.isEmpty {
                     Text("No service log messages were found in the last 15 minutes.")
@@ -204,8 +234,13 @@ struct SystemView: View {
             }
         }
     }
+}
 
-    private var diagnosticsSheet: some View {
+private struct SystemDiagnosticsSheet: View {
+    let model: SystemModel
+    @Binding var isPresented: Bool
+
+    var body: some View {
         VStack(spacing: 0) {
             HStack {
                 Text("Diagnostics")
@@ -216,7 +251,7 @@ struct SystemView: View {
                 }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
                 Button("Done") {
-                    showsDiagnostics = false
+                    isPresented = false
                 }
                 .keyboardShortcut(.defaultAction)
             }
@@ -235,8 +270,14 @@ struct SystemView: View {
         .frame(minWidth: 680, minHeight: 480)
         .accessibilityIdentifier("system.diagnosticsSheet")
     }
+}
 
-    private func unavailable(_ title: String, error: String) -> some View {
+private struct SystemUnavailableView: View {
+    let title: LocalizedStringResource
+    let error: String
+    let model: SystemModel
+
+    var body: some View {
         ContentUnavailableView {
             Label(title, systemImage: "exclamationmark.triangle")
         } description: {
@@ -246,13 +287,5 @@ struct SystemView: View {
                 Task { await model.refresh() }
             }
         }
-    }
-
-    private func formatBytes(_ value: UInt64?) -> String {
-        guard let value else { return "—" }
-        return ByteCountFormatter.string(
-            fromByteCount: Int64(clamping: value),
-            countStyle: .file
-        )
     }
 }

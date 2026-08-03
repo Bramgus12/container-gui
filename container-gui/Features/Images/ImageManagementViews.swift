@@ -49,7 +49,9 @@ struct ImageListView: View {
 
                 ToolbarItem {
                     Button(role: .destructive) {
-                        pendingDeletion = model.selectedImage?.reference
+                        if let reference = model.selectedImage?.reference {
+                            requestDeletion(reference)
+                        }
                     } label: {
                         Label("Delete Image", systemImage: "trash")
                     }
@@ -92,8 +94,10 @@ struct ImageListView: View {
                 }
             } message: { reference in
                 Text(
-                    "This permanently deletes “\(reference)”. "
-                        + "Containers that use the image can cause this operation to fail."
+                    """
+                    This permanently deletes “\(reference)”. Containers that use the image \
+                    can cause this operation to fail.
+                    """
                 )
             }
             .sheet(item: $pullModel) { pullModel in
@@ -102,12 +106,7 @@ struct ImageListView: View {
             .sheet(item: $runContainerModel) { runModel in
                 RunContainerSheet(model: runModel, appModel: model)
             }
-            .inspector(
-                isPresented: Binding(
-                    get: { model.selectedImageID != nil },
-                    set: { if !$0 { model.selectedImageID = nil } }
-                )
-            ) {
+            .inspector(isPresented: $model.isImageInspectorPresented) {
                 ImageInspectionView(model: model)
                     .id(model.selectedImageID)
                     .inspectorColumnWidth(min: 360, ideal: 460, max: 680)
@@ -150,12 +149,16 @@ struct ImageListView: View {
                     runContainerModel = RunContainerModel(image: image.reference)
                 }
                 Button("Delete…", role: .destructive) {
-                    pendingDeletion = image.reference
+                    requestDeletion(image.reference)
                 }
                 .disabled(model.deletingImageReference != nil)
             }
         }
         .accessibilityIdentifier("images.table")
+    }
+
+    private func requestDeletion(_ reference: String) {
+        pendingDeletion = reference
     }
 
     @ViewBuilder

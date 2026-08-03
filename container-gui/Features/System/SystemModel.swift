@@ -152,6 +152,13 @@ enum SystemLoadingState: Equatable, Sendable {
 enum SystemServiceOperation: String, Equatable, Sendable {
     case start = "Starting service"
     case stop = "Stopping service"
+
+    var localizedDescription: LocalizedStringResource {
+        switch self {
+        case .start: "Starting service"
+        case .stop: "Stopping service"
+        }
+    }
 }
 
 @MainActor
