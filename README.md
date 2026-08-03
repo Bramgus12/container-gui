@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="container-gui/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png" alt="Container GUI app icon" width="160">
+<img src="docs/app-icon.png" alt="Container GUI app icon" width="160">
 
 # Container GUI
 
