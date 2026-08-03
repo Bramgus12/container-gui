@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="container-gui/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png" alt="Container GUI app icon" width="160">
+
 # Container GUI
 
 ### Apple Container, without the command-line friction.
