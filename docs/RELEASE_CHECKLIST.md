@@ -36,26 +36,21 @@ hardware, CLI version, app commit, tester, and date in the release notes.
   seeded secrets. Confirm environment values, credentials, bearer tokens,
   private keys, and URL userinfo are absent.
 
-## Sign, notarize, and install
+## Package and install
 
-Store notary credentials in a keychain profile:
-
-```sh
-xcrun notarytool store-credentials container-gui-notary
-```
-
-Then run:
+Create the current ad-hoc signed distribution:
 
 ```sh
-DEVELOPER_ID_APPLICATION="Developer ID Application: Example (TEAMID)" \
-NOTARYTOOL_PROFILE=container-gui-notary \
 ./scripts/release.sh
 ```
 
-The script archives, exports with Developer ID, submits to notarytool, staples,
-and verifies with `codesign`, `stapler`, and Gatekeeper. Install the exported app
-on a second clean Mac, launch it from Finder, complete onboarding, and repeat
-the lifecycle smoke test through the GUI.
+The script archives with an ad-hoc signature, creates `Container-GUI.zip`, and
+verifies the signature with `codesign`. It does not use a Developer ID
+certificate, submit the app to Apple's notary service, or staple a notarization
+ticket. Confirm the README warning and installation instructions are present.
+Install the exported app on a second clean Mac, approve it through Privacy &
+Security, complete onboarding, and repeat the lifecycle smoke test through the
+GUI.
 
 ## Release notes
 

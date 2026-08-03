@@ -75,6 +75,28 @@ On first launch, the app verifies the platform, executable, CLI version, and
 service health before opening the main interface. If the service is installed
 but stopped, it can be started directly from onboarding.
 
+### Installing a prebuilt release
+
+> [!WARNING]
+> Container GUI releases are currently ad-hoc signed and **not notarized by
+> Apple**. Apple cannot verify the developer identity or confirm that the app
+> passed its automated malware scan. Only continue if you trust the download
+> source and understand the risk.
+
+Because the app is not Developer ID signed or notarized, Gatekeeper may prevent
+it from opening after download. To approve this specific app without disabling
+Gatekeeper globally:
+
+1. Move **Container GUI.app** to the Applications folder and try to open it.
+2. Open **System Settings**, select **Privacy & Security**, and scroll to
+   **Security**.
+3. Click **Open Anyway** for Container GUI, authenticate, and confirm **Open**.
+
+The **Open Anyway** option is available for about an hour after the blocked
+launch attempt. See Apple's guide to
+[opening an app from an unknown developer](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac)
+for the current steps and security considerations.
+
 ## How it works
 
 ```mermaid
@@ -130,6 +152,16 @@ xcodebuild test \
   -scheme "Container GUI" \
   -destination "platform=macOS"
 ```
+
+Create an ad-hoc signed Release build and zip archive with:
+
+```sh
+./scripts/release.sh
+```
+
+The outputs are written to `build/export/Container GUI.app` and
+`build/export/Container-GUI.zip`. These artifacts are not notarized; see the
+[installation warning](#installing-a-prebuilt-release) above.
 
 ### Opt-in real smoke test
 
