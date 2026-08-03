@@ -5,7 +5,10 @@ hardware, CLI version, app commit, tester, and date in the release notes.
 
 ## Automated gates
 
-- Run the `Container GUI` Xcode scheme tests in Debug and Release.
+- Run the `Container GUI` Xcode scheme tests in Debug, then run the optimized
+  Release test build with `scripts/test-release.sh`. The script uses ad-hoc
+  signing and disables Hardened Runtime only for the test host so its XCTest
+  bundles can load without a Team ID; release archives remain hardened.
 - Confirm onboarding and lifecycle UI tests pass with the fake CLI.
 - Run `scripts/real-smoke-test.sh` on clean Apple-silicon Macs with CLI `0.12.0`
   and the current supported CLI release.
