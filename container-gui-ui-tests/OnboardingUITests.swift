@@ -10,12 +10,16 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.links["Open Apple Container installation instructions"].exists)
     }
 
-    func testStoppedServiceCanEnterMainNavigation() {
+    func testStoppedServiceCanEnterMainNavigationUsingMockCLI() {
         let app = launch(scenario: "stopped")
 
         XCTAssertTrue(app.buttons["Start Service"].waitForExistence(timeout: 3))
         app.buttons["Start Service"].click()
         XCTAssertTrue(app.staticTexts["Containers"].waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            app.staticTexts["demo-stopped"].waitForExistence(timeout: 3),
+            "Starting the mocked service should load containers from the mocked CLI."
+        )
     }
 
     func testFailureShowsDiagnosticsAndRecoveryActions() {
@@ -27,24 +31,36 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Retry"].exists)
     }
 
-    func testReadyStateSkipsOnboarding() {
+    func testReadyStateSkipsOnboardingAndUsesMockCLI() {
         let app = launch(scenario: "ready")
 
         XCTAssertTrue(app.staticTexts["Containers"].waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            app.staticTexts["demo-stopped"].waitForExistence(timeout: 3),
+            "The ready scenario should load containers from the mocked CLI."
+        )
         XCTAssertFalse(app.buttons["Retry"].exists)
     }
 
     func testMainContainerLifecycleWithFakeCLI() {
         let app = launch(scenario: "lifecycle")
 
-        app.buttons["containers.run"].click()
+        let runButton = app.buttons["containers.run"]
+        XCTAssertTrue(runButton.waitForExistence(timeout: 3))
+        runButton.click()
         let runSheet = app.sheets.firstMatch
-        XCTAssertTrue(runSheet.waitForExistence(timeout: 2))
-        runSheet.textFields["run.image"].click()
-        runSheet.textFields["run.image"].typeText("alpine:3.21")
-        runSheet.textFields["run.name"].click()
-        runSheet.textFields["run.name"].typeText("created-by-ui-test")
-        runSheet.buttons["run.submit"].click()
+        XCTAssertTrue(runSheet.waitForExistence(timeout: 3))
+        let imageField = runSheet.textFields["run.image"]
+        XCTAssertTrue(imageField.waitForExistence(timeout: 3))
+        imageField.click()
+        imageField.typeText("alpine:3.21")
+        let nameField = runSheet.textFields["run.name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 3))
+        nameField.click()
+        nameField.typeText("created-by-ui-test")
+        let submitButton = runSheet.buttons["run.submit"]
+        XCTAssertTrue(submitButton.waitForExistence(timeout: 3))
+        submitButton.click()
         XCTAssertTrue(
             app.staticTexts["created-by-ui-test"].waitForExistence(timeout: 3),
             "Running a container should refresh the list with the created container."
@@ -83,6 +99,8 @@ final class OnboardingUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = [
             "-ApplePersistenceIgnoreState", "YES",
+            "-AppleLanguages", "(en)",
+            "-AppleLocale", "en_US",
             "--ui-test-preflight", scenario,
         ]
         app.launch()

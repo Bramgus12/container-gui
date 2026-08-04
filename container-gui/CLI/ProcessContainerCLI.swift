@@ -113,16 +113,16 @@ actor ProcessContainerCLI: ContainerCLI {
         process.standardError = standardError
 
         standardOutput.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
             drainQueue.async {
-                let data = handle.availableData
-                guard !data.isEmpty else { return }
                 continuation.yield(.standardOutput(String(decoding: data, as: UTF8.self)))
             }
         }
         standardError.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
             drainQueue.async {
-                let data = handle.availableData
-                guard !data.isEmpty else { return }
                 continuation.yield(.standardError(String(decoding: data, as: UTF8.self)))
             }
         }
@@ -230,18 +230,18 @@ actor ProcessContainerCLI: ContainerCLI {
         process.standardError = standardError
 
         standardOutput.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
             drainQueue.async {
-                let data = handle.availableData
-                guard !data.isEmpty else { return }
                 if output.append(data, to: .standardOutput) {
                     session.cancel()
                 }
             }
         }
         standardError.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
             drainQueue.async {
-                let data = handle.availableData
-                guard !data.isEmpty else { return }
                 if output.append(data, to: .standardError) {
                     session.cancel()
                 }

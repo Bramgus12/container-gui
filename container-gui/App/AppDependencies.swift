@@ -11,14 +11,9 @@ enum AppDependencies {
                 preflight: UITestPreflightService(scenario: scenario),
                 diagnosticsCopier: SystemDiagnosticsCopier()
             )
-            if scenario == .lifecycle {
-                return AppModel(
-                    setup: setup,
-                    cliFactory: UITestContainerCLIFactory()
-                )
-            }
             return AppModel(
-                setup: setup
+                setup: setup,
+                cliFactory: UITestContainerCLIFactory()
             )
         }
         #endif
