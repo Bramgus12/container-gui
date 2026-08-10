@@ -143,11 +143,9 @@ final class ContainerDetailModel {
             startLogs()
         }
     }
-    var autoscrollsLogs = true
 
     private(set) var inspectionState: ContainerInspectionState = .loading
-    private(set) var logText = ""
-    private(set) var logRevision = 0
+    private(set) var logSnapshot = ContainerLogSnapshot.empty
     private(set) var isLogPaused = false
     private(set) var isLogStreaming = false
     private(set) var logError: String?
@@ -156,11 +154,10 @@ final class ContainerDetailModel {
     private(set) var isStatsLoading = false
 
     private let service: any ContainerDiagnosing
-    private let maximumLogLines: Int
-    private let maximumLogBytes: Int
     private let statsInterval: Duration
     private var isVisible = false
-    private var pendingLogText = ""
+    private var liveLogBuffer: ContainerLogBuffer
+    private var logStreamSession = 0
     private var logTask: Task<Void, Never>?
     private var statsTask: Task<Void, Never>?
     private var inspectionGeneration = 0
@@ -176,9 +173,11 @@ final class ContainerDetailModel {
     ) {
         self.containerID = containerID
         self.service = service
-        self.maximumLogLines = max(1, maximumLogLines)
-        self.maximumLogBytes = max(1, maximumLogBytes)
         self.statsInterval = statsInterval
+        self.liveLogBuffer = ContainerLogBuffer(
+            maximumLines: max(1, maximumLogLines),
+            maximumBytes: max(1, maximumLogBytes)
+        )
     }
 
     func appear() async {
@@ -201,15 +200,14 @@ final class ContainerDetailModel {
 
     func toggleLogPause() {
         isLogPaused.toggle()
-        guard !isLogPaused, !pendingLogText.isEmpty else { return }
-        appendToVisibleLog(pendingLogText)
-        pendingLogText = ""
+        if !isLogPaused {
+            publishLiveLogSnapshot()
+        }
     }
 
     func clearLogs() {
-        logText = ""
-        pendingLogText = ""
-        logRevision += 1
+        liveLogBuffer.clear()
+        publishLiveLogSnapshot()
     }
 
     private func loadInspection() async {
@@ -248,6 +246,12 @@ final class ContainerDetailModel {
     private func startLogs() {
         cancelLogs()
         let generation = logGeneration
+        logStreamSession += 1
+        let session = logStreamSession
+        liveLogBuffer.startNewSession()
+        if !isLogPaused {
+            publishLiveLogSnapshot()
+        }
         logError = nil
         isLogStreaming = true
         let stream = service.streamLogs(
@@ -261,7 +265,9 @@ final class ContainerDetailModel {
             do {
                 for try await event in stream {
                     try Task.checkCancellation()
-                    guard generation == self.logGeneration else { return }
+                    guard generation == self.logGeneration,
+                          session == self.logStreamSession
+                    else { return }
                     switch event {
                     case .standardOutput(let text), .standardError(let text):
                         self.appendLog(text)
@@ -276,11 +282,13 @@ final class ContainerDetailModel {
             } catch CLIError.cancelled {
                 // ProcessContainerCLI normalizes stream cancellation.
             } catch {
-                if generation == self.logGeneration {
+                if generation == self.logGeneration, session == self.logStreamSession {
                     self.logError = DiagnosticSanitizer.sanitize(error.localizedDescription)
                 }
             }
-            if !Task.isCancelled, generation == self.logGeneration {
+            if !Task.isCancelled,
+               generation == self.logGeneration,
+               session == self.logStreamSession {
                 self.isLogStreaming = false
             }
         }
@@ -295,37 +303,14 @@ final class ContainerDetailModel {
 
     private func appendLog(_ text: String) {
         guard !text.isEmpty else { return }
-        if isLogPaused {
-            pendingLogText = boundedLog(pendingLogText + text)
-        } else {
-            appendToVisibleLog(text)
+        liveLogBuffer.append(text)
+        if !isLogPaused {
+            publishLiveLogSnapshot()
         }
     }
 
-    private func appendToVisibleLog(_ text: String) {
-        logText = boundedLog(logText + text)
-        logRevision += 1
-    }
-
-    private func boundedLog(_ text: String) -> String {
-        var result = text
-        let data = Data(result.utf8)
-        if data.count > maximumLogBytes {
-            result = String(decoding: data.suffix(maximumLogBytes), as: UTF8.self)
-        }
-
-        let hasTrailingNewline = result.hasSuffix("\n")
-        var lines = result.split(separator: "\n", omittingEmptySubsequences: false)
-        if hasTrailingNewline, lines.last?.isEmpty == true {
-            lines.removeLast()
-        }
-        if lines.count > maximumLogLines {
-            result = lines.suffix(maximumLogLines).joined(separator: "\n")
-            if hasTrailingNewline {
-                result.append("\n")
-            }
-        }
-        return result
+    private func publishLiveLogSnapshot() {
+        logSnapshot = liveLogBuffer.snapshot
     }
 
     private func startStats() {

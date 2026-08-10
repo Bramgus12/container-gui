@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 
 final class OnboardingUITests: XCTestCase {
@@ -95,6 +96,56 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(waitUntil(timeout: 3) { !fixture.exists })
     }
 
+    func testContainerLogViewerShowsNumberedSelectableMockLogs() {
+        let app = launch(scenario: "ready")
+        let fixture = app.staticTexts["demo-stopped"]
+        XCTAssertTrue(fixture.waitForExistence(timeout: 3))
+        fixture.click()
+
+        let logsTab = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", "Logs"))
+            .firstMatch
+        XCTAssertTrue(logsTab.waitForExistence(timeout: 3))
+        logsTab.click()
+
+        let viewer = app.textViews["logs.viewer"]
+        XCTAssertTrue(viewer.waitForExistence(timeout: 3))
+        XCTAssertTrue(logsTab.exists, "The detail tabs must remain visible above the log viewer.")
+        XCTAssertTrue(
+            (viewer.value as? String)?.contains("first UI test log line") == true,
+            "The native text view must expose the rendered log text."
+        )
+        assertLogTextIsVisiblyRendered(in: viewer)
+        XCTAssertGreaterThan(viewer.frame.width, 100)
+        XCTAssertGreaterThan(viewer.frame.height, 100)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["logs.lineNumbers"]
+                .waitForExistence(timeout: 2)
+        )
+        XCTAssertTrue(app.buttons["logs.jumpToLatest"].exists)
+        XCTAssertTrue(app.buttons["logs.copy"].isEnabled)
+
+        app.buttons["logs.copy"].click()
+        let copiedLogs = NSPasteboard.general.string(forType: .string) ?? ""
+        XCTAssertTrue(copiedLogs.contains("first UI test log line"))
+        XCTAssertTrue(copiedLogs.contains("final UI test log line"))
+        XCTAssertFalse(copiedLogs.contains("Waiting for logs"))
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Container log viewer"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        viewer.click()
+        viewer.typeKey("a", modifierFlags: .command)
+        viewer.typeKey("c", modifierFlags: .command)
+        XCTAssertEqual(
+            NSPasteboard.general.string(forType: .string),
+            copiedLogs,
+            "The native text view should support selection and standard copy commands."
+        )
+    }
+
     private func launch(scenario: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
@@ -105,6 +156,63 @@ final class OnboardingUITests: XCTestCase {
         ]
         app.launch()
         return app
+    }
+
+    private func assertLogTextIsVisiblyRendered(
+        in viewer: XCUIElement,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard let data = viewer.screenshot().image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: data)
+        else {
+            XCTFail("Could not inspect the rendered log viewer.", file: file, line: line)
+            return
+        }
+
+        let minimumX = min(bitmap.pixelsWide - 1, 16)
+        let maximumX = max(minimumX, bitmap.pixelsWide - 20)
+        let maximumY = min(bitmap.pixelsHigh, 100)
+        var colorHistogram: [Int: Int] = [:]
+        for y in 0..<maximumY {
+            for x in minimumX..<maximumX {
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB)
+                else { continue }
+                let red = Int((color.redComponent * 31).rounded())
+                let green = Int((color.greenComponent * 31).rounded())
+                let blue = Int((color.blueComponent * 31).rounded())
+                colorHistogram[(red << 10) | (green << 5) | blue, default: 0] += 1
+            }
+        }
+        guard let backgroundKey = colorHistogram.max(by: { $0.value < $1.value })?.key
+        else {
+            XCTFail("Could not sample the rendered log viewer.", file: file, line: line)
+            return
+        }
+
+        let backgroundRed = CGFloat((backgroundKey >> 10) & 31) / 31
+        let backgroundGreen = CGFloat((backgroundKey >> 5) & 31) / 31
+        let backgroundBlue = CGFloat(backgroundKey & 31) / 31
+        var contrastingPixelCount = 0
+        for y in 0..<maximumY {
+            for x in minimumX..<maximumX {
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB)
+                else { continue }
+                let contrast = abs(color.redComponent - backgroundRed)
+                    + abs(color.greenComponent - backgroundGreen)
+                    + abs(color.blueComponent - backgroundBlue)
+                if contrast > 0.6, color.alphaComponent > 0.5 {
+                    contrastingPixelCount += 1
+                }
+            }
+        }
+        XCTAssertGreaterThan(
+            contrastingPixelCount,
+            50,
+            "The populated log view should contain visibly painted text glyphs.",
+            file: file,
+            line: line
+        )
     }
 
     private func waitUntil(

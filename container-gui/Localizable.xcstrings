@@ -114,16 +114,6 @@
         }
       }
     },
-    "Autoscroll" : {
-      "localizations" : {
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Automatisch scrollen"
-          }
-        }
-      }
-    },
     "Cancel" : {
       "localizations" : {
         "nl" : {
@@ -744,12 +734,32 @@
         }
       }
     },
+    "Jump to Latest" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Naar nieuwste"
+          }
+        }
+      }
+    },
     "Last 15 minutes" : {
       "localizations" : {
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Afgelopen 15 minuten"
+          }
+        }
+      }
+    },
+    "Line numbers" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Regelnummers"
           }
         }
       }
@@ -1610,6 +1620,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Waarde"
+          }
+        }
+      }
+    },
+    "Waiting for logs…" : {
+      "localizations" : {
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wachten op logs…"
           }
         }
       }

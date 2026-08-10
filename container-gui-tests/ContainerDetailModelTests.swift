@@ -56,17 +56,59 @@ final class ContainerDetailModelTests: XCTestCase {
         await model.appear()
 
         service.yieldLog(.standardOutput("one\ntwo\nthree\nfour\n"))
-        try await eventually { model.logText == "two\nthree\nfour\n" }
+        try await eventually { model.logSnapshot.text == "two\nthree\nfour\n" }
+        XCTAssertEqual(model.logSnapshot.firstLogicalLineNumber, 2)
 
         model.toggleLogPause()
         service.yieldLog(.standardOutput("five\n"))
         try await Task.sleep(for: .milliseconds(20))
-        XCTAssertEqual(model.logText, "two\nthree\nfour\n")
+        XCTAssertEqual(model.logSnapshot.text, "two\nthree\nfour\n")
 
         model.toggleLogPause()
-        XCTAssertEqual(model.logText, "three\nfour\nfive\n")
+        XCTAssertEqual(model.logSnapshot.text, "three\nfour\nfive\n")
+        XCTAssertEqual(model.logSnapshot.firstLogicalLineNumber, 3)
         model.disappear()
         XCTAssertTrue(service.logStreamWasCancelled)
+    }
+
+    func testClearPreservesNumberingWithinAStream() async throws {
+        let service = DiagnosticsStub()
+        let model = ContainerDetailModel(containerID: "web", service: service)
+        model.selectedTab = .logs
+        await model.appear()
+
+        service.yieldLog(.standardOutput("one\ntwo\n"))
+        try await eventually { model.logSnapshot.text == "one\ntwo\n" }
+        model.clearLogs()
+
+        XCTAssertEqual(model.logSnapshot, ContainerLogSnapshot(
+            text: "",
+            firstLogicalLineNumber: 3
+        ))
+        service.yieldLog(.standardOutput("three"))
+        try await eventually { model.logSnapshot.text == "three" }
+        XCTAssertEqual(model.logSnapshot.firstLogicalLineNumber, 3)
+        model.disappear()
+    }
+
+    func testRestartReplacesFetchedTailAndStartsNumberingAtOne() async throws {
+        let service = DiagnosticsStub()
+        let model = ContainerDetailModel(containerID: "web", service: service)
+        model.selectedTab = .logs
+        await model.appear()
+
+        service.yieldLog(.standardOutput("old tail\n"))
+        try await eventually { model.logSnapshot.text == "old tail\n" }
+
+        model.followsLogs = false
+        XCTAssertEqual(model.logSnapshot, .empty)
+        service.yieldLog(.standardOutput("replacement tail\n"))
+
+        try await eventually { model.logSnapshot.text == "replacement tail\n" }
+        XCTAssertEqual(model.logSnapshot.firstLogicalLineNumber, 1)
+        XCTAssertFalse(model.logSnapshot.text.contains("old tail"))
+        XCTAssertEqual(service.logStreamCallCount, 2)
+        model.disappear()
     }
 
     func testStatsPollOnlyWhileStatsTabIsVisible() async throws {
@@ -199,6 +241,7 @@ private final class DiagnosticsStub: ContainerDiagnosing, @unchecked Sendable {
     private var logContinuation: AsyncThrowingStream<ProcessEvent, Error>.Continuation?
     private var recordedStatsCallCount = 0
     private var recordedLogStreamWasCancelled = false
+    private var recordedLogStreamCallCount = 0
 
     var statsCallCount: Int {
         lock.withLock { recordedStatsCallCount }
@@ -206,6 +249,10 @@ private final class DiagnosticsStub: ContainerDiagnosing, @unchecked Sendable {
 
     var logStreamWasCancelled: Bool {
         lock.withLock { recordedLogStreamWasCancelled }
+    }
+
+    var logStreamCallCount: Int {
+        lock.withLock { recordedLogStreamCallCount }
     }
 
     func inspect(containerID: String) async throws -> ContainerInspection {
@@ -229,6 +276,7 @@ private final class DiagnosticsStub: ContainerDiagnosing, @unchecked Sendable {
     ) -> AsyncThrowingStream<ProcessEvent, Error> {
         AsyncThrowingStream { continuation in
             lock.withLock {
+                recordedLogStreamCallCount += 1
                 logContinuation = continuation
             }
             continuation.onTermination = { [weak self] _ in

@@ -103,7 +103,8 @@ nonisolated struct EnvironmentVariable: Equatable, Sendable {
         guard key.range(of: #"^[A-Za-z_][A-Za-z0-9_]*$"#, options: .regularExpression) != nil else {
             throw CommandValidationError.invalid(field: "Environment variable key", value: key)
         }
-        guard !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+        let controlCharacters = CharacterSet.controlCharacters
+        guard !value.unicodeScalars.contains(where: { controlCharacters.contains($0) }) else {
             throw CommandValidationError.invalid(field: "Environment variable value", value: value)
         }
         self.key = key

@@ -43,6 +43,7 @@ private struct ContainerDetailView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .accessibilityIdentifier("container.detail.tabs")
             .padding()
 
             Divider()
@@ -51,7 +52,7 @@ private struct ContainerDetailView: View {
             case .overview:
                 overview
             case .logs:
-                logs
+                ContainerLogsSection(model: model)
             case .inspect:
                 inspect
             case .stats:
@@ -169,62 +170,6 @@ private struct ContainerDetailView: View {
                     }
                 }
                 .padding()
-            }
-        }
-    }
-
-    private var logs: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Toggle("Follow", isOn: $model.followsLogs)
-                .toggleStyle(.switch)
-
-                Toggle("Autoscroll", isOn: $model.autoscrollsLogs)
-                    .toggleStyle(.switch)
-
-                Spacer()
-
-                Button(model.isLogPaused ? "Resume" : "Pause") {
-                    model.toggleLogPause()
-                }
-                .disabled(!model.isLogStreaming)
-
-                Button("Copy") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(model.logText, forType: .string)
-                }
-                .disabled(model.logText.isEmpty)
-
-                Button("Clear") {
-                    model.clearLogs()
-                }
-                .disabled(model.logText.isEmpty)
-            }
-            .controlSize(.small)
-            .padding(10)
-
-            Divider()
-
-            if let error = model.logError {
-                errorBanner(error)
-            }
-
-            ScrollViewReader { proxy in
-                ScrollView([.vertical, .horizontal]) {
-                    Text(model.logText.isEmpty ? "Waiting for logs…" : model.logText)
-                        .font(.system(.callout, design: .monospaced))
-                        .foregroundStyle(model.logText.isEmpty ? .secondary : .primary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .padding()
-                    Color.clear
-                        .frame(height: 1)
-                        .id("logs.bottom")
-                }
-                .onChange(of: model.logRevision) {
-                    guard model.autoscrollsLogs else { return }
-                    proxy.scrollTo("logs.bottom", anchor: .bottom)
-                }
             }
         }
     }
@@ -383,5 +328,110 @@ private struct ContainerDetailView: View {
     private func formatDuration(microseconds: UInt64) -> String {
         let seconds = Double(microseconds) / 1_000_000
         return seconds.formatted(.number.precision(.fractionLength(0...2))) + " s"
+    }
+}
+
+@MainActor
+private struct ContainerLogsSection: View {
+    @Bindable var model: ContainerDetailModel
+    @State private var isTailing = true
+    @State private var jumpToLatestRequest = 0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ContainerLogControls(
+                followsLogs: $model.followsLogs,
+                isPaused: model.isLogPaused,
+                isStreaming: model.isLogStreaming,
+                hasLogs: !model.logSnapshot.text.isEmpty,
+                isAtLatest: isTailing,
+                pauseOrResume: model.toggleLogPause,
+                copy: copyLogs,
+                clear: model.clearLogs,
+                jumpToLatest: jumpToLatest
+            )
+
+            Divider()
+
+            if let error = model.logError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(.red.opacity(0.08))
+            }
+
+            ContainerLogViewer(
+                snapshot: model.logSnapshot,
+                jumpToLatestRequest: jumpToLatestRequest
+            ) { value in
+                Task { @MainActor in
+                    isTailing = value
+                }
+            }
+            .overlay {
+                if model.logSnapshot.text.isEmpty {
+                    Text("Waiting for logs…")
+                        .foregroundStyle(.secondary)
+                        .allowsHitTesting(false)
+                        .accessibilityIdentifier("logs.waiting")
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityIdentifier("logs.viewerContainer")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+    }
+
+    private func copyLogs() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(model.logSnapshot.text, forType: .string)
+    }
+
+    private func jumpToLatest() {
+        jumpToLatestRequest &+= 1
+        isTailing = true
+    }
+}
+
+private struct ContainerLogControls: View {
+    @Binding var followsLogs: Bool
+    let isPaused: Bool
+    let isStreaming: Bool
+    let hasLogs: Bool
+    let isAtLatest: Bool
+    let pauseOrResume: () -> Void
+    let copy: () -> Void
+    let clear: () -> Void
+    let jumpToLatest: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Toggle("Follow", isOn: $followsLogs)
+                .toggleStyle(.switch)
+                .accessibilityIdentifier("logs.follow")
+
+            Spacer()
+
+            Button("Jump to Latest", action: jumpToLatest)
+                .disabled(isAtLatest)
+                .accessibilityIdentifier("logs.jumpToLatest")
+
+            Button(isPaused ? "Resume" : "Pause", action: pauseOrResume)
+                .disabled(!isStreaming)
+                .accessibilityIdentifier("logs.pause")
+
+            Button("Copy", action: copy)
+                .disabled(!hasLogs)
+                .accessibilityIdentifier("logs.copy")
+
+            Button("Clear", action: clear)
+                .disabled(!hasLogs)
+                .accessibilityIdentifier("logs.clear")
+        }
+        .controlSize(.small)
+        .padding(10)
     }
 }

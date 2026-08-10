@@ -5,7 +5,7 @@ enum AppDependencies {
     static func makeAppModel(
         processInfo: ProcessInfo = .processInfo
     ) -> AppModel {
-        #if DEBUG
+        #if DEBUG || UI_TESTING
         if let scenario = UITestPreflightScenario(arguments: processInfo.arguments) {
             let setup = SetupModel(
                 preflight: UITestPreflightService(scenario: scenario),
@@ -21,7 +21,7 @@ enum AppDependencies {
     }
 }
 
-#if DEBUG
+#if DEBUG || UI_TESTING
 nonisolated private enum UITestPreflightScenario: String, Sendable {
     case missing
     case stopped
@@ -187,7 +187,13 @@ private actor UITestContainerCLI: ContainerCLI {
                     continuation.yield(.terminated(exitCode: 0))
                     continuation.finish()
                 case .logs:
-                    continuation.yield(.standardOutput("UI test log line\n"))
+                    continuation.yield(.standardOutput(
+                        "first UI test log line\n\n"
+                    ))
+                    continuation.yield(.standardOutput(
+                        "A deliberately long UI test log line that should wrap inside the inspector without creating a horizontal scrollbar or an extra logical line number.\n"
+                    ))
+                    continuation.yield(.standardError("final UI test log line\n"))
                     continuation.yield(.terminated(exitCode: 0))
                     continuation.finish()
                 default:

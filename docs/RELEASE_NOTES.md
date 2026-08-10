@@ -1,3 +1,28 @@
+# Container GUI 1.0.2
+
+Container GUI 1.0.2 improves the container log viewer.
+
+## Changes
+
+- Adds selectable, wrapped log output with stable logical line numbers.
+- Preserves the viewport while reading older output and provides an explicit
+  **Jump to Latest** action.
+- Keeps retained logs bounded without splitting UTF-8 characters or resetting
+  logical line numbering during a stream.
+- Fixes native log text being hidden by the line-number ruler, including the
+  leading characters of wrapped lines.
+- Improves log-viewer behavior across light and dark appearances and during
+  live window resizing.
+
+## Compatibility
+
+- macOS 26 or later on Apple-silicon Macs.
+- Apple Container CLI `0.12.0` or later and earlier than `2.0.0`.
+
+The distributed DMG is ad-hoc signed and is not notarized. Follow the README's
+Privacy & Security installation instructions when macOS blocks the first
+launch.
+
 # Container GUI 1.0
 
 Container GUI 1.0 provides a native macOS interface for Apple Container on

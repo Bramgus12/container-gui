@@ -114,7 +114,8 @@ final class RunContainerModel: Identifiable {
         if trimmed(command).isEmpty && !arguments.isEmpty {
             return "Enter a command before adding arguments."
         }
-        if command.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) {
+        let controlCharacters = CharacterSet.controlCharacters
+        if command.unicodeScalars.contains(where: { controlCharacters.contains($0) }) {
             return "Command cannot contain control characters."
         }
         return nil
