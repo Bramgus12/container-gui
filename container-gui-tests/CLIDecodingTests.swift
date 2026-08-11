@@ -25,6 +25,15 @@ final class CLIDecodingTests: XCTestCase {
         XCTAssertEqual(details.networks.first?.name, "default")
         XCTAssertEqual(details.ports.first?.hostPort, 8_080)
         XCTAssertEqual(details.mounts.first?.destination, "/data")
+        XCTAssertEqual(details.mounts.first?.type, "virtiofs")
+        XCTAssertEqual(details.process?.environment, ["API_TOKEN=secret", "MODE=production"])
+        XCTAssertEqual(details.process?.user?.processUserDescription, "1000:1000")
+        XCTAssertEqual(details.resources?.storage, 8_589_934_592)
+        XCTAssertEqual(details.sockets.first?.hostPath, "/tmp/service.sock")
+        XCTAssertEqual(details.labels["com.example.role"], "web")
+        XCTAssertEqual(details.dns?.domain, "example.test")
+        XCTAssertEqual(details.capAdd, ["CAP_NET_BIND_SERVICE"])
+        XCTAssertEqual(details.networks.first?.variant, "standard")
     }
 
     func testDecodesBothImageFixtureShapes() throws {
@@ -73,6 +82,93 @@ final class CLIDecodingTests: XCTestCase {
         XCTAssertEqual(image.architecture, "arm64")
     }
 
+    func testDecodesLegacyImageInspectionShape() throws {
+        let rawJSON = #"""
+        [{
+          "name": "docker.io/library/alpine:3.20",
+          "index": {
+            "digest": "sha256:index",
+            "mediaType": "application/vnd.oci.image.index.v1+json",
+            "size": 512
+          },
+          "variants": [{
+            "platform": {"os": "linux", "architecture": "arm64", "variant": "v8"},
+            "size": 8100000,
+            "config": {
+              "created": "2026-04-27T10:00:00Z",
+              "author": "Apple",
+              "architecture": "arm64",
+              "os": "linux",
+              "config": {
+                "User": "1000:1000",
+                "Env": ["TOKEN=secret"],
+                "Entrypoint": ["/bin/sh"],
+                "Cmd": ["-c", "echo ready"],
+                "WorkingDir": "/work",
+                "Labels": {"org.example.kind": "fixture"},
+                "StopSignal": "SIGTERM"
+              },
+              "rootfs": {"type": "layers", "diff_ids": ["sha256:layer"]},
+              "history": [{"created_by": "RUN echo ready", "empty_layer": false}]
+            }
+          }]
+        }]
+        """#
+        let dto = try XCTUnwrap(JSONDecoder().decode([ImageDTO].self, from: Data(rawJSON.utf8)).first)
+        let inspection = try XCTUnwrap(ImageInspection(
+            dto: dto,
+            fallbackReference: "alpine:3.20",
+            rawJSON: rawJSON
+        ))
+
+        XCTAssertEqual(inspection.reference, "docker.io/library/alpine:3.20")
+        XCTAssertEqual(inspection.descriptor?.digest, "sha256:index")
+        XCTAssertEqual(inspection.variants.first?.configuration?.environment, ["TOKEN=secret"])
+        XCTAssertEqual(inspection.variants.first?.rootFS?.diffIDs, ["sha256:layer"])
+        XCTAssertEqual(inspection.variants.first?.history.first?.createdBy, "RUN echo ready")
+    }
+
+    func testDecodesCurrentImageInspectionShape() throws {
+        let rawJSON = #"""
+        [{
+          "configuration": {
+            "name": "ghcr.io/example/app:1.0",
+            "creationDate": "2026-06-16T00:00:15Z",
+            "descriptor": {
+              "digest": "sha256:index",
+              "mediaType": "application/vnd.oci.image.index.v1+json",
+              "size": 9218,
+              "annotations": {"org.opencontainers.image.title": "Example"}
+            }
+          },
+          "variants": [{
+            "digest": "sha256:manifest",
+            "platform": {"architecture": "amd64", "os": "linux"},
+            "size": 42000000,
+            "config": {
+              "created": "2026-06-15T22:00:00Z",
+              "architecture": "amd64",
+              "os": "linux",
+              "config": {"Env": ["MODE=production"]},
+              "rootfs": {"type": "layers", "diff_ids": []}
+            }
+          }]
+        }]
+        """#
+        let dto = try XCTUnwrap(JSONDecoder().decode([ImageDTO].self, from: Data(rawJSON.utf8)).first)
+        let inspection = try XCTUnwrap(ImageInspection(
+            dto: dto,
+            fallbackReference: "ghcr.io/example/app:1.0",
+            rawJSON: rawJSON
+        ))
+
+        XCTAssertEqual(inspection.reference, "ghcr.io/example/app:1.0")
+        XCTAssertEqual(inspection.descriptor?.annotations?["org.opencontainers.image.title"], "Example")
+        XCTAssertEqual(inspection.variants.first?.digest, "sha256:manifest")
+        XCTAssertEqual(inspection.variants.first?.architecture, "amd64")
+        XCTAssertEqual(inspection.variants.first?.configuration?.environment, ["MODE=production"])
+    }
+
     func testDecodesVersionStatusAndStatsFixtures() throws {
         let versions: [SystemVersionDTO] = try decodeFixture("1.0.0/system-version.json")
         let version = SystemVersion(components: versions)
@@ -93,6 +189,20 @@ final class CLIDecodingTests: XCTestCase {
         XCTAssertEqual(summary.id, "only-an-id")
         XCTAssertEqual(summary.state, .unknown("mystery"))
         XCTAssertNil(summary.image)
+    }
+
+    func testDecodesFoundationNumericDatesUsedByLegacyCLIJSON() throws {
+        let data = Data(#"[{"configuration":{"id":"legacy"},"status":"running","startedDate":0}]"#.utf8)
+        let dto = try XCTUnwrap(JSONDecoder().decode([ContainerDTO].self, from: data).first)
+        let details = try XCTUnwrap(ContainerDetails(dto: dto))
+
+        XCTAssertEqual(details.startedAt, Date(timeIntervalSinceReferenceDate: 0))
+
+        let imageDTO = try JSONDecoder().decode(
+            ImageDTO.self,
+            from: Data(#"{"name":"legacy-image","createdAt":0}"#.utf8)
+        )
+        XCTAssertEqual(ImageSummary(dto: imageDTO)?.createdAt, Date(timeIntervalSinceReferenceDate: 0))
     }
 
     private func decodeFixture<Value: Decodable>(_ path: String) throws -> Value {

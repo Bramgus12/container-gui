@@ -146,6 +146,51 @@ final class OnboardingUITests: XCTestCase {
         )
     }
 
+    func testContainerConfigurationUsesStructuredMaskedUI() {
+        let app = launch(scenario: "ready")
+        let fixture = app.staticTexts["demo-stopped"]
+        XCTAssertTrue(fixture.waitForExistence(timeout: 3))
+        fixture.click()
+
+        let configurationTab = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", "Configuration"))
+            .firstMatch
+        XCTAssertTrue(configurationTab.waitForExistence(timeout: 3))
+        configurationTab.click()
+
+        XCTAssertTrue(app.staticTexts["Container Configuration"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Process"].exists)
+        let revealToken = app.buttons["Reveal API_TOKEN"]
+        XCTAssertTrue(revealToken.exists)
+        XCTAssertFalse(app.staticTexts["container-secret"].exists)
+        revealToken.click()
+        XCTAssertTrue(app.staticTexts["container-secret"].exists)
+
+        app.buttons["Copy Raw JSON"].click()
+        XCTAssertTrue(
+            NSPasteboard.general.string(forType: .string)?.contains("API_TOKEN=container-secret") == true
+        )
+    }
+
+    func testImageInspectionUsesStructuredMaskedUI() {
+        let app = launch(scenario: "ready")
+        let images = app.staticTexts["Images"].firstMatch
+        XCTAssertTrue(images.waitForExistence(timeout: 3))
+        images.click()
+
+        let fixture = app.staticTexts["ghcr.io/example/demo:1.0"]
+        XCTAssertTrue(fixture.waitForExistence(timeout: 3))
+        fixture.click()
+
+        XCTAssertTrue(app.descendants(matching: .any)["images.inspection"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["linux / arm64 / v8"].exists)
+        let revealToken = app.buttons["Reveal TOKEN"]
+        XCTAssertTrue(revealToken.exists)
+        XCTAssertFalse(app.staticTexts["image-secret"].exists)
+        revealToken.click()
+        XCTAssertTrue(app.staticTexts["image-secret"].exists)
+    }
+
     func testSystemLogViewerShowsNumberedLogsAndSharedActionsAtLatest() {
         let app = launch(scenario: "ready")
         let systemDestination = app.staticTexts["System"].firstMatch

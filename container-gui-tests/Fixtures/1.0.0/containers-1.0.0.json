@@ -15,7 +15,19 @@
       "creationDate": "2026-06-09T12:34:56.123Z",
       "resources": {
         "cpus": "2",
-        "memoryInBytes": "1073741824"
+        "memoryInBytes": "1073741824",
+        "storage": 8589934592,
+        "cpuOverhead": 1
+      },
+      "initProcess": {
+        "executable": "/usr/bin/server",
+        "arguments": ["--port", "80"],
+        "environment": ["API_TOKEN=secret", "MODE=production"],
+        "workingDirectory": "/app",
+        "terminal": false,
+        "user": {"id": {"uid": 1000, "gid": 1000}},
+        "supplementalGroups": [20],
+        "rlimits": [{"limit": "RLIMIT_NOFILE", "soft": 1024, "hard": 2048}]
       },
       "publishedPorts": [
         {
@@ -35,6 +47,31 @@
           }
         }
       ],
+      "publishedSockets": [{
+        "containerPath": "/run/service.sock",
+        "hostPath": "/tmp/service.sock",
+        "permissions": 384
+      }],
+      "labels": {"com.example.role": "web"},
+      "sysctls": {"net.ipv4.ip_forward": "1"},
+      "dns": {
+        "nameservers": ["1.1.1.1"],
+        "domain": "example.test",
+        "searchDomains": ["svc.example.test"],
+        "options": ["ndots:1"]
+      },
+      "rosetta": false,
+      "runtimeHandler": "container-runtime-linux",
+      "virtualization": true,
+      "ssh": true,
+      "readOnly": true,
+      "useInit": true,
+      "capAdd": ["CAP_NET_BIND_SERVICE"],
+      "capDrop": ["CAP_SYS_ADMIN"],
+      "shmSize": 67108864,
+      "stopSignal": "SIGTERM",
+      "maskedPaths": ["/proc/kcore"],
+      "readonlyPaths": ["/proc/sys"],
       "newConfigurationField": true
     },
     "status": {
@@ -48,6 +85,7 @@
           "gateway": "192.168.64.1",
           "macAddress": "02:42:ac:11:00:04",
           "mtu": 1500,
+          "variant": "standard",
           "futureNetworkField": "ignored"
         }
       ]

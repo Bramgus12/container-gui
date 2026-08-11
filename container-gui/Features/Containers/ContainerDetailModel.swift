@@ -3,7 +3,7 @@ import Observation
 
 nonisolated struct ContainerInspection: Equatable, Sendable {
     let details: ContainerDetails
-    let formattedJSON: String
+    let rawJSON: String
 }
 
 nonisolated protocol ContainerDiagnosing: Sendable {
@@ -29,11 +29,6 @@ actor CLIContainerDiagnosticsService: ContainerDiagnosing {
         let data = Data(result.standardOutput.utf8)
 
         do {
-            let object = try JSONSerialization.jsonObject(with: data)
-            let formattedData = try JSONSerialization.data(
-                withJSONObject: object,
-                options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-            )
             let dto: ContainerDTO
             if let decoded = try? JSONDecoder().decode(ContainerDTO.self, from: data) {
                 dto = decoded
@@ -53,7 +48,7 @@ actor CLIContainerDiagnosticsService: ContainerDiagnosing {
             }
             return ContainerInspection(
                 details: details,
-                formattedJSON: String(decoding: formattedData, as: UTF8.self)
+                rawJSON: result.standardOutput
             )
         } catch let error as CLIError {
             throw error
@@ -109,7 +104,7 @@ actor CLIContainerDiagnosticsService: ContainerDiagnosing {
 enum ContainerDetailTab: String, CaseIterable, Identifiable {
     case overview = "Overview"
     case logs = "Logs"
-    case inspect = "Inspect"
+    case configuration = "Configuration"
     case stats = "Stats"
 
     var id: Self { self }
@@ -118,7 +113,7 @@ enum ContainerDetailTab: String, CaseIterable, Identifiable {
         switch self {
         case .overview: "Overview"
         case .logs: "Logs"
-        case .inspect: "Inspect"
+        case .configuration: "Configuration"
         case .stats: "Stats"
         }
     }

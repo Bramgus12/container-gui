@@ -30,7 +30,7 @@ directly, never through a shell.
 | | Capability | What you can do |
 | :---: | --- | --- |
 | 📦 | **Containers** | Search, filter, run, start, stop, and safely delete containers. |
-| 🔎 | **Deep inspection** | Explore configuration, networking, ports, mounts, and formatted inspection JSON. |
+| 🔎 | **Deep inspection** | Explore structured container configuration, networking, ports, mounts, image variants, and OCI metadata. |
 | 📜 | **Logs & stats** | Follow bounded logs and monitor CPU, memory, network, and block I/O. |
 | 🖼️ | **Images** | Search local images, inspect metadata, stream pull progress, run, and delete. |
 | ❤️ | **System health** | Check CLI and server versions, control the service, and review disk usage and recent logs. |

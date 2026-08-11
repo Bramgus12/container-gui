@@ -4,7 +4,7 @@ import XCTest
 
 @MainActor
 final class ContainerDetailModelTests: XCTestCase {
-    func testInspectionServiceDecodesObjectFormatsRawJSONAndRunsTypedCommand() async throws {
+    func testInspectionServiceDecodesObjectPreservesRawJSONAndRunsTypedCommand() async throws {
         let output = """
         {
           "future": true,
@@ -23,7 +23,7 @@ final class ContainerDetailModelTests: XCTestCase {
 
         XCTAssertEqual(inspection.details.id, "web")
         XCTAssertEqual(inspection.details.resources?.cpus, 2)
-        XCTAssertTrue(inspection.formattedJSON.contains("\"future\" : true"))
+        XCTAssertTrue(inspection.rawJSON.contains("\"future\": true"))
         let commands = await cli.commands
         XCTAssertEqual(commands, [.inspectContainer(id: try ContainerIdentifier(validating: "web"))])
     }
@@ -193,7 +193,7 @@ private actor SequencedInspectionService: ContainerDiagnosing {
         }
         return ContainerInspection(
             details: details,
-            formattedJSON: String(decoding: data, as: UTF8.self)
+            rawJSON: String(decoding: data, as: UTF8.self)
         )
     }
 
@@ -265,7 +265,7 @@ private final class DiagnosticsStub: ContainerDiagnosing, @unchecked Sendable {
         let dto = try JSONDecoder().decode(ContainerDTO.self, from: data)
         return ContainerInspection(
             details: ContainerDetails(dto: dto)!,
-            formattedJSON: String(decoding: data, as: UTF8.self)
+            rawJSON: String(decoding: data, as: UTF8.self)
         )
     }
 

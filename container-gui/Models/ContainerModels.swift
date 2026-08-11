@@ -1,11 +1,30 @@
 import Foundation
 
+nonisolated struct CLIDateValue: Decodable, Equatable, Sendable {
+    let date: Date
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let value = try? container.decode(Double.self) {
+            date = Date(timeIntervalSinceReferenceDate: value)
+            return
+        }
+        let value = try container.decode(String.self)
+        if let parsed = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(value) {
+            date = parsed
+        } else {
+            date = try Date.ISO8601FormatStyle().parse(value)
+        }
+    }
+}
+
 nonisolated struct ContainerDTO: Decodable, Equatable, Sendable {
     let id: String?
     let configuration: ContainerConfigurationDTO?
     let status: ContainerStatusDTO?
     let networks: [ContainerNetworkDTO]?
-    let creationDate: String?
+    let creationDate: CLIDateValue?
+    let startedDate: CLIDateValue?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -14,6 +33,7 @@ nonisolated struct ContainerDTO: Decodable, Equatable, Sendable {
         case networks
         case creationDate
         case createdAt
+        case startedDate
     }
 
     init(from decoder: Decoder) throws {
@@ -22,8 +42,9 @@ nonisolated struct ContainerDTO: Decodable, Equatable, Sendable {
         configuration = try container.decodeIfPresent(ContainerConfigurationDTO.self, forKey: .configuration)
         status = try container.decodeIfPresent(ContainerStatusDTO.self, forKey: .status)
         networks = try container.decodeIfPresent([ContainerNetworkDTO].self, forKey: .networks)
-        creationDate = try container.decodeIfPresent(String.self, forKey: .creationDate)
-            ?? container.decodeIfPresent(String.self, forKey: .createdAt)
+        creationDate = try container.decodeIfPresent(CLIDateValue.self, forKey: .creationDate)
+            ?? container.decodeIfPresent(CLIDateValue.self, forKey: .createdAt)
+        startedDate = try container.decodeIfPresent(CLIDateValue.self, forKey: .startedDate)
     }
 }
 
@@ -31,14 +52,28 @@ nonisolated struct ContainerConfigurationDTO: Decodable, Equatable, Sendable {
     let id: String?
     let image: CLIReferenceDTO?
     let platform: PlatformDTO?
-    let creationDate: String?
+    let creationDate: CLIDateValue?
     let initProcess: InitProcessDTO?
     let resources: ContainerResourcesDTO?
     let networks: [ContainerNetworkDTO]?
     let publishedPorts: [PublishedPortDTO]?
+    let publishedSockets: [PublishedSocketDTO]?
     let mounts: [ContainerMountDTO]?
     let labels: [String: String]?
+    let sysctls: [String: String]?
+    let dns: ContainerDNSDTO?
+    let rosetta: Bool?
+    let runtimeHandler: String?
+    let virtualization: Bool?
+    let ssh: Bool?
     let readOnly: Bool?
+    let useInit: Bool?
+    let capAdd: [String]?
+    let capDrop: [String]?
+    let shmSize: UInt64?
+    let stopSignal: String?
+    let maskedPaths: [String]?
+    let readonlyPaths: [String]?
 }
 
 nonisolated struct CLIReferenceDTO: Decodable, Equatable, Sendable {
@@ -68,6 +103,8 @@ nonisolated struct PlatformDTO: Decodable, Equatable, Sendable {
     let os: String?
     let architecture: String?
     let variant: String?
+    let osVersion: String?
+    let osFeatures: [String]?
 }
 
 nonisolated struct InitProcessDTO: Decodable, Equatable, Sendable {
@@ -75,28 +112,46 @@ nonisolated struct InitProcessDTO: Decodable, Equatable, Sendable {
     let arguments: [String]?
     let environment: [String]?
     let workingDirectory: String?
+    let terminal: Bool?
+    let user: InspectionValue?
+    let supplementalGroups: [UInt32]?
+    let rlimits: [ProcessRlimitDTO]?
+}
+
+nonisolated struct ProcessRlimitDTO: Decodable, Equatable, Identifiable, Sendable {
+    let limit: String?
+    let soft: UInt64?
+    let hard: UInt64?
+
+    var id: String { limit ?? "unknown" }
 }
 
 nonisolated struct ContainerResourcesDTO: Decodable, Equatable, Sendable {
     let cpus: Int?
     let memoryInBytes: UInt64?
+    let storage: UInt64?
+    let cpuOverhead: Int?
 
     private enum CodingKeys: String, CodingKey {
         case cpus
         case memoryInBytes
         case memory
+        case storage
+        case cpuOverhead
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         cpus = try container.decodeLossyIntIfPresent(forKey: .cpus)
         memoryInBytes = try container.decodeLossyUInt64IfPresent(forKeys: [.memoryInBytes, .memory])
+        storage = try container.decodeLossyUInt64IfPresent(forKeys: [.storage])
+        cpuOverhead = try container.decodeLossyIntIfPresent(forKey: .cpuOverhead)
     }
 }
 
 nonisolated struct ContainerStatusDTO: Decodable, Equatable, Sendable {
     let state: String?
-    let startedDate: String?
+    let startedDate: CLIDateValue?
     let exitCode: Int?
     let networks: [ContainerNetworkDTO]?
 
@@ -119,21 +174,53 @@ nonisolated struct ContainerStatusDTO: Decodable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         state = try container.decodeIfPresent(String.self, forKey: .status)
             ?? container.decodeIfPresent(String.self, forKey: .state)
-        startedDate = try container.decodeIfPresent(String.self, forKey: .startedDate)
+        startedDate = try container.decodeIfPresent(CLIDateValue.self, forKey: .startedDate)
         exitCode = try container.decodeLossyIntIfPresent(forKey: .exitCode)
         networks = try container.decodeIfPresent([ContainerNetworkDTO].self, forKey: .networks)
     }
 }
 
-nonisolated struct ContainerNetworkDTO: Decodable, Equatable, Sendable {
+nonisolated struct ContainerNetworkDTO: Decodable, Equatable, Identifiable, Sendable {
+    struct ID: Hashable, Sendable {
+        let network: String?
+        let hostname: String?
+        let macAddress: String?
+        let ipv4Address: String?
+    }
+
     let network: String?
     let hostname: String?
     let address: String?
     let ipv4Address: String?
     let ipv6Address: String?
     let gateway: String?
+    let ipv4Gateway: String?
     let macAddress: String?
     let mtu: Int?
+    let variant: String?
+    let options: ContainerNetworkOptionsDTO?
+
+    var id: ID {
+        ID(
+            network: network,
+            hostname: options?.hostname ?? hostname,
+            macAddress: options?.macAddress ?? macAddress,
+            ipv4Address: ipv4Address ?? address
+        )
+    }
+}
+
+nonisolated struct ContainerNetworkOptionsDTO: Decodable, Equatable, Sendable {
+    let hostname: String?
+    let macAddress: String?
+    let mtu: Int?
+}
+
+nonisolated struct ContainerDNSDTO: Decodable, Equatable, Sendable {
+    let nameservers: [String]?
+    let domain: String?
+    let searchDomains: [String]?
+    let options: [String]?
 }
 
 nonisolated struct PublishedPortDTO: Decodable, Equatable, Identifiable, Sendable {
@@ -142,19 +229,22 @@ nonisolated struct PublishedPortDTO: Decodable, Equatable, Identifiable, Sendabl
         let hostPort: Int?
         let containerPort: Int?
         let proto: String?
+        let count: Int?
     }
 
     let hostAddress: String?
     let hostPort: Int?
     let containerPort: Int?
     let proto: String?
+    let count: Int?
 
     var id: ID {
         ID(
             hostAddress: hostAddress,
             hostPort: hostPort,
             containerPort: containerPort,
-            proto: proto
+            proto: proto,
+            count: count
         )
     }
 
@@ -164,6 +254,7 @@ nonisolated struct PublishedPortDTO: Decodable, Equatable, Identifiable, Sendabl
         case containerPort
         case proto
         case protocolName = "protocol"
+        case count
     }
 
     init(from decoder: Decoder) throws {
@@ -173,6 +264,37 @@ nonisolated struct PublishedPortDTO: Decodable, Equatable, Identifiable, Sendabl
         containerPort = try container.decodeLossyIntIfPresent(forKey: .containerPort)
         proto = try container.decodeIfPresent(String.self, forKey: .proto)
             ?? container.decodeIfPresent(String.self, forKey: .protocolName)
+        count = try container.decodeLossyIntIfPresent(forKey: .count)
+    }
+}
+
+nonisolated struct PublishedSocketDTO: Decodable, Equatable, Identifiable, Sendable {
+    let containerPath: String?
+    let hostPath: String?
+    let permissions: InspectionValue?
+
+    var id: String { containerPath ?? hostPath ?? "unknown" }
+
+    private enum CodingKeys: String, CodingKey {
+        case containerPath
+        case hostPath
+        case permissions
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        containerPath = try Self.decodePath(container, key: .containerPath)
+        hostPath = try Self.decodePath(container, key: .hostPath)
+        permissions = try container.decodeIfPresent(InspectionValue.self, forKey: .permissions)
+    }
+
+    private static func decodePath(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        key: CodingKeys
+    ) throws -> String? {
+        guard let value = try container.decodeIfPresent(String.self, forKey: key) else { return nil }
+        guard value.hasPrefix("file:"), let url = URL(string: value), url.isFileURL else { return value }
+        return url.path(percentEncoded: false)
     }
 }
 
@@ -212,7 +334,70 @@ nonisolated struct ContainerMountDTO: Decodable, Equatable, Identifiable, Sendab
         destination = try container.decodeIfPresent(String.self, forKey: .destination)
             ?? container.decodeIfPresent(String.self, forKey: .target)
         options = try container.decodeIfPresent([String].self, forKey: .options)
-        type = try? container.decode(String.self, forKey: .type)
+        type = try container.decodeIfPresent(InspectionValue.self, forKey: .type)?.compactDescription
+    }
+}
+
+nonisolated indirect enum InspectionValue: Decodable, Equatable, Sendable {
+    case string(String)
+    case number(String)
+    case bool(Bool)
+    case object([String: InspectionValue])
+    case array([InspectionValue])
+    case null
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? container.decode(Int64.self) {
+            self = .number(String(value))
+        } else if let value = try? container.decode(Double.self) {
+            self = .number(value.formatted())
+        } else if let value = try? container.decode([String: InspectionValue].self) {
+            self = .object(value)
+        } else {
+            self = .array(try container.decode([InspectionValue].self))
+        }
+    }
+
+    var compactDescription: String {
+        switch self {
+        case .string(let value), .number(let value): value
+        case .bool(let value): value ? "Yes" : "No"
+        case .null: "None"
+        case .array(let values): values.map(\.compactDescription).joined(separator: ", ")
+        case .object(let values):
+            values.sorted { $0.key < $1.key }.map { key, value in
+                let nested = value.compactDescription
+                return nested.isEmpty ? key : "\(key): \(nested)"
+            }.joined(separator: ", ")
+        }
+    }
+
+    var processUserDescription: String {
+        guard case .object(let values) = self else { return compactDescription }
+        if case .object(let id)? = values["id"],
+           let uid = id["uid"]?.scalarDescription,
+           let gid = id["gid"]?.scalarDescription {
+            return "\(uid):\(gid)"
+        }
+        if case .object(let raw)? = values["raw"],
+           let user = raw["userString"]?.scalarDescription {
+            return user
+        }
+        return compactDescription
+    }
+
+    private var scalarDescription: String? {
+        switch self {
+        case .string(let value), .number(let value): value
+        default: nil
+        }
     }
 }
 
@@ -279,7 +464,10 @@ nonisolated struct ContainerNetwork: Equatable, Identifiable, Sendable {
     let hostname: String?
     let ipv4Address: String?
     let ipv6Address: String?
+    let gateway: String?
     let macAddress: String?
+    let mtu: Int?
+    let variant: String?
 
     var id: ID {
         if let name { return .name(name) }
@@ -298,6 +486,29 @@ nonisolated struct ContainerDetails: Identifiable, Equatable, Sendable {
     let ports: [PublishedPortDTO]
     let mounts: [ContainerMountDTO]
     let resources: ContainerResourcesDTO?
+    let imageDigest: String?
+    let createdAt: Date?
+    let startedAt: Date?
+    let exitCode: Int?
+    let platform: PlatformDTO?
+    let process: InitProcessDTO?
+    let configuredNetworks: [ContainerNetworkDTO]
+    let sockets: [PublishedSocketDTO]
+    let labels: [String: String]
+    let sysctls: [String: String]
+    let dns: ContainerDNSDTO?
+    let rosetta: Bool?
+    let runtimeHandler: String?
+    let virtualization: Bool?
+    let ssh: Bool?
+    let readOnly: Bool?
+    let useInit: Bool?
+    let capAdd: [String]
+    let capDrop: [String]
+    let shmSize: UInt64?
+    let stopSignal: String?
+    let maskedPaths: [String]?
+    let readonlyPaths: [String]?
 
     init?(dto: ContainerDTO) {
         guard let summary = ContainerSummary(dto: dto) else {
@@ -312,23 +523,43 @@ nonisolated struct ContainerDetails: Identifiable, Equatable, Sendable {
                 hostname: $0.hostname,
                 ipv4Address: $0.ipv4Address ?? $0.address,
                 ipv6Address: $0.ipv6Address,
-                macAddress: $0.macAddress
+                gateway: $0.ipv4Gateway ?? $0.gateway,
+                macAddress: $0.macAddress,
+                mtu: $0.mtu,
+                variant: $0.variant
             )
         }
         ports = dto.configuration?.publishedPorts ?? []
         mounts = dto.configuration?.mounts ?? []
         resources = dto.configuration?.resources
+        imageDigest = dto.configuration?.image?.digest
+        createdAt = parseCLIDate(dto.configuration?.creationDate ?? dto.creationDate)
+        startedAt = parseCLIDate(dto.status?.startedDate ?? dto.startedDate)
+        exitCode = dto.status?.exitCode
+        platform = dto.configuration?.platform
+        process = dto.configuration?.initProcess
+        configuredNetworks = dto.configuration?.networks ?? []
+        sockets = dto.configuration?.publishedSockets ?? []
+        labels = dto.configuration?.labels ?? [:]
+        sysctls = dto.configuration?.sysctls ?? [:]
+        dns = dto.configuration?.dns
+        rosetta = dto.configuration?.rosetta
+        runtimeHandler = dto.configuration?.runtimeHandler
+        virtualization = dto.configuration?.virtualization
+        ssh = dto.configuration?.ssh
+        readOnly = dto.configuration?.readOnly
+        useInit = dto.configuration?.useInit
+        capAdd = dto.configuration?.capAdd ?? []
+        capDrop = dto.configuration?.capDrop ?? []
+        shmSize = dto.configuration?.shmSize
+        stopSignal = dto.configuration?.stopSignal
+        maskedPaths = dto.configuration?.maskedPaths
+        readonlyPaths = dto.configuration?.readonlyPaths
     }
 }
 
-nonisolated private func parseCLIDate(_ value: String?) -> Date? {
-    guard let value else {
-        return nil
-    }
-    if let date = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(value) {
-        return date
-    }
-    return try? Date.ISO8601FormatStyle().parse(value)
+nonisolated private func parseCLIDate(_ value: CLIDateValue?) -> Date? {
+    value?.date
 }
 
 nonisolated private extension KeyedDecodingContainer {

@@ -167,9 +167,13 @@ private actor UITestContainerCLI: ContainerCLI {
                 .map { "UI test service log line \($0)." }
                 .joined(separator: "\n")
         case .listImages:
-            output = "[]"
+            output = """
+            [{"name":"ghcr.io/example/demo:1.0","descriptor":{"digest":"sha256:demo-index","size":9218,"mediaType":"application/vnd.oci.image.index.v1+json"},"createdAt":"2026-06-16T00:00:15Z","platform":{"os":"linux","architecture":"arm64"}}]
+            """
         case .inspectImage:
-            output = "{}"
+            output = """
+            [{"configuration":{"name":"ghcr.io/example/demo:1.0","creationDate":"2026-06-16T00:00:15Z","descriptor":{"digest":"sha256:demo-index","size":9218,"mediaType":"application/vnd.oci.image.index.v1+json"}},"variants":[{"digest":"sha256:demo-manifest","size":4184689,"platform":{"os":"linux","architecture":"arm64","variant":"v8"},"config":{"created":"2026-06-15T22:00:00Z","author":"UI Test","architecture":"arm64","os":"linux","config":{"User":"1000:1000","Env":["TOKEN=image-secret","MODE=test"],"Entrypoint":["/bin/demo"],"Cmd":["serve"],"WorkingDir":"/app","Labels":{"org.example.fixture":"true"},"StopSignal":"SIGTERM"},"rootfs":{"type":"layers","diff_ids":["sha256:demo-layer"]},"history":[{"created_by":"COPY demo /bin/demo","empty_layer":false}]}}]}]
+            """
         case .systemStart, .systemStop, .pullImage, .deleteImage, .run, .logs, .stats:
             output = ""
         }
@@ -230,7 +234,7 @@ private actor UITestContainerCLI: ContainerCLI {
             return "{}"
         }
         return """
-        {"id":"\(container.id)","configuration":{"id":"\(container.id)","image":"\(container.image)","platform":{"os":"linux","architecture":"arm64"}},"status":{"state":"\(container.state)"}}
+        {"id":"\(container.id)","configuration":{"id":"\(container.id)","image":{"reference":"\(container.image)","digest":"sha256:demo"},"platform":{"os":"linux","architecture":"arm64"},"creationDate":"2026-06-16T00:00:15Z","initProcess":{"executable":"/bin/demo","arguments":["serve"],"environment":["API_TOKEN=container-secret","MODE=test"],"workingDirectory":"/app","terminal":false},"resources":{"cpus":2,"memoryInBytes":1073741824},"labels":{"org.example.fixture":"true"},"readOnly":true,"capDrop":["CAP_SYS_ADMIN"]},"status":{"state":"\(container.state)","startedDate":"2026-06-16T00:01:00Z"}}
         """
     }
 

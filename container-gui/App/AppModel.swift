@@ -17,7 +17,7 @@ nonisolated protocol ContainerRunning: Sendable {
 
 nonisolated protocol ImageManaging: Sendable {
     func listImages() async throws -> [ImageSummary]
-    func inspectImage(reference: String) async throws -> String
+    func inspectImage(reference: String) async throws -> ImageInspection
     func pullImage(reference: String) -> AsyncThrowingStream<ProcessEvent, Error>
     func deleteImage(reference: String) async throws
 }
@@ -84,17 +84,29 @@ nonisolated struct CLIImageService: ImageManaging {
         }
     }
 
-    func inspectImage(reference: String) async throws -> String {
+    func inspectImage(reference: String) async throws -> ImageInspection {
         let imageReference = try ImageReference(validating: reference)
         let result = try await cli.run(.inspectImage(reference: imageReference))
         let data = Data(result.standardOutput.utf8)
         do {
-            let object = try JSONSerialization.jsonObject(with: data)
-            let formatted = try JSONSerialization.data(
-                withJSONObject: object,
-                options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-            )
-            return String(decoding: formatted, as: UTF8.self)
+            let dtos: [ImageDTO]
+            if let decoded = try? JSONDecoder().decode([ImageDTO].self, from: data) {
+                dtos = decoded
+            } else {
+                dtos = [try JSONDecoder().decode(ImageDTO.self, from: data)]
+            }
+            guard let dto = dtos.first,
+                  dto.containsInspectionData,
+                  let inspection = ImageInspection(
+                    dto: dto,
+                    fallbackReference: reference,
+                    rawJSON: result.standardOutput
+                  ) else {
+                throw CLIError.invalidOutput(description: "Image inspection returned no entries.")
+            }
+            return inspection
+        } catch let error as CLIError {
+            throw error
         } catch {
             throw CLIError.invalidOutput(
                 description: "Image inspection could not be decoded as JSON: \(error.localizedDescription)"
@@ -225,7 +237,7 @@ enum ImageListState: Equatable, Sendable {
 enum ImageInspectionState: Equatable, Sendable {
     case idle
     case loading
-    case loaded(String)
+    case loaded(ImageInspection)
     case failed(String)
 }
 
@@ -427,10 +439,10 @@ final class AppModel {
         imageInspectionState = .loading
 
         do {
-            let json = try await imageService.inspectImage(reference: selectedImage.reference)
+            let inspection = try await imageService.inspectImage(reference: selectedImage.reference)
             guard generation == imageInspectionGeneration,
                   selectedImageID == selectedID else { return }
-            imageInspectionState = .loaded(json)
+            imageInspectionState = .loaded(inspection)
         } catch is CancellationError {
             guard generation == imageInspectionGeneration else { return }
             imageInspectionState = .idle

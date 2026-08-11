@@ -23,20 +23,36 @@ final class ImageManagementTests: XCTestCase {
         XCTAssertEqual(images.first?.architecture, "arm64")
     }
 
-    func testCLIServiceFormatsInspectionAndUsesSelectedReference() async throws {
+    func testCLIServiceDecodesInspectionAndUsesSelectedReference() async throws {
         let reference = "ghcr.io/example/app:1.0"
         let validatedReference = try ImageReference(validating: reference)
-        let cli = ImageCLIStub(output: #"{"z":1,"a":{"value":true}}"#)
+        let output = #"[{"name":"ghcr.io/example/app:1.0","index":{"digest":"sha256:index","size":123,"mediaType":"application/vnd.oci.image.index.v1+json"},"variants":[]}]"#
+        let cli = ImageCLIStub(output: output)
         let service = CLIImageService(cli: cli)
 
         let inspection = try await service.inspectImage(reference: reference)
         let commands = await cli.commands
 
         XCTAssertEqual(commands, [.inspectImage(reference: validatedReference)])
-        XCTAssertTrue(inspection.contains("\n"))
-        let aIndex = try XCTUnwrap(inspection.range(of: "\"a\"")).lowerBound
-        let zIndex = try XCTUnwrap(inspection.range(of: "\"z\"")).lowerBound
-        XCTAssertLessThan(aIndex, zIndex)
+        XCTAssertEqual(inspection.reference, reference)
+        XCTAssertEqual(inspection.descriptor?.digest, "sha256:index")
+        XCTAssertEqual(inspection.rawJSON, output)
+    }
+
+    func testCLIServiceRejectsEmptyInspectionObject() async {
+        let service = CLIImageService(cli: ImageCLIStub(output: "[{\"configuration\":{},\"descriptor\":{},\"variants\":[]}]"))
+
+        do {
+            _ = try await service.inspectImage(reference: "alpine:3.21")
+            XCTFail("Expected an empty inspection object to fail.")
+        } catch let error as CLIError {
+            guard case .invalidOutput(let description) = error else {
+                return XCTFail("Unexpected CLI error: \(error)")
+            }
+            XCTAssertEqual(description, "Image inspection returned no entries.")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
     }
 
     func testRefreshSelectionSearchAndInspectionCompose() async {
@@ -52,10 +68,10 @@ final class ImageManagementTests: XCTestCase {
         await model.inspectSelectedImage()
 
         XCTAssertEqual(model.filteredImages.map(\.reference), ["docker.io/library/alpine:3.21"])
-        XCTAssertEqual(
-            model.imageInspectionState,
-            .loaded(#"{"reference":"docker.io/library/alpine:3.21"}"#)
-        )
+        guard case .loaded(let inspection) = model.imageInspectionState else {
+            return XCTFail("Expected typed image inspection.")
+        }
+        XCTAssertEqual(inspection.reference, "docker.io/library/alpine:3.21")
     }
 
     func testPullStreamsProgressAndRefreshesImages() async throws {
@@ -201,8 +217,10 @@ private actor ImageServiceStub: ImageManaging {
         return imagesResult
     }
 
-    func inspectImage(reference: String) -> String {
-        #"{"reference":"\#(reference)"}"#
+    func inspectImage(reference: String) throws -> ImageInspection {
+        let rawJSON = #"{"reference":"\#(reference)"}"#
+        let dto = try JSONDecoder().decode(ImageDTO.self, from: Data(rawJSON.utf8))
+        return ImageInspection(dto: dto, fallbackReference: reference, rawJSON: rawJSON)!
     }
 
     nonisolated func pullImage(

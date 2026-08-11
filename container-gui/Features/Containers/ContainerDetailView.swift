@@ -53,8 +53,8 @@ private struct ContainerDetailView: View {
                 overview
             case .logs:
                 ContainerLogsSection(model: model)
-            case .inspect:
-                inspect
+            case .configuration:
+                configuration
             case .stats:
                 stats
             }
@@ -175,23 +175,17 @@ private struct ContainerDetailView: View {
     }
 
     @ViewBuilder
-    private var inspect: some View {
+    private var configuration: some View {
         switch model.inspectionState {
         case .loading:
-            ProgressView("Formatting inspection JSON…")
+            ProgressView("Loading configuration…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .failed(let message):
             failureView(title: "Inspection Failed", message: message) {
                 Task { await model.reloadInspection() }
             }
         case .loaded(let inspection):
-            ScrollView([.vertical, .horizontal]) {
-                Text(inspection.formattedJSON)
-                    .font(.system(.callout, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .padding()
-            }
+            ContainerConfigurationView(inspection: inspection)
         }
     }
 

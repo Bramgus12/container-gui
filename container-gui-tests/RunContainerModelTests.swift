@@ -185,8 +185,10 @@ private actor RunContainerImageService: ImageManaging {
         return []
     }
 
-    func inspectImage(reference: String) -> String {
-        #"{}"#
+    func inspectImage(reference: String) throws -> ImageInspection {
+        let rawJSON = #"{"reference":"\#(reference)"}"#
+        let dto = try JSONDecoder().decode(ImageDTO.self, from: Data(rawJSON.utf8))
+        return ImageInspection(dto: dto, fallbackReference: reference, rawJSON: rawJSON)!
     }
 
     nonisolated func pullImage(

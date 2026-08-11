@@ -253,48 +253,6 @@ struct ImageListView: View {
     }
 }
 
-private struct ImageInspectionView: View {
-    let model: AppModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let image = model.selectedImage {
-                Text(image.reference)
-                    .font(.title3.bold())
-                    .textSelection(.enabled)
-            }
-
-            switch model.imageInspectionState {
-            case .idle, .loading:
-                Spacer()
-                ProgressView("Inspecting image…")
-                    .frame(maxWidth: .infinity)
-                Spacer()
-            case .loaded(let json):
-                ScrollView {
-                    Text(json)
-                        .font(.system(.callout, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            case .failed(let message):
-                ContentUnavailableView {
-                    Label("Inspection Failed", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(message)
-                        .textSelection(.enabled)
-                } actions: {
-                    Button("Try Again") {
-                        Task { await model.inspectSelectedImage() }
-                    }
-                }
-            }
-        }
-        .padding()
-        .accessibilityIdentifier("images.inspection")
-    }
-}
-
 private struct ImagePullSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: ImagePullModel
