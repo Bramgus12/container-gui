@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct SystemView: View {
@@ -194,6 +195,8 @@ private struct SystemDiskUsageSection: View {
 
 private struct SystemLogsSection: View {
     let model: SystemModel
+    @State private var isTailing = true
+    @State private var jumpToLatestRequest = 0
 
     var body: some View {
         GroupBox {
@@ -214,11 +217,37 @@ private struct SystemLogsSection: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
                 } else {
-                    ScrollView([.horizontal, .vertical]) {
-                        Text(model.logs)
-                            .font(.system(.caption, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(spacing: 0) {
+                        HStack(spacing: 10) {
+                            Spacer()
+                            LogJumpToLatestButton(
+                                isAtLatest: isTailing,
+                                action: jumpToLatest
+                            )
+                            .accessibilityIdentifier("system.logs.jumpToLatest")
+
+                            LogCopyButton(
+                                hasLogs: !model.logs.isEmpty,
+                                action: copyLogs
+                            )
+                                .accessibilityIdentifier("system.logs.copy")
+                        }
+                        .controlSize(.small)
+                        .padding(10)
+
+                        Divider()
+
+                        LogViewer(
+                            snapshot: LogSnapshot(
+                                text: model.logs,
+                                firstLogicalLineNumber: 1
+                            ),
+                            jumpToLatestRequest: jumpToLatestRequest
+                        ) { value in
+                            Task { @MainActor in
+                                isTailing = value
+                            }
+                        }
                     }
                     .frame(minHeight: 180, maxHeight: 360)
                 }
@@ -233,6 +262,20 @@ private struct SystemLogsSection: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .onChange(of: model.logsState) { _, state in
+            guard state == .loaded, !model.logs.isEmpty else { return }
+            jumpToLatest()
+        }
+    }
+
+    private func copyLogs() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(model.logs, forType: .string)
+    }
+
+    private func jumpToLatest() {
+        jumpToLatestRequest &+= 1
+        isTailing = true
     }
 }
 

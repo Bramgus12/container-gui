@@ -104,6 +104,66 @@ final class PreflightServiceTests: XCTestCase {
         XCTAssertEqual(context.status.message, "not running")
     }
 
+    func testReportsStoppedServiceFromExitOneStatusJSON() async {
+        for status in ["unregistered", "not running"] {
+            let service = makeService(
+                executableURLs: [executableURL],
+                statusResult: .failure(.nonZeroExit(
+                    invocation: "/test/container system status --format json",
+                    exitCode: 1,
+                    standardError: "",
+                    standardOutput: "{\"status\":\"\(status)\"}"
+                ))
+            )
+
+            guard case .serviceStopped(let context) = await service.check() else {
+                return XCTFail("Expected stopped service for status \(status)")
+            }
+            XCTAssertFalse(context.status.isRunning)
+        }
+    }
+
+    func testDoesNotClassifyMalformedExitOneStatusOutputAsStopped() async {
+        let service = makeService(
+            executableURLs: [executableURL],
+            statusResult: .failure(.nonZeroExit(
+                invocation: "/test/container system status --format json",
+                exitCode: 1,
+                standardError: "",
+                standardOutput: "[invalid"
+            ))
+        )
+
+        guard case .failure(_, let diagnostic) = await service.check() else {
+            return XCTFail("Expected failure for malformed status output")
+        }
+        XCTAssertEqual(diagnostic.exitCode, 1)
+    }
+
+    func testDoesNotClassifyUnexpectedStatusOrExitCodeAsStopped() async {
+        let cases: [(exitCode: Int32, status: String)] = [
+            (1, "stopped"),
+            (2, "not running"),
+        ]
+
+        for testCase in cases {
+            let service = makeService(
+                executableURLs: [executableURL],
+                statusResult: .failure(.nonZeroExit(
+                    invocation: "/test/container system status --format json",
+                    exitCode: testCase.exitCode,
+                    standardError: "",
+                    standardOutput: "{\"status\":\"\(testCase.status)\"}"
+                ))
+            )
+
+            guard case .failure(_, let diagnostic) = await service.check() else {
+                return XCTFail("Expected failure for \(testCase)")
+            }
+            XCTAssertEqual(diagnostic.exitCode, testCase.exitCode)
+        }
+    }
+
     func testReportsMalformedVersionJSON() async {
         let service = makeService(
             executableURLs: [executableURL],
@@ -289,14 +349,15 @@ final class PreflightServiceTests: XCTestCase {
         standardExecutableURLs: [URL]? = nil,
         versionJSON: String? = nil,
         statusJSON: String = #"{"status":"ready","healthy":true,"version":"1.0.0"}"#,
-        versionResult: Result<CommandResult, CLIError>? = nil
+        versionResult: Result<CommandResult, CLIError>? = nil,
+        statusResult: Result<CommandResult, CLIError>? = nil
     ) -> PreflightService {
         let versionResult = versionResult ?? .success(result(
             versionJSON ?? self.versionJSON(cliVersion: "1.0.0")
         ))
         let cli = StubContainerCLI(
             versionResult: versionResult,
-            statusResult: .success(result(statusJSON))
+            statusResult: statusResult ?? .success(result(statusJSON))
         )
         return PreflightService(
             platform: PlatformSnapshot(

@@ -145,7 +145,7 @@ final class ContainerDetailModel {
     }
 
     private(set) var inspectionState: ContainerInspectionState = .loading
-    private(set) var logSnapshot = ContainerLogSnapshot.empty
+    private(set) var logSnapshot = LogSnapshot.empty
     private(set) var isLogPaused = false
     private(set) var isLogStreaming = false
     private(set) var logError: String?
@@ -156,7 +156,7 @@ final class ContainerDetailModel {
     private let service: any ContainerDiagnosing
     private let statsInterval: Duration
     private var isVisible = false
-    private var liveLogBuffer: ContainerLogBuffer
+    private var liveLogBuffer: LogBuffer
     private var logStreamSession = 0
     private var logTask: Task<Void, Never>?
     private var statsTask: Task<Void, Never>?
@@ -174,7 +174,7 @@ final class ContainerDetailModel {
         self.containerID = containerID
         self.service = service
         self.statsInterval = statsInterval
-        self.liveLogBuffer = ContainerLogBuffer(
+        self.liveLogBuffer = LogBuffer(
             maximumLines: max(1, maximumLogLines),
             maximumBytes: max(1, maximumLogBytes)
         )

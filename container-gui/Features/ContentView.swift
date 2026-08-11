@@ -67,14 +67,6 @@ private struct SetupView: View {
             Spacer(minLength: 32)
         }
         .padding(40)
-        .overlay(alignment: .topTrailing) {
-            if model.isWorking {
-                ProgressView()
-                    .controlSize(.small)
-                    .padding()
-                    .accessibilityLabel("Setup operation in progress")
-            }
-        }
         .fileImporter(
             isPresented: $isChoosingExecutable,
             allowedContentTypes: [.item],
@@ -209,8 +201,17 @@ private struct SetupView: View {
                 .accessibilityIdentifier("setup.retry")
 
             case .serviceStopped:
-                Button("Start Service") {
+                Button {
                     Task { await model.startService() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if model.isWorking {
+                            ProgressView()
+                                .controlSize(.small)
+                                .accessibilityLabel("Starting Container service")
+                        }
+                        Text("Start Service")
+                    }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(model.isWorking)

@@ -4,6 +4,18 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testHostedXCTestAppUsesMockCLIWithoutUITestArguments() async {
+        let model = AppDependencies.makeAppModel()
+
+        await model.setup.checkIfNeeded()
+        guard case .ready(let context) = model.setup.readiness else {
+            return XCTFail("Hosted XCTest should use the ready mock preflight.")
+        }
+        await model.activate(context)
+
+        XCTAssertEqual(model.containers.map(\.id), ["demo-stopped"])
+    }
+
     func testListServiceRunsAuthoritativeCommandAndDecodesSummaries() async throws {
         let cli = ContainerCLIStub(output: makeContainerJSON(id: "web", state: "running"))
         let service = CLIContainerListService(cli: cli)

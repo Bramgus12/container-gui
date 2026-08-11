@@ -1,16 +1,16 @@
 import Foundation
 
-nonisolated struct ContainerLogSnapshot: Equatable, Sendable {
+nonisolated struct LogSnapshot: Equatable, Sendable {
     let text: String
     let firstLogicalLineNumber: Int
 
-    static let empty = ContainerLogSnapshot(text: "", firstLogicalLineNumber: 1)
+    static let empty = LogSnapshot(text: "", firstLogicalLineNumber: 1)
 }
 
 /// A bounded collection of logical source lines. A line is created only when
 /// source text arrives, so a trailing newline does not manufacture an extra
 /// numbered line.
-nonisolated struct ContainerLogBuffer: Sendable {
+nonisolated struct LogBuffer: Sendable {
     private struct Line: Sendable {
         let number: Int
         var text: String
@@ -33,7 +33,7 @@ nonisolated struct ContainerLogBuffer: Sendable {
         self.maximumBytes = max(1, maximumBytes)
     }
 
-    var snapshot: ContainerLogSnapshot {
+    var snapshot: LogSnapshot {
         let visibleLines = lines[firstLineIndex...]
         var text = ""
         text.reserveCapacity(storedByteCount)
@@ -43,7 +43,7 @@ nonisolated struct ContainerLogBuffer: Sendable {
                 text.append("\n")
             }
         }
-        return ContainerLogSnapshot(
+        return LogSnapshot(
             text: text,
             firstLogicalLineNumber: visibleLines.first?.number ?? nextLogicalLineNumber
         )

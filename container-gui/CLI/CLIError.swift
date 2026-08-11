@@ -6,7 +6,12 @@ nonisolated enum CLIError: Error, Equatable, Sendable {
     case executableIsNotAFile(URL)
     case executableIsNotExecutable(URL)
     case launchFailed(message: String)
-    case nonZeroExit(invocation: String, exitCode: Int32, standardError: String)
+    case nonZeroExit(
+        invocation: String,
+        exitCode: Int32,
+        standardError: String,
+        standardOutput: String = ""
+    )
     case invalidOutput(description: String)
     case outputLimitExceeded(limit: Int)
     case timedOut
@@ -26,7 +31,7 @@ extension CLIError: LocalizedError {
             "The selected container executable cannot be executed: \(url.path)."
         case .launchFailed(let message):
             "Container could not be launched: \(message)"
-        case .nonZeroExit(_, let exitCode, let standardError):
+        case .nonZeroExit(_, let exitCode, let standardError, _):
             standardError.isEmpty
                 ? "Container exited with status \(exitCode)."
                 : "Container exited with status \(exitCode): \(standardError)"

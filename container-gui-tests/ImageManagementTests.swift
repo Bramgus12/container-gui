@@ -93,7 +93,7 @@ final class ImageManagementTests: XCTestCase {
             try await model.pullImage(reference: "private.example/app:1") { _ in }
             XCTFail("Expected pull failure")
         } catch let error as CLIError {
-            guard case .nonZeroExit(_, let exitCode, let standardError) = error else {
+            guard case .nonZeroExit(_, let exitCode, let standardError, _) = error else {
                 return XCTFail("Unexpected CLI error: \(error)")
             }
             XCTAssertEqual(exitCode, 19)

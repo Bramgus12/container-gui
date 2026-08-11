@@ -1,11 +1,11 @@
 import AppKit
 import SwiftUI
 
-struct ContainerLogLineMap: Equatable {
+struct LogLineMap: Equatable {
     let firstLogicalLineNumber: Int
     let characterIndexes: [Int]
 
-    init(snapshot: ContainerLogSnapshot) {
+    init(snapshot: LogSnapshot) {
         firstLogicalLineNumber = snapshot.firstLogicalLineNumber
         guard !snapshot.text.isEmpty else {
             characterIndexes = []
@@ -33,28 +33,28 @@ struct ContainerLogLineMap: Equatable {
     }
 }
 
-struct ContainerLogTextUpdate: Equatable {
+struct LogTextUpdate: Equatable {
     let removedPrefixLength: Int
     let insertedRange: NSRange?
 }
 
-enum ContainerLogTextStorageUpdater {
+enum LogTextStorageUpdater {
     static func update(
         _ textStorage: NSTextStorage,
-        from oldSnapshot: ContainerLogSnapshot,
-        to newSnapshot: ContainerLogSnapshot
-    ) -> ContainerLogTextUpdate {
+        from oldSnapshot: LogSnapshot,
+        to newSnapshot: LogSnapshot
+    ) -> LogTextUpdate {
         let oldText = textStorage.string
         let newText = newSnapshot.text
         guard oldText != newText else {
-            return ContainerLogTextUpdate(removedPrefixLength: 0, insertedRange: nil)
+            return LogTextUpdate(removedPrefixLength: 0, insertedRange: nil)
         }
 
         if newText.hasPrefix(oldText) {
             let insertedText = String(newText.dropFirst(oldText.count))
             let range = NSRange(location: (oldText as NSString).length, length: 0)
             textStorage.replaceCharacters(in: range, with: insertedText)
-            return ContainerLogTextUpdate(
+            return LogTextUpdate(
                 removedPrefixLength: 0,
                 insertedRange: NSRange(
                     location: range.location,
@@ -69,7 +69,7 @@ enum ContainerLogTextStorageUpdater {
                 location: newLength,
                 length: textStorage.length - newLength
             ))
-            return ContainerLogTextUpdate(removedPrefixLength: 0, insertedRange: nil)
+            return LogTextUpdate(removedPrefixLength: 0, insertedRange: nil)
         }
 
         let removedLineCount = newSnapshot.firstLogicalLineNumber
@@ -90,7 +90,7 @@ enum ContainerLogTextStorageUpdater {
                         with: appendedText
                     )
                 }
-                return ContainerLogTextUpdate(
+                return LogTextUpdate(
                     removedPrefixLength: prefixLength,
                     insertedRange: appendedText.isEmpty ? nil : NSRange(
                         location: appendLocation,
@@ -104,7 +104,7 @@ enum ContainerLogTextStorageUpdater {
             in: NSRange(location: 0, length: textStorage.length),
             with: newText
         )
-        return ContainerLogTextUpdate(
+        return LogTextUpdate(
             removedPrefixLength: (oldText as NSString).length,
             insertedRange: newText.isEmpty ? nil : NSRange(
                 location: 0,
@@ -138,13 +138,13 @@ private extension String {
 }
 
 @MainActor
-struct ContainerLogViewer: NSViewRepresentable {
-    let snapshot: ContainerLogSnapshot
+struct LogViewer: NSViewRepresentable {
+    let snapshot: LogSnapshot
     let jumpToLatestRequest: Int
     let onTailingChange: (Bool) -> Void
 
-    func makeCoordinator() -> ContainerLogScrollView {
-        ContainerLogScrollView(frame: .zero)
+    func makeCoordinator() -> LogScrollView {
+        LogScrollView(frame: .zero)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -169,7 +169,24 @@ struct ContainerLogViewer: NSViewRepresentable {
 }
 
 @MainActor
-final class ContainerLogScrollView: NSObject {
+final class LogClipView: NSClipView {
+    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
+        var constrainedBounds = super.constrainBoundsRect(proposedBounds)
+        constrainedBounds.origin.x = 0
+        return constrainedBounds
+    }
+
+    override func scroll(to newOrigin: NSPoint) {
+        super.scroll(to: NSPoint(x: 0, y: newOrigin.y))
+    }
+
+    override func setBoundsOrigin(_ newOrigin: NSPoint) {
+        super.setBoundsOrigin(NSPoint(x: 0, y: newOrigin.y))
+    }
+}
+
+@MainActor
+final class LogScrollView: NSObject {
     private struct ViewportAnchor {
         var characterIndex: Int
         let lineOffsetFromViewportTop: CGFloat
@@ -177,8 +194,8 @@ final class ContainerLogScrollView: NSObject {
 
     let scrollView: NSScrollView
     let logTextView: NSTextView
-    private var lineNumberRuler: ContainerLogLineNumberRuler!
-    private var snapshot = ContainerLogSnapshot.empty
+    private var lineNumberRuler: LogLineNumberRuler!
+    private var snapshot = LogSnapshot.empty
     private var lastJumpRequest = 0
     private(set) var isTailing = true
     private var isConfigured = false
@@ -198,12 +215,13 @@ final class ContainerLogScrollView: NSObject {
 
     init(frame frameRect: NSRect) {
         scrollView = NSScrollView(frame: frameRect)
+        scrollView.contentView = LogClipView(frame: frameRect)
         logTextView = NSTextView(usingTextLayoutManager: false)
         logTextView.frame = NSRect(origin: .zero, size: frameRect.size)
         scrollView.documentView = logTextView
         super.init()
         scrollView.clipsToBounds = true
-        lineNumberRuler = ContainerLogLineNumberRuler(
+        lineNumberRuler = LogLineNumberRuler(
             scrollView: scrollView,
             textView: logTextView
         )
@@ -292,6 +310,7 @@ final class ContainerLogScrollView: NSObject {
         isTiling = true
         isUpdatingContent = true
         scrollView.tile()
+        resetHorizontalOrigin()
         layoutDocumentView()
         if shouldRemainAtLatest {
             scrollToLatest()
@@ -305,7 +324,7 @@ final class ContainerLogScrollView: NSObject {
         isTiling = false
     }
 
-    func update(snapshot newSnapshot: ContainerLogSnapshot, jumpToLatestRequest: Int) {
+    func update(snapshot newSnapshot: LogSnapshot, jumpToLatestRequest: Int) {
         let shouldJump = jumpToLatestRequest != lastJumpRequest
         lastJumpRequest = jumpToLatestRequest
         let shouldTailAfterUpdate = isTailing || shouldJump
@@ -317,7 +336,7 @@ final class ContainerLogScrollView: NSObject {
         defer { isUpdatingContent = false }
         var anchor = shouldTailAfterUpdate ? nil : captureViewportAnchor()
         let selectedRanges = logTextView.selectedRanges
-        let update = ContainerLogTextStorageUpdater.update(
+        let update = LogTextStorageUpdater.update(
             logTextView.textStorage!,
             from: snapshot,
             to: newSnapshot
@@ -332,10 +351,12 @@ final class ContainerLogScrollView: NSObject {
             anchor = currentAnchor
         }
         snapshot = newSnapshot
-        lineNumberRuler.lineMap = ContainerLogLineMap(snapshot: newSnapshot)
+        lineNumberRuler.lineMap = LogLineMap(snapshot: newSnapshot)
         applyParagraphStyle()
         lineNumberRuler.needsDisplay = true
 
+        scrollView.tile()
+        resetHorizontalOrigin()
         layoutDocumentView()
         if shouldTailAfterUpdate {
             scrollToLatest()
@@ -357,6 +378,7 @@ final class ContainerLogScrollView: NSObject {
         scrollView.borderType = .noBorder
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
+        scrollView.horizontalScrollElasticity = .none
         scrollView.autohidesScrollers = true
 
         logTextView.isEditable = false
@@ -493,6 +515,7 @@ final class ContainerLogScrollView: NSObject {
 
     @discardableResult
     private func layoutDocumentView() -> Bool {
+        resetHorizontalOrigin()
         let viewportSize = contentView.bounds.size
         guard viewportSize.width > 0, viewportSize.height > 0,
               let layoutManager = logTextView.layoutManager,
@@ -532,7 +555,14 @@ final class ContainerLogScrollView: NSObject {
             )
         )
         logTextView.needsDisplay = true
+        resetHorizontalOrigin()
         return true
+    }
+
+    private func resetHorizontalOrigin() {
+        guard contentView.bounds.origin.x != 0 else { return }
+        contentView.scroll(to: NSPoint(x: 0, y: contentView.bounds.origin.y))
+        scrollView.reflectScrolledClipView(contentView)
     }
 
     private func captureViewportAnchor() -> ViewportAnchor? {
@@ -601,13 +631,22 @@ final class ContainerLogScrollView: NSObject {
 
     private func scrollPositionDidChange() {
         guard !isUpdatingContent else { return }
-        if scrollView.inLiveResize, isTailing {
-            scrollToLatest()
-            return
+        // AppKit can reset the clip-view origin just before it tiles a resized
+        // scroll view. Evaluate on the next run-loop turn so that transient
+        // layout movement is not mistaken for the user scrolling away.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.isUpdatingContent else { return }
+            if self.scrollView.inLiveResize, self.isTailing {
+                self.scrollToLatest()
+                return
+            }
+            let maximumY = max(
+                0,
+                self.logTextView.frame.height - self.contentView.bounds.height
+            )
+            let atLatest = self.contentView.bounds.origin.y >= maximumY - 2
+            self.setTailing(atLatest)
         }
-        let maximumY = max(0, logTextView.frame.height - contentView.bounds.height)
-        let atLatest = contentView.bounds.origin.y >= maximumY - 2
-        setTailing(atLatest)
     }
 
     private func scrollToLatest() {
@@ -626,9 +665,9 @@ final class ContainerLogScrollView: NSObject {
 }
 
 @MainActor
-final class ContainerLogLineNumberRuler: NSRulerView {
+final class LogLineNumberRuler: NSRulerView {
     weak var textView: NSTextView?
-    var lineMap = ContainerLogLineMap(snapshot: .empty) {
+    var lineMap = LogLineMap(snapshot: .empty) {
         didSet {
             let digits = max(3, String(lineMap.lastLogicalLineNumber).count)
             ruleThickness = CGFloat(digits * 8 + 18)

@@ -81,7 +81,7 @@ final class ContainerDetailModelTests: XCTestCase {
         try await eventually { model.logSnapshot.text == "one\ntwo\n" }
         model.clearLogs()
 
-        XCTAssertEqual(model.logSnapshot, ContainerLogSnapshot(
+        XCTAssertEqual(model.logSnapshot, LogSnapshot(
             text: "",
             firstLogicalLineNumber: 3
         ))

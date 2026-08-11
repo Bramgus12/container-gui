@@ -25,7 +25,7 @@ nonisolated struct OperationFailureRecord: Equatable, Sendable {
         self.date = date
         self.operation = DiagnosticSanitizer.sanitize(operation)
         self.summary = DiagnosticSanitizer.sanitize(error.localizedDescription)
-        if case .nonZeroExit(let invocation, let exitCode, _) = error as? CLIError {
+        if case .nonZeroExit(let invocation, let exitCode, _, _) = error as? CLIError {
             self.invocation = DiagnosticSanitizer.sanitize(invocation)
             self.exitCode = exitCode
         } else {

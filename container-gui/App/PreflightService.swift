@@ -78,7 +78,7 @@ nonisolated struct PreflightDiagnostic: Equatable, Sendable {
         summary = DiagnosticSanitizer.sanitize(
             (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         )
-        if case .nonZeroExit(let invocation, let exitCode, let standardError) = error as? CLIError {
+        if case .nonZeroExit(let invocation, let exitCode, let standardError, _) = error as? CLIError {
             self.invocation = invocation
             self.standardError = DiagnosticSanitizer.sanitize(standardError)
             self.exitCode = exitCode
@@ -290,17 +290,16 @@ actor PreflightService {
         let status: SystemStatus
         do {
             let result = try await cli.run(.systemStatus)
-            let dto = try decoder.decode(
-                SystemStatusDTO.self,
-                from: Data(result.standardOutput.utf8)
-            )
-            guard dto.healthy != nil || dto.status != nil else {
-                throw CLIError.invalidOutput(
-                    description: "The system status response contained no status."
-                )
-            }
-            status = SystemStatus(dto: dto)
+            status = try decodeSystemStatus(result.standardOutput)
         } catch {
+            if let stoppedStatus = stoppedSystemStatus(from: error) {
+                let context = PreflightContext(
+                    executableURL: executableURL,
+                    versions: versions,
+                    status: stoppedStatus
+                )
+                return finish(.serviceStopped(context))
+            }
             return finish(.failure(
                 executableURL: executableURL,
                 diagnostic: PreflightDiagnostic(error: normalizedDecodeError(
@@ -316,6 +315,31 @@ actor PreflightService {
             status: status
         )
         return finish(status.isRunning ? .ready(context) : .serviceStopped(context))
+    }
+
+    private func decodeSystemStatus(_ output: String) throws -> SystemStatus {
+        let dto = try decoder.decode(
+            SystemStatusDTO.self,
+            from: Data(output.utf8)
+        )
+        guard dto.healthy != nil || dto.status != nil else {
+            throw CLIError.invalidOutput(
+                description: "The system status response contained no status."
+            )
+        }
+        return SystemStatus(dto: dto)
+    }
+
+    private func stoppedSystemStatus(from error: Error) -> SystemStatus? {
+        guard case .nonZeroExit(_, 1, _, let output) = error as? CLIError,
+              let dto = try? decoder.decode(SystemStatusDTO.self, from: Data(output.utf8)),
+              dto.healthy != true,
+              let status = dto.status?.lowercased(),
+              ["unregistered", "not running"].contains(status)
+        else {
+            return nil
+        }
+        return SystemStatus(dto: dto)
     }
 
     @discardableResult

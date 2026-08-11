@@ -96,7 +96,7 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(waitUntil(timeout: 3) { !fixture.exists })
     }
 
-    func testContainerLogViewerShowsNumberedSelectableMockLogs() {
+    func testLogViewerShowsNumberedSelectableMockLogs() {
         let app = launch(scenario: "ready")
         let fixture = app.staticTexts["demo-stopped"]
         XCTAssertTrue(fixture.waitForExistence(timeout: 3))
@@ -143,6 +143,45 @@ final class OnboardingUITests: XCTestCase {
             NSPasteboard.general.string(forType: .string),
             copiedLogs,
             "The native text view should support selection and standard copy commands."
+        )
+    }
+
+    func testSystemLogViewerShowsNumberedLogsAndSharedActionsAtLatest() {
+        let app = launch(scenario: "ready")
+        let systemDestination = app.staticTexts["System"].firstMatch
+        XCTAssertTrue(systemDestination.waitForExistence(timeout: 3))
+        systemDestination.click()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["system.screen"]
+                .waitForExistence(timeout: 3)
+        )
+        let viewer = app.textViews["logs.viewer"]
+        XCTAssertTrue(viewer.waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            (viewer.value as? String)?.contains("UI test service log line 1.") == true
+        )
+        XCTAssertTrue(
+            (viewer.value as? String)?.contains("UI test service log line 40.") == true
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["logs.lineNumbers"]
+                .waitForExistence(timeout: 2)
+        )
+
+        let copy = app.buttons["system.logs.copy"]
+        let jumpToLatest = app.buttons["system.logs.jumpToLatest"]
+        XCTAssertTrue(copy.waitForExistence(timeout: 2))
+        XCTAssertTrue(jumpToLatest.waitForExistence(timeout: 2))
+        XCTAssertTrue(copy.isEnabled)
+        XCTAssertFalse(jumpToLatest.isEnabled)
+
+        copy.click()
+        let copiedLogs = NSPasteboard.general.string(forType: .string) ?? ""
+        XCTAssertTrue(copiedLogs.contains("UI test service log line 1."))
+        XCTAssertTrue(
+            copiedLogs.contains("UI test service log line 40."),
+            "Copy should include the newest service-log entry."
         )
     }
 

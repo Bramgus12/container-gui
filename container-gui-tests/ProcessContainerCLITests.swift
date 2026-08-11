@@ -28,11 +28,17 @@ final class ProcessContainerCLITests: XCTestCase {
             _ = try await cli.run(.systemStatus)
             XCTFail("Expected a nonzero-exit error")
         } catch let error as CLIError {
-            guard case .nonZeroExit(let invocation, let exitCode, let standardError) = error else {
+            guard case .nonZeroExit(
+                let invocation,
+                let exitCode,
+                let standardError,
+                let standardOutput
+            ) = error else {
                 return XCTFail("Unexpected CLI error: \(error)")
             }
             XCTAssertEqual(exitCode, 37)
             XCTAssertEqual(standardError, "simulated failure\n")
+            XCTAssertEqual(standardOutput, "simulated failure output\n")
             XCTAssertTrue(invocation.contains("system status --format json"))
         } catch {
             XCTFail("Unexpected error: \(error)")

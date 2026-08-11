@@ -6,6 +6,7 @@ case "${FAKE_CONTAINER_SCENARIO:-success}" in
         printf 'fixture stderr\n' >&2
         ;;
     failure)
+        printf 'simulated failure output\n'
         printf 'simulated failure\n' >&2
         exit "${FAKE_CONTAINER_EXIT_CODE:-23}"
         ;;

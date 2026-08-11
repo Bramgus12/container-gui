@@ -6,7 +6,9 @@ enum AppDependencies {
         processInfo: ProcessInfo = .processInfo
     ) -> AppModel {
         #if DEBUG || UI_TESTING
-        if let scenario = UITestPreflightScenario(arguments: processInfo.arguments) {
+        let scenario = UITestPreflightScenario(arguments: processInfo.arguments)
+            ?? (isHostedXCTest(environment: processInfo.environment) ? .ready : nil)
+        if let scenario {
             let setup = SetupModel(
                 preflight: UITestPreflightService(scenario: scenario),
                 diagnosticsCopier: SystemDiagnosticsCopier()
@@ -19,6 +21,13 @@ enum AppDependencies {
         #endif
         return AppModel()
     }
+
+    #if DEBUG || UI_TESTING
+    private static func isHostedXCTest(environment: [String: String]) -> Bool {
+        environment["XCTestConfigurationFilePath"] != nil
+            || environment["XCInjectBundleInto"] != nil
+    }
+    #endif
 }
 
 #if DEBUG || UI_TESTING
@@ -154,7 +163,9 @@ private actor UITestContainerCLI: ContainerCLI {
         case .systemDiskUsage:
             output = #"[{"type":"images","totalCount":1,"activeCount":1,"sizeBytes":1024,"reclaimableBytes":0}]"#
         case .systemLogs:
-            output = "UI test service is healthy."
+            output = (1...40)
+                .map { "UI test service log line \($0)." }
+                .joined(separator: "\n")
         case .listImages:
             output = "[]"
         case .inspectImage:

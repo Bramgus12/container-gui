@@ -46,7 +46,8 @@ actor ProcessContainerCLI: ContainerCLI {
                 throw CLIError.nonZeroExit(
                     invocation: result.invocation,
                     exitCode: result.exitCode,
-                    standardError: result.standardError
+                    standardError: result.standardError,
+                    standardOutput: result.standardOutput
                 )
             }
             return result

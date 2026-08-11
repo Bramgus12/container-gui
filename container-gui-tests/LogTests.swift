@@ -2,30 +2,30 @@ import AppKit
 import XCTest
 @testable import Container_GUI
 
-final class ContainerLogBufferTests: XCTestCase {
+final class LogBufferTests: XCTestCase {
     func testChunkSplitLinesKeepOneLogicalNumber() {
-        var buffer = ContainerLogBuffer()
+        var buffer = LogBuffer()
 
         buffer.append("hel")
         buffer.append("lo\nwor")
         buffer.append("ld")
 
-        XCTAssertEqual(buffer.snapshot, ContainerLogSnapshot(
+        XCTAssertEqual(buffer.snapshot, LogSnapshot(
             text: "hello\nworld",
             firstLogicalLineNumber: 1
         ))
         XCTAssertEqual(
-            ContainerLogLineMap(snapshot: buffer.snapshot).characterIndexes,
+            LogLineMap(snapshot: buffer.snapshot).characterIndexes,
             [0, 6]
         )
     }
 
     func testBlankLinesAndTrailingNewlineHaveNoPhantomLine() {
-        var buffer = ContainerLogBuffer()
+        var buffer = LogBuffer()
         buffer.append("\n\nlast\n")
 
         XCTAssertEqual(buffer.snapshot.text, "\n\nlast\n")
-        let lineMap = ContainerLogLineMap(snapshot: buffer.snapshot)
+        let lineMap = LogLineMap(snapshot: buffer.snapshot)
         XCTAssertEqual(lineMap.characterIndexes, [0, 1, 2])
         XCTAssertEqual(lineMap.lineNumber(atCharacterIndex: 0), 1)
         XCTAssertEqual(lineMap.lineNumber(atCharacterIndex: 1), 2)
@@ -34,10 +34,10 @@ final class ContainerLogBufferTests: XCTestCase {
     }
 
     func testLineLimitEvictionAdvancesFirstNumberMonotonically() {
-        var buffer = ContainerLogBuffer(maximumLines: 3, maximumBytes: 1_024)
+        var buffer = LogBuffer(maximumLines: 3, maximumBytes: 1_024)
         buffer.append("one\ntwo\nthree\nfour\n")
 
-        XCTAssertEqual(buffer.snapshot, ContainerLogSnapshot(
+        XCTAssertEqual(buffer.snapshot, LogSnapshot(
             text: "two\nthree\nfour\n",
             firstLogicalLineNumber: 2
         ))
@@ -48,7 +48,7 @@ final class ContainerLogBufferTests: XCTestCase {
     }
 
     func testUTF8ByteLimitTrimsOnlyAtAValidScalarBoundary() {
-        var buffer = ContainerLogBuffer(maximumLines: 10, maximumBytes: 4)
+        var buffer = LogBuffer(maximumLines: 10, maximumBytes: 4)
         buffer.append("abc😀")
 
         XCTAssertEqual(buffer.snapshot.text, "😀")
@@ -57,7 +57,7 @@ final class ContainerLogBufferTests: XCTestCase {
     }
 
     func testByteLimitEvictsWholeOlderLinesAndAdvancesNumber() {
-        var buffer = ContainerLogBuffer(maximumLines: 10, maximumBytes: 6)
+        var buffer = LogBuffer(maximumLines: 10, maximumBytes: 6)
         buffer.append("one\ntwo\n")
 
         XCTAssertEqual(buffer.snapshot.text, "two\n")
@@ -66,7 +66,7 @@ final class ContainerLogBufferTests: XCTestCase {
     }
 
     func testClearKeepsNextNumberAndNewSessionResetsIt() {
-        var buffer = ContainerLogBuffer()
+        var buffer = LogBuffer()
         buffer.append("one\ntwo")
         buffer.clear()
 
@@ -76,7 +76,7 @@ final class ContainerLogBufferTests: XCTestCase {
 
         buffer.startNewSession()
         buffer.append("replacement")
-        XCTAssertEqual(buffer.snapshot, ContainerLogSnapshot(
+        XCTAssertEqual(buffer.snapshot, LogSnapshot(
             text: "replacement",
             firstLogicalLineNumber: 1
         ))
@@ -84,9 +84,9 @@ final class ContainerLogBufferTests: XCTestCase {
 }
 
 @MainActor
-final class ContainerLogViewerTests: XCTestCase {
+final class LogViewerTests: XCTestCase {
     func testViewerWrapsAndHasNoHorizontalScroller() {
-        let scrollView = ContainerLogScrollView(frame: NSRect(
+        let scrollView = LogScrollView(frame: NSRect(
             x: 0,
             y: 0,
             width: 240,
@@ -94,6 +94,7 @@ final class ContainerLogViewerTests: XCTestCase {
         ))
 
         XCTAssertFalse(scrollView.hasHorizontalScroller)
+        XCTAssertEqual(scrollView.scrollView.horizontalScrollElasticity, .none)
         XCTAssertTrue(scrollView.hasVerticalScroller)
         XCTAssertFalse(scrollView.logTextView.isHorizontallyResizable)
         XCTAssertTrue(scrollView.logTextView.isVerticallyResizable)
@@ -103,7 +104,7 @@ final class ContainerLogViewerTests: XCTestCase {
         XCTAssertTrue(scrollView.hasVerticalRuler)
 
         scrollView.update(
-            snapshot: ContainerLogSnapshot(
+            snapshot: LogSnapshot(
                 text: String(repeating: "long log output ", count: 50),
                 firstLogicalLineNumber: 1
             ),
@@ -119,14 +120,58 @@ final class ContainerLogViewerTests: XCTestCase {
         XCTAssertFalse(scrollView.drawsBackground)
         XCTAssertFalse(scrollView.contentView.drawsBackground)
         XCTAssertTrue(scrollView.logTextView.drawsBackground)
+
+        scrollView.contentView.scroll(to: NSPoint(x: 200, y: 0))
+        XCTAssertEqual(scrollView.contentView.bounds.origin.x, 0)
+        scrollView.contentView.scroll(to: NSPoint(x: -200, y: 0))
+        XCTAssertEqual(scrollView.contentView.bounds.origin.x, 0)
+    }
+
+    func testWideLineNumbersAndLongLinesCannotCreateHorizontalRange() throws {
+        let scrollView = LogScrollView(frame: NSRect(
+            x: 0,
+            y: 0,
+            width: 260,
+            height: 120
+        ))
+        scrollView.update(
+            snapshot: LogSnapshot(
+                text: String(repeating: "unbroken-long-log-value", count: 100),
+                firstLogicalLineNumber: 1_000_000_000
+            ),
+            jumpToLatestRequest: 0
+        )
+        scrollView.layoutSubtreeIfNeeded()
+
+        let textContainer = try XCTUnwrap(scrollView.logTextView.textContainer)
+        let expectedContainerWidth = max(
+            0,
+            scrollView.contentView.bounds.width
+                - (scrollView.logTextView.textContainerInset.width * 2)
+        )
+        XCTAssertGreaterThan(
+            try XCTUnwrap(scrollView.scrollView.verticalRulerView).ruleThickness,
+            42
+        )
+        XCTAssertEqual(
+            scrollView.logTextView.frame.width,
+            scrollView.contentView.bounds.width,
+            accuracy: 1
+        )
+        XCTAssertEqual(textContainer.containerSize.width, expectedContainerWidth, accuracy: 1)
+
+        scrollView.contentView.setBoundsOrigin(NSPoint(x: 500, y: 20))
+        XCTAssertEqual(scrollView.contentView.bounds.origin.x, 0)
+        scrollView.logTextView.scroll(NSPoint(x: 500, y: 20))
+        XCTAssertEqual(scrollView.contentView.bounds.origin.x, 0)
     }
 
     func testZeroSizedRepresentableLaysOutTextAfterSwiftUIAssignsAFrame() {
-        let scrollView = ContainerLogScrollView(frame: .zero)
+        let scrollView = LogScrollView(frame: .zero)
         let text = "The log text must remain visible after zero-sized creation.\nSecond line."
 
         scrollView.update(
-            snapshot: ContainerLogSnapshot(text: text, firstLogicalLineNumber: 1),
+            snapshot: LogSnapshot(text: text, firstLogicalLineNumber: 1),
             jumpToLatestRequest: 0
         )
         XCTAssertEqual(scrollView.logTextView.string, text)
@@ -149,14 +194,14 @@ final class ContainerLogViewerTests: XCTestCase {
     }
 
     func testWrappedFragmentsStartAfterLineNumberRuler() throws {
-        let scrollView = ContainerLogScrollView(frame: NSRect(
+        let scrollView = LogScrollView(frame: NSRect(
             x: 0,
             y: 0,
             width: 240,
             height: 120
         ))
         scrollView.update(
-            snapshot: ContainerLogSnapshot(
+            snapshot: LogSnapshot(
                 text: String(repeating: "wrapped fragment text ", count: 20),
                 firstLogicalLineNumber: 1
             ),
@@ -183,7 +228,7 @@ final class ContainerLogViewerTests: XCTestCase {
     }
 
     func testLiveResizeRewrapsDocumentWithoutCollapsingItsWidth() {
-        let scrollView = ContainerLogScrollView(frame: NSRect(
+        let scrollView = LogScrollView(frame: NSRect(
             x: 0,
             y: 0,
             width: 360,
@@ -191,7 +236,7 @@ final class ContainerLogViewerTests: XCTestCase {
         ))
         let text = String(repeating: "resizable log content ", count: 40)
         scrollView.update(
-            snapshot: ContainerLogSnapshot(text: text, firstLogicalLineNumber: 1),
+            snapshot: LogSnapshot(text: text, firstLogicalLineNumber: 1),
             jumpToLatestRequest: 0
         )
         scrollView.layoutSubtreeIfNeeded()
@@ -209,10 +254,14 @@ final class ContainerLogViewerTests: XCTestCase {
         )
         XCTAssertGreaterThan(scrollView.logTextView.frame.height, wideHeight)
         XCTAssertTrue(scrollView.isTailing)
+        XCTAssertEqual(scrollView.contentView.bounds.origin.x, 0)
+
+        scrollView.contentView.scroll(to: NSPoint(x: 250, y: 0))
+        XCTAssertEqual(scrollView.contentView.bounds.origin.x, 0)
     }
 
     func testTextForegroundTracksTheEffectiveLightAndDarkAppearance() throws {
-        let scrollView = ContainerLogScrollView(frame: NSRect(
+        let scrollView = LogScrollView(frame: NSRect(
             x: 0,
             y: 0,
             width: 240,
@@ -220,7 +269,7 @@ final class ContainerLogViewerTests: XCTestCase {
         ))
         scrollView.appearance = NSAppearance(named: .darkAqua)
         scrollView.update(
-            snapshot: ContainerLogSnapshot(text: "visible log", firstLogicalLineNumber: 1),
+            snapshot: LogSnapshot(text: "visible log", firstLogicalLineNumber: 1),
             jumpToLatestRequest: 0
         )
 
@@ -246,7 +295,7 @@ final class ContainerLogViewerTests: XCTestCase {
     }
 
     func testDarkModeBitmapActuallyContainsPaintedLogGlyphs() throws {
-        let scrollView = ContainerLogScrollView(frame: NSRect(
+        let scrollView = LogScrollView(frame: NSRect(
             x: 0,
             y: 0,
             width: 320,
@@ -254,7 +303,7 @@ final class ContainerLogViewerTests: XCTestCase {
         ))
         scrollView.appearance = NSAppearance(named: .darkAqua)
         scrollView.update(
-            snapshot: ContainerLogSnapshot(
+            snapshot: LogSnapshot(
                 text: "Painted log text must be visible.\nAnd so must this line.",
                 firstLogicalLineNumber: 1
             ),
@@ -293,16 +342,16 @@ final class ContainerLogViewerTests: XCTestCase {
 
     func testTextStorageUpdatesByAppendingAndTrimming() {
         let storage = NSTextStorage(string: "one\ntwo\nthree\n")
-        let oldSnapshot = ContainerLogSnapshot(
+        let oldSnapshot = LogSnapshot(
             text: storage.string,
             firstLogicalLineNumber: 1
         )
-        let appendedSnapshot = ContainerLogSnapshot(
+        let appendedSnapshot = LogSnapshot(
             text: "one\ntwo\nthree\nfour\n",
             firstLogicalLineNumber: 1
         )
 
-        let append = ContainerLogTextStorageUpdater.update(
+        let append = LogTextStorageUpdater.update(
             storage,
             from: oldSnapshot,
             to: appendedSnapshot
@@ -311,11 +360,11 @@ final class ContainerLogViewerTests: XCTestCase {
         XCTAssertEqual(append.removedPrefixLength, 0)
         XCTAssertEqual(append.insertedRange?.location, 14)
 
-        let trimmedSnapshot = ContainerLogSnapshot(
+        let trimmedSnapshot = LogSnapshot(
             text: "two\nthree\nfour\n",
             firstLogicalLineNumber: 2
         )
-        let trim = ContainerLogTextStorageUpdater.update(
+        let trim = LogTextStorageUpdater.update(
             storage,
             from: appendedSnapshot,
             to: trimmedSnapshot
@@ -325,27 +374,27 @@ final class ContainerLogViewerTests: XCTestCase {
     }
 
     func testSelectionSurvivesAppendAndMovesWithEvictedPrefix() {
-        let scrollView = ContainerLogScrollView(frame: NSRect(
+        let scrollView = LogScrollView(frame: NSRect(
             x: 0,
             y: 0,
             width: 300,
             height: 120
         ))
-        let first = ContainerLogSnapshot(
+        let first = LogSnapshot(
             text: "one\ntwo\nthree\n",
             firstLogicalLineNumber: 1
         )
         scrollView.update(snapshot: first, jumpToLatestRequest: 0)
         scrollView.logTextView.setSelectedRange(NSRange(location: 4, length: 3))
 
-        let appended = ContainerLogSnapshot(
+        let appended = LogSnapshot(
             text: "one\ntwo\nthree\nfour\n",
             firstLogicalLineNumber: 1
         )
         scrollView.update(snapshot: appended, jumpToLatestRequest: 0)
         XCTAssertEqual(scrollView.logTextView.selectedRange(), NSRange(location: 4, length: 3))
 
-        let trimmed = ContainerLogSnapshot(
+        let trimmed = LogSnapshot(
             text: "two\nthree\nfour\n",
             firstLogicalLineNumber: 2
         )
@@ -353,8 +402,8 @@ final class ContainerLogViewerTests: XCTestCase {
         XCTAssertEqual(scrollView.logTextView.selectedRange(), NSRange(location: 0, length: 3))
     }
 
-    func testScrollingAwayDisengagesTailingAndJumpResumesIt() {
-        let scrollView = ContainerLogScrollView(frame: NSRect(
+    func testScrollingAwayDisengagesTailingAndJumpResumesIt() async {
+        let scrollView = LogScrollView(frame: NSRect(
             x: 0,
             y: 0,
             width: 240,
@@ -362,7 +411,7 @@ final class ContainerLogViewerTests: XCTestCase {
         ))
         let text = (1...100).map { "line \($0)" }.joined(separator: "\n")
         scrollView.update(
-            snapshot: ContainerLogSnapshot(text: text, firstLogicalLineNumber: 1),
+            snapshot: LogSnapshot(text: text, firstLogicalLineNumber: 1),
             jumpToLatestRequest: 0
         )
         XCTAssertTrue(scrollView.isTailing)
@@ -372,10 +421,11 @@ final class ContainerLogViewerTests: XCTestCase {
             name: NSView.boundsDidChangeNotification,
             object: scrollView.contentView
         )
+        await nextMainRunLoopTurn()
         XCTAssertFalse(scrollView.isTailing)
 
         scrollView.update(
-            snapshot: ContainerLogSnapshot(text: text, firstLogicalLineNumber: 1),
+            snapshot: LogSnapshot(text: text, firstLogicalLineNumber: 1),
             jumpToLatestRequest: 1
         )
         XCTAssertTrue(scrollView.isTailing)
@@ -386,21 +436,21 @@ final class ContainerLogViewerTests: XCTestCase {
         XCTAssertEqual(scrollView.contentView.bounds.origin.y, maximumY, accuracy: 1)
     }
 
-    func testAppendFollowsWhenPinnedAndPreservesViewportWhenUnpinned() {
-        let scrollView = ContainerLogScrollView(frame: NSRect(
+    func testAppendFollowsWhenPinnedAndPreservesViewportWhenUnpinned() async {
+        let scrollView = LogScrollView(frame: NSRect(
             x: 0,
             y: 0,
             width: 240,
             height: 80
         ))
         let originalText = (1...100).map { "line \($0)" }.joined(separator: "\n")
-        let original = ContainerLogSnapshot(
+        let original = LogSnapshot(
             text: originalText,
             firstLogicalLineNumber: 1
         )
         scrollView.update(snapshot: original, jumpToLatestRequest: 0)
 
-        let appended = ContainerLogSnapshot(
+        let appended = LogSnapshot(
             text: originalText + "\nline 101",
             firstLogicalLineNumber: 1
         )
@@ -417,11 +467,12 @@ final class ContainerLogViewerTests: XCTestCase {
             name: NSView.boundsDidChangeNotification,
             object: scrollView.contentView
         )
+        await nextMainRunLoopTurn()
         XCTAssertFalse(scrollView.isTailing)
         let heldY = scrollView.contentView.bounds.origin.y
 
         scrollView.update(
-            snapshot: ContainerLogSnapshot(
+            snapshot: LogSnapshot(
                 text: appended.text + "\nline 102",
                 firstLogicalLineNumber: 1
             ),
@@ -429,5 +480,13 @@ final class ContainerLogViewerTests: XCTestCase {
         )
         XCTAssertFalse(scrollView.isTailing)
         XCTAssertEqual(scrollView.contentView.bounds.origin.y, heldY, accuracy: 1)
+    }
+
+    private func nextMainRunLoopTurn() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                continuation.resume()
+            }
+        }
     }
 }

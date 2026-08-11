@@ -362,7 +362,7 @@ private struct ContainerLogsSection: View {
                     .background(.red.opacity(0.08))
             }
 
-            ContainerLogViewer(
+            LogViewer(
                 snapshot: model.logSnapshot,
                 jumpToLatestRequest: jumpToLatestRequest
             ) { value in
@@ -415,16 +415,17 @@ private struct ContainerLogControls: View {
 
             Spacer()
 
-            Button("Jump to Latest", action: jumpToLatest)
-                .disabled(isAtLatest)
+            LogJumpToLatestButton(
+                isAtLatest: isAtLatest,
+                action: jumpToLatest
+            )
                 .accessibilityIdentifier("logs.jumpToLatest")
 
             Button(isPaused ? "Resume" : "Pause", action: pauseOrResume)
                 .disabled(!isStreaming)
                 .accessibilityIdentifier("logs.pause")
 
-            Button("Copy", action: copy)
-                .disabled(!hasLogs)
+            LogCopyButton(hasLogs: hasLogs, action: copy)
                 .accessibilityIdentifier("logs.copy")
 
             Button("Clear", action: clear)
