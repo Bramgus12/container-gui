@@ -39,6 +39,8 @@ nonisolated private enum UITestPreflightScenario: String, Sendable {
     case lifecycle
     case imageCleanup
     case cancelRun
+    case networkLegacy
+    case networkCurrent
 
     init?(arguments: [String]) {
         guard let flagIndex = arguments.firstIndex(of: "--ui-test-preflight"),
@@ -64,18 +66,23 @@ nonisolated private enum UITestPreflightScenario: String, Sendable {
                     standardError: "service unavailable"
                 ))
             )
-        case .ready, .lifecycle, .imageCleanup, .cancelRun:
+        case .networkLegacy:
+            .ready(Self.context(isRunning: true, cliVersion: "0.12.0"))
+        case .ready, .lifecycle, .imageCleanup, .cancelRun, .networkCurrent:
             .ready(Self.context(isRunning: true))
         }
     }
 
-    private static func context(isRunning: Bool) -> PreflightContext {
+    private static func context(
+        isRunning: Bool,
+        cliVersion: String = "1.0.0"
+    ) -> PreflightContext {
         PreflightContext(
             executableURL: URL(fileURLWithPath: "/test/container"),
             versions: SystemVersion(components: [
                 SystemVersionDTO(
                     appName: "container",
-                    version: "1.0.0",
+                    version: cliVersion,
                     buildType: nil,
                     commit: nil
                 ),
@@ -83,7 +90,7 @@ nonisolated private enum UITestPreflightScenario: String, Sendable {
             status: SystemStatus(dto: SystemStatusDTO(
                 status: isRunning ? "ready" : "stopped",
                 healthy: isRunning,
-                version: "1.0.0",
+                version: cliVersion,
                 message: isRunning ? nil : "Service is stopped"
             ))
         )
@@ -141,9 +148,36 @@ private actor UITestContainerCLI: ContainerCLI {
         var state: String
     }
 
+    private struct FixtureNetwork: Sendable {
+        var name: String
+        var mode: String
+        var ipv4Subnet: String?
+        var ipv6Subnet: String?
+        var plugin: String
+        var isBuiltIn: Bool
+    }
+
     private let scenario: UITestPreflightScenario
     private var containers: [FixtureContainer]
     private var images = ["ghcr.io/example/demo:1.0"]
+    private var networks = [
+        FixtureNetwork(
+            name: "default",
+            mode: "nat",
+            ipv4Subnet: "192.168.64.0/24",
+            ipv6Subnet: nil,
+            plugin: "container-network-vmnet",
+            isBuiltIn: true
+        ),
+        FixtureNetwork(
+            name: "ui-test-network",
+            mode: "internal",
+            ipv4Subnet: "10.42.0.0/24",
+            ipv6Subnet: "fd42::/64",
+            plugin: "container-network-vmnet",
+            isBuiltIn: false
+        ),
+    ]
 
     init(scenario: UITestPreflightScenario) {
         self.scenario = scenario
@@ -212,6 +246,27 @@ private actor UITestContainerCLI: ContainerCLI {
             }
             images.removeAll { $0 == imageReference }
             output = ""
+        case .listNetworks:
+            output = networkListJSON
+        case .inspectNetwork(let name):
+            output = networkInspectionJSON(name: name.rawValue)
+        case .createNetwork(let configuration):
+            networks.append(FixtureNetwork(
+                name: configuration.name.rawValue,
+                mode: configuration.mode.rawValue,
+                ipv4Subnet: configuration.ipv4Subnet?.rawValue,
+                ipv6Subnet: configuration.ipv6Subnet?.rawValue,
+                plugin: configuration.plugin ?? NetworkCreateConfiguration.defaultPlugin,
+                isBuiltIn: false
+            ))
+            output = ""
+        case .deleteNetwork(let name):
+            networks.removeAll { $0.name == name.rawValue && !$0.isBuiltIn }
+            output = ""
+        case .pruneNetworks:
+            let deleted = networks.filter { !$0.isBuiltIn }.map(\.name)
+            networks.removeAll { !$0.isBuiltIn }
+            output = deleted.joined(separator: "\n")
         case .systemStart, .systemStop, .pullImage, .run, .logs, .stats:
             output = ""
         }
@@ -284,6 +339,32 @@ private actor UITestContainerCLI: ContainerCLI {
             """
         }
         return "[\(rows.joined(separator: ","))]"
+    }
+
+    private var networkListJSON: String {
+        "[\(networks.map(networkJSON).joined(separator: ","))]"
+    }
+
+    private func networkInspectionJSON(name: String) -> String {
+        guard let network = networks.first(where: { $0.name == name }) else { return "[]" }
+        return networkJSON(network)
+    }
+
+    private func networkJSON(_ network: FixtureNetwork) -> String {
+        var status: [String] = []
+        if let ipv4Subnet = network.ipv4Subnet {
+            status.append(#""ipv4Subnet":"\#(ipv4Subnet)""#)
+            status.append(#""ipv4Gateway":"192.168.64.1""#)
+        }
+        if let ipv6Subnet = network.ipv6Subnet {
+            status.append(#""ipv6Subnet":"\#(ipv6Subnet)""#)
+        }
+        let labels = network.isBuiltIn
+            ? #"{"com.apple.container.resource.role":"builtin"}"#
+            : #"{"org.example.fixture":"true"}"#
+        return """
+        {"id":"\(network.name)","configuration":{"name":"\(network.name)","mode":"\(network.mode)","creationDate":"2026-06-16T00:00:15.123Z","labels":\(labels),"plugin":"\(network.plugin)","options":{"fixture":"enabled"}},"status":{\(status.joined(separator: ","))}}
+        """
     }
 
     private func inspectJSON(for id: String) -> String {

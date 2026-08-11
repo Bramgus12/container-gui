@@ -45,6 +45,25 @@ struct CommandArgumentDraft: Identifiable, Equatable {
     }
 }
 
+struct NetworkAttachmentDraft: Identifiable, Equatable {
+    let id: UUID
+    var networkName: String
+    var macAddress: String
+    var mtu: String
+
+    init(
+        id: UUID = UUID(),
+        networkName: String = "",
+        macAddress: String = "",
+        mtu: String = ""
+    ) {
+        self.id = id
+        self.networkName = networkName
+        self.macAddress = macAddress
+        self.mtu = mtu
+    }
+}
+
 enum RunContainerOutcome: Equatable {
     case succeeded
     case failed
@@ -61,6 +80,7 @@ final class RunContainerModel: Identifiable {
     var removeWhenStopped = false
     var cpuLimit = ""
     var memoryLimit = ""
+    var networks: [NetworkAttachmentDraft] = []
     var ports: [PortMappingDraft] = []
     var environment: [EnvironmentVariableDraft] = []
     var command = ""
@@ -69,9 +89,11 @@ final class RunContainerModel: Identifiable {
     private(set) var isRunning = false
     private(set) var progress = ""
     private(set) var errorMessage: String?
+    private weak var networkModel: NetworkModel?
 
-    init(image: String = "") {
+    init(image: String = "", networkModel: NetworkModel? = nil) {
         self.image = image
+        self.networkModel = networkModel
     }
 
     var imageError: String? {
@@ -116,6 +138,21 @@ final class RunContainerModel: Identifiable {
         }
     }
 
+    func networkError(for draft: NetworkAttachmentDraft) -> String? {
+        if networks.filter({ $0.networkName == draft.networkName }).count > 1,
+           !draft.networkName.isEmpty {
+            return "Each network can be attached only once."
+        }
+        guard networkModel?.networks.contains(where: { $0.name == draft.networkName }) == true else {
+            return draft.networkName.isEmpty
+                ? "Select a network."
+                : "This network is no longer available. Select another network."
+        }
+        return validationMessage {
+            _ = try makeNetworkAttachment(draft)
+        }
+    }
+
     var commandError: String? {
         if trimmed(command).isEmpty && !arguments.isEmpty {
             return "Enter a command before adding arguments."
@@ -145,6 +182,16 @@ final class RunContainerModel: Identifiable {
 
     func addPort() {
         ports.append(PortMappingDraft())
+    }
+
+    func addNetworkAttachment() {
+        let selected = Set(networks.map(\.networkName))
+        let name = networkModel?.networks.first { !selected.contains($0.name) }?.name ?? ""
+        networks.append(NetworkAttachmentDraft(networkName: name))
+    }
+
+    func removeNetworkAttachment(id: UUID) {
+        networks.removeAll { $0.id == id }
     }
 
     func removePort(id: UUID) {
@@ -209,6 +256,7 @@ final class RunContainerModel: Identifiable {
             removeWhenStopped: removeWhenStopped,
             cpuLimit: cpuLimit.isEmpty ? nil : cpuLimit,
             memoryLimit: memoryLimit.isEmpty ? nil : memoryLimit,
+            networks: try networks.map(makeNetworkAttachment),
             ports: try ports.map(makePort),
             environment: try environment.map {
                 try EnvironmentVariable(key: trimmed($0.key), value: $0.value)
@@ -216,6 +264,30 @@ final class RunContainerModel: Identifiable {
             command: trimmed(command).isEmpty
                 ? []
                 : [trimmed(command)] + arguments.map(\.value)
+        )
+    }
+
+    private func makeNetworkAttachment(
+        _ draft: NetworkAttachmentDraft
+    ) throws -> NetworkAttachment {
+        let name = trimmed(draft.networkName)
+        guard networkModel?.networks.contains(where: { $0.name == name }) == true else {
+            throw CommandValidationError.invalid(field: "Network attachment", value: name)
+        }
+        let macAddress = trimmed(draft.macAddress)
+        let mtuText = trimmed(draft.mtu)
+        let mtu: Int?
+        if mtuText.isEmpty {
+            mtu = nil
+        } else if let parsed = Int(mtuText) {
+            mtu = parsed
+        } else {
+            throw CommandValidationError.invalid(field: "Network MTU", value: mtuText)
+        }
+        return try NetworkAttachment(
+            network: name,
+            macAddress: macAddress.isEmpty ? nil : macAddress,
+            mtu: mtu
         )
     }
 

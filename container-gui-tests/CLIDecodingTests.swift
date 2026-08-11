@@ -50,6 +50,36 @@ final class CLIDecodingTests: XCTestCase {
         XCTAssertEqual(new.size, 42_000_000)
     }
 
+    func testDecodesBothNetworkFixtureShapesAndInspections() throws {
+        let legacy: [NetworkDTO] = try decodeFixture("0.12.0/networks-0.12.0.json")
+        let current: [NetworkDTO] = try decodeFixture("1.0.0/networks-1.0.0.json")
+        let legacyInspectionDTO: NetworkDTO = try decodeFixture(
+            "0.12.0/network-inspect-0.12.0.json"
+        )
+        let currentInspectionDTOs: [NetworkDTO] = try decodeFixture(
+            "1.0.0/network-inspect-1.0.0.json"
+        )
+
+        let legacySummaries = legacy.compactMap(NetworkSummary.init(dto:))
+        let currentSummaries = current.compactMap(NetworkSummary.init(dto:))
+        XCTAssertEqual(legacySummaries.map(\.name), ["default", "legacy-fixture"])
+        XCTAssertEqual(legacySummaries[1].gateway, "10.12.0.1")
+        XCTAssertEqual(currentSummaries.map(\.name), ["default", "current-fixture"])
+        XCTAssertEqual(currentSummaries[1].pluginOptions["isolation"], "strict")
+        XCTAssertTrue(legacySummaries[0].isBuiltIn)
+        XCTAssertTrue(currentSummaries[0].isBuiltIn)
+
+        let legacyInspection = try XCTUnwrap(NetworkInspection(
+            dto: legacyInspectionDTO,
+            rawJSON: "legacy"
+        ))
+        let currentInspection = try XCTUnwrap(currentInspectionDTOs.first.flatMap {
+            NetworkInspection(dto: $0, rawJSON: "current")
+        })
+        XCTAssertEqual(legacyInspection.legacyPluginVariant, "host")
+        XCTAssertEqual(currentInspection.summary.ipv6Subnet, "fd20::/64")
+    }
+
     func testDecodesCurrentNestedImageListShape() throws {
         let data = Data(
             #"""

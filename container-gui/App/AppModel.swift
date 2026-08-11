@@ -183,6 +183,7 @@ nonisolated struct ContainerMutationFailure: Identifiable, Equatable, Sendable {
 enum AppDestination: String, CaseIterable, Identifiable, Sendable {
     case containers = "Containers"
     case images = "Images"
+    case networks = "Networks"
     case system = "System"
 
     var id: Self { self }
@@ -191,6 +192,7 @@ enum AppDestination: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .containers: "Containers"
         case .images: "Images"
+        case .networks: "Networks"
         case .system: "System"
         }
     }
@@ -199,6 +201,7 @@ enum AppDestination: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .containers: "shippingbox"
         case .images: "square.stack.3d.up"
+        case .networks: "network"
         case .system: "gauge.with.dots.needle.67percent"
         }
     }
@@ -281,6 +284,7 @@ final class AppModel {
     private(set) var preparingImageDeletionReference: String?
     private(set) var deletingImageReference: String?
     private(set) var imageDeletionFailure: ImageDeletionFailure?
+    private(set) var networkModel: NetworkModel?
 
     private let cliFactory: any ContainerCLIMaking
     private var containerLister: (any ContainerListing)?
@@ -307,6 +311,8 @@ final class AppModel {
         containerRunner: (any ContainerRunning)? = nil,
         containerDiagnoser: (any ContainerDiagnosing)? = nil,
         imageService: (any ImageManaging)? = nil,
+        networkService: (any NetworkManaging)? = nil,
+        networkCapabilities: NetworkCapabilities? = nil,
         failureLog: OperationFailureLog? = nil
     ) {
         self.setup = setup
@@ -317,6 +323,15 @@ final class AppModel {
         self.containerDiagnoser = containerDiagnoser
         self.imageService = imageService
         self.failureLog = failureLog ?? OperationFailureLog()
+        if let networkService {
+            self.networkModel = NetworkModel(
+                service: networkService,
+                capabilities: networkCapabilities ?? NetworkCapabilities(
+                    version: SemanticVersion(major: 1, minor: 0, patch: 0)
+                ),
+                failureLog: self.failureLog
+            )
+        }
     }
 
     var isContainerInspectorPresented: Bool {
@@ -370,6 +385,13 @@ final class AppModel {
             containerRunner = CLIContainerRunService(cli: cli)
             containerDiagnoser = CLIContainerDiagnosticsService(cli: cli)
             imageService = CLIImageService(cli: cli)
+            let cliVersion = (try? context.versions.cli.map { try SemanticVersion($0.version) })
+                ?? SemanticVersion(major: 1, minor: 0, patch: 0)
+            networkModel = NetworkModel(
+                service: CLINetworkService(cli: cli),
+                capabilities: NetworkCapabilities(version: cliVersion),
+                failureLog: failureLog
+            )
             systemModel = SystemModel(
                 context: context,
                 service: CLISystemService(cli: cli),

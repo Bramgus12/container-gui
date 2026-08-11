@@ -28,7 +28,10 @@ struct ImageListView: View {
                 ToolbarItem {
                     Button {
                         guard let selectedImage = model.selectedImage else { return }
-                        runContainerModel = RunContainerModel(image: selectedImage.reference)
+                        runContainerModel = RunContainerModel(
+                            image: selectedImage.reference,
+                            networkModel: model.networkModel
+                        )
                     } label: {
                         Label("Run Image", systemImage: "play.fill")
                     }
@@ -85,7 +88,11 @@ struct ImageListView: View {
                 ImagePullSheet(model: pullModel, appModel: model)
             }
             .sheet(item: $runContainerModel) { runModel in
-                RunContainerSheet(model: runModel, appModel: model)
+                RunContainerSheet(
+                    model: runModel,
+                    appModel: model,
+                    networkModel: model.networkModel
+                )
             }
             .inspector(isPresented: $model.isImageInspectorPresented) {
                 ImageInspectionView(model: model)
@@ -127,7 +134,10 @@ struct ImageListView: View {
         .contextMenu(forSelectionType: String.self) { selection in
             if let image = model.images.first(where: { selection.contains($0.id) }) {
                 Button("Run Image…") {
-                    runContainerModel = RunContainerModel(image: image.reference)
+                    runContainerModel = RunContainerModel(
+                        image: image.reference,
+                        networkModel: model.networkModel
+                    )
                 }
                 Button("Delete…", role: .destructive) {
                     requestDeletion(image.reference)

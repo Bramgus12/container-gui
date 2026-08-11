@@ -173,6 +173,7 @@ nonisolated struct RunConfiguration: Equatable, Sendable {
     let removeWhenStopped: Bool
     let cpuLimit: CPULimit?
     let memoryLimit: MemoryLimit?
+    let networks: [NetworkAttachment]
     let ports: [PortMapping]
     let environment: [EnvironmentVariable]
     let command: [String]
@@ -184,6 +185,7 @@ nonisolated struct RunConfiguration: Equatable, Sendable {
         removeWhenStopped: Bool = false,
         cpuLimit: String? = nil,
         memoryLimit: String? = nil,
+        networks: [NetworkAttachment] = [],
         ports: [PortMapping] = [],
         environment: [EnvironmentVariable] = [],
         command: [String] = []
@@ -206,6 +208,14 @@ nonisolated struct RunConfiguration: Equatable, Sendable {
         } else {
             self.memoryLimit = nil
         }
+        var networkNames = Set<String>()
+        guard networks.allSatisfy({ networkNames.insert($0.network.rawValue).inserted }) else {
+            throw CommandValidationError.invalid(
+                field: "Network attachment",
+                value: "Duplicate network"
+            )
+        }
+        self.networks = networks
         self.ports = ports
         self.environment = environment
         self.command = command
@@ -227,6 +237,9 @@ nonisolated struct RunConfiguration: Equatable, Sendable {
         }
         if let memoryLimit {
             result += ["--memory", memoryLimit.value]
+        }
+        for network in networks {
+            result += ["--network", network.argument]
         }
         for port in ports {
             result += ["--publish", port.argument]

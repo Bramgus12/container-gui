@@ -1,0 +1,22 @@
+[
+  {
+    "id": "current-fixture-id",
+    "configuration": {
+      "name": "current-fixture",
+      "mode": "internal",
+      "creationDate": "2026-06-01T10:12:00Z",
+      "labels": {
+        "fixture": "1.x"
+      },
+      "plugin": "container-network-vmnet",
+      "options": {
+        "isolation": "strict"
+      }
+    },
+    "status": {
+      "ipv4Subnet": "10.20.0.0/24",
+      "ipv4Gateway": "10.20.0.1",
+      "ipv6Subnet": "fd20::/64"
+    }
+  }
+]

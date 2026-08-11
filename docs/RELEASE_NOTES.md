@@ -6,6 +6,14 @@
   containers before deleting an image.
 - Adds cancellation for active container runs while preserving the draft and
   refreshing authoritative container and image state.
+- Adds first-class network list, search, inspection, creation, deletion, and
+  confirmed pruning, including built-in network protection and sanitized
+  failures.
+- Adds repeatable Run Container network attachments with optional MAC address
+  and MTU values, backed by the same cached network inventory.
+- Supports both Apple Container 0.12 network JSON and the redesigned 1.x
+  schema. Network creation exposes `--plugin-variant` on 0.12 and repeatable
+  plugin `--option` values on 1.x.
 
 # Container GUI 1.0.2
 
@@ -67,7 +75,7 @@ environment.
 
 ## Known limitations
 
-Version 1 does not manage networks, volumes, builds, registry authentication,
-interactive terminals, import/export, DNS, kernel settings, prune operations,
-or remote hosts. Compatibility with a new major Apple Container CLI version is
+Version 1 does not manage volumes, builds, registry authentication,
+interactive terminals, import/export, DNS, kernel settings, image/container
+prune operations, or remote hosts. Compatibility with a new major Apple Container CLI version is
 disabled until its JSON formats have been tested.

@@ -338,6 +338,7 @@ private struct MainNavigationView: View {
             List(AppDestination.allCases, selection: $model.destination) { destination in
                 Label(destination.title, systemImage: destination.systemImage)
                     .tag(destination)
+                    .accessibilityIdentifier("destination.\(destination.rawValue.lowercased())")
             }
             .navigationTitle("Container GUI")
         } detail: {
@@ -346,6 +347,12 @@ private struct MainNavigationView: View {
                 ContainerListView(model: model)
             case .images:
                 ImageListView(model: model)
+            case .networks:
+                if let networkModel = model.networkModel {
+                    NetworksView(model: networkModel)
+                } else {
+                    ProgressView("Loading networks…")
+                }
             case .system:
                 SystemView(model: model.makeSystemModel(context: context))
             case nil:
@@ -388,7 +395,7 @@ private struct ContainerListView: View {
 
                 ToolbarItem {
                     Button {
-                        runContainerModel = RunContainerModel()
+                        runContainerModel = RunContainerModel(networkModel: model.networkModel)
                     } label: {
                         Label("Run Container", systemImage: "plus")
                     }
@@ -482,7 +489,11 @@ private struct ContainerListView: View {
                 }
             }
             .sheet(item: $runContainerModel) { runModel in
-                RunContainerSheet(model: runModel, appModel: model)
+                RunContainerSheet(
+                    model: runModel,
+                    appModel: model,
+                    networkModel: model.networkModel
+                )
             }
             .inspector(isPresented: $model.isContainerInspectorPresented) {
                 if let containerID = model.selectedContainerID {

@@ -33,6 +33,8 @@ directly, never through a shell.
 | 🔎 | **Deep inspection** | Explore structured container configuration, networking, ports, mounts, image variants, and OCI metadata. |
 | 📜 | **Logs & stats** | Follow bounded logs and monitor CPU, memory, network, and block I/O. |
 | 🖼️ | **Images** | Search local images, inspect metadata, stream pull progress, run, and delete with dependency-aware cleanup. |
+| 🌐 | **Networks** | List, search, inspect, create, delete, and prune networks, with Apple Container 0.12 and 1.x compatibility. |
+| 🔗 | **Container networking** | Attach a new container to multiple networks with optional MAC addresses and MTUs. |
 | ❤️ | **System health** | Check CLI and server versions, control the service, and review disk usage and recent logs. |
 | 🩺 | **Diagnostics** | Copy a sanitized support report with common secrets and credentials redacted. |
 
@@ -128,7 +130,8 @@ app treats safety as a product feature:
 - **No shell invocation.** The resolved executable is launched directly with
   validated, discrete arguments.
 - **Confirmation before destructive actions.** Delete, force delete, image
-  delete, and service stop explain their impact before proceeding.
+  delete, network delete/prune, and service stop explain their impact before
+  proceeding.
 - **Cancellable work.** Long-running child processes are terminated when their
   operation is cancelled.
 - **Bounded output.** Retained command output and logs are capped to prevent
@@ -170,7 +173,7 @@ see the [installation warning](#installing-a-prebuilt-release) above.
 
 > [!CAUTION]
 > Run this only on a disposable test Mac. It creates and removes a real
-> container and may pull the configured image.
+> container and network and may pull the configured image.
 
 ```sh
 CONTAINER_GUI_RUN_REAL_SMOKE=1 \
@@ -178,21 +181,22 @@ CONTAINER_GUI_SMOKE_IMAGE=alpine:3.21 \
 ./scripts/real-smoke-test.sh
 ```
 
-The script uses a unique container name and targeted best-effort cleanup. It
-deletes the image only if the image was not present before the test, and it
-never invokes prune or another bulk deletion command.
+The script uses unique container and network names and targeted best-effort
+cleanup. It attaches the smoke container to only that newly-created network,
+deletes the image only if it was not present before the test, and never invokes
+prune or another bulk deletion command.
 
 ## Current scope
 
-Container GUI 1.0 intentionally focuses on local container, image, and service
+Container GUI intentionally focuses on local container, image, network, and service
 workflows. It does not yet manage:
 
-- networks, volumes, or builds;
+- volumes or builds;
 - registry authentication;
 - interactive terminals;
 - import and export;
 - DNS or kernel settings;
-- prune operations; or
+- image or container prune operations; or
 - remote container hosts.
 
 New major Apple Container CLI versions remain unsupported until their JSON

@@ -45,3 +45,25 @@ delete is available with a separate confirmation. When containers depend on an
 image, image deletion lists them and can delete them before deleting the image.
 Running containers are force deleted. Cleanup is not transactional: if one
 deletion fails, earlier deletions remain applied and the image is preserved.
+
+## A network cannot be created
+
+Check that the name uses 1–63 lowercase letters, digits, dots, underscores, or
+hyphens and starts and ends with a letter or digit. IPv4 prefixes must be
+between 0 and 32; IPv6 prefixes must be between 0 and 128. The CLI can also
+reject otherwise valid CIDRs when they overlap an existing network. Refresh the
+Networks screen, choose non-overlapping subnets, and retry.
+
+## A network cannot be deleted
+
+Built-in and default networks are intentionally protected. For a user-created
+network, stop and delete any containers attached to it, refresh Containers and
+Networks, then retry the exact network deletion. Container GUI does not offer a
+force-network-delete operation because the Apple Container CLI has none.
+
+## Network lists or inspections fail after retrying
+
+Confirm the service is healthy in System, then retry the Networks screen. If
+cached rows remain visible, the error banner describes the most recent refresh
+failure without discarding the last successful inventory. Copy sanitized
+diagnostics from System when reporting persistent failures.

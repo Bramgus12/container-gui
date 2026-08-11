@@ -4,6 +4,7 @@ struct RunContainerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: RunContainerModel
     let appModel: AppModel
+    let networkModel: NetworkModel?
     @State private var runRequestID: UUID?
     @State private var isCancelling = false
 
@@ -45,6 +46,50 @@ struct RunContainerSheet: View {
                         prompt: "Optional, for example 512M",
                         error: model.memoryLimitError
                     )
+                }
+
+                Section("Networks") {
+                    if let networkModel {
+                        switch networkModel.listState {
+                        case .idle where networkModel.networks.isEmpty,
+                             .loading where networkModel.networks.isEmpty:
+                            ProgressView("Loading networks…")
+                        case .failed(let message) where networkModel.networks.isEmpty:
+                            Label(message, systemImage: "exclamationmark.triangle")
+                                .foregroundStyle(.red)
+                                .textSelection(.enabled)
+                            Button("Try Again") {
+                                Task { await networkModel.refresh() }
+                            }
+                        default:
+                            if networkModel.networks.isEmpty {
+                                Text("No networks are available. Without an explicit attachment, the CLI uses its default network.")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        ForEach($model.networks) { $attachment in
+                            NetworkAttachmentDraftRow(
+                                attachment: $attachment,
+                                choices: networkModel.networks,
+                                error: model.networkError(for: attachment),
+                                onRemove: {
+                                    model.removeNetworkAttachment(id: attachment.id)
+                                }
+                            )
+                        }
+
+                        Button("Add Network", systemImage: "plus") {
+                            model.addNetworkAttachment()
+                        }
+                        .disabled(
+                            networkModel.networks.isEmpty
+                                || model.networks.count >= networkModel.networks.count
+                        )
+                    } else {
+                        Text("The network inventory is unavailable. The CLI will use its default network.")
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Section("Published Ports") {
@@ -189,6 +234,9 @@ struct RunContainerSheet: View {
         }
         .frame(minWidth: 720, minHeight: 680)
         .interactiveDismissDisabled(operationIsActive)
+        .task {
+            await networkModel?.loadIfNeeded()
+        }
         .task(id: runRequestID) {
             guard let requestID = runRequestID else { return }
             let outcome = await model.run(using: appModel)
@@ -233,6 +281,42 @@ struct RunContainerSheet: View {
             Text(message)
                 .font(.caption)
                 .foregroundStyle(.red)
+        }
+    }
+}
+
+private struct NetworkAttachmentDraftRow: View {
+    @Binding var attachment: NetworkAttachmentDraft
+    let choices: [NetworkSummary]
+    let error: String?
+    let onRemove: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Picker("Network", selection: $attachment.networkName) {
+                    Text("Select a network").tag("")
+                    ForEach(choices) { network in
+                        Text(network.name).tag(network.name)
+                    }
+                }
+                .frame(minWidth: 180)
+                .accessibilityIdentifier("run.network.\(attachment.id).selection")
+
+                TextField("MAC address (optional)", text: $attachment.macAddress)
+                    .frame(minWidth: 180)
+                    .accessibilityIdentifier("run.network.\(attachment.id).mac")
+                TextField("MTU (optional)", text: $attachment.mtu)
+                    .frame(width: 110)
+                    .accessibilityIdentifier("run.network.\(attachment.id).mtu")
+                Button("Remove", systemImage: "minus.circle", action: onRemove)
+                    .labelStyle(.iconOnly)
+            }
+            if let error {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
         }
     }
 }

@@ -1,0 +1,23 @@
+{
+  "id": "legacy-fixture",
+  "state": "active",
+  "config": {
+    "id": "legacy-fixture",
+    "mode": "internal",
+    "creationDate": "2026-06-01T10:12:00.125Z",
+    "ipv4Subnet": "10.12.0.0/24",
+    "ipv6Subnet": "fd12::/64",
+    "labels": {
+      "fixture": "0.12"
+    },
+    "pluginInfo": {
+      "plugin": "container-network-vmnet",
+      "variant": "host"
+    }
+  },
+  "status": {
+    "address": "10.12.0.0/24",
+    "gateway": "10.12.0.1",
+    "ipv6Subnet": "fd12::/64"
+  }
+}

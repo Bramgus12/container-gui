@@ -22,6 +22,12 @@ nonisolated enum ContainerCommand: Equatable, Sendable {
     case pullImage(reference: ImageReference)
     case deleteImage(reference: ImageReference)
 
+    case listNetworks
+    case inspectNetwork(name: NetworkName)
+    case createNetwork(configuration: NetworkCreateConfiguration)
+    case deleteNetwork(name: NetworkName)
+    case pruneNetworks
+
     var arguments: [String] {
         switch self {
         case .systemStart:
@@ -67,7 +73,52 @@ nonisolated enum ContainerCommand: Equatable, Sendable {
             ["image", "pull", "--progress", "plain", reference.rawValue]
         case .deleteImage(let reference):
             ["image", "delete", reference.rawValue]
+
+        case .listNetworks:
+            ["network", "list", "--format", "json"]
+        case .inspectNetwork(let name):
+            ["network", "inspect", name.rawValue]
+        case .createNetwork(let configuration):
+            Self.createNetworkArguments(configuration)
+        case .deleteNetwork(let name):
+            ["network", "delete", name.rawValue]
+        case .pruneNetworks:
+            ["network", "prune"]
         }
+    }
+
+    private static func createNetworkArguments(
+        _ configuration: NetworkCreateConfiguration
+    ) -> [String] {
+        var result = ["network", "create"]
+        if configuration.mode == .internal {
+            result.append("--internal")
+        }
+        for label in configuration.labels {
+            result += ["--label", label.argument]
+        }
+        switch configuration.customization {
+        case .legacyVariant(let variant):
+            if let variant, !variant.isEmpty {
+                result += ["--plugin-variant", variant]
+            }
+        case .options(let options):
+            for option in options {
+                result += ["--option", option.argument]
+            }
+        }
+        if let plugin = configuration.plugin,
+           plugin != NetworkCreateConfiguration.defaultPlugin {
+            result += ["--plugin", plugin]
+        }
+        if let ipv4Subnet = configuration.ipv4Subnet {
+            result += ["--subnet", ipv4Subnet.rawValue]
+        }
+        if let ipv6Subnet = configuration.ipv6Subnet {
+            result += ["--subnet-v6", ipv6Subnet.rawValue]
+        }
+        result.append(configuration.name.rawValue)
+        return result
     }
 }
 

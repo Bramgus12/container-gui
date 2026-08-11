@@ -96,6 +96,47 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(waitUntil(timeout: 3) { !fixture.exists })
     }
 
+    func testNetworkInventoryInspectionAndVersionSpecificCreateControls() {
+        let app = launch(scenario: "networkCurrent")
+        let destination = app.descendants(matching: .any)["destination.networks"]
+        XCTAssertTrue(destination.waitForExistence(timeout: 3))
+        destination.click()
+
+        let fixture = app.staticTexts["ui-test-network"]
+        XCTAssertTrue(fixture.waitForExistence(timeout: 3))
+        fixture.click()
+        XCTAssertTrue(app.staticTexts["Addressing"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["fd42::/64"].exists)
+
+        app.buttons["networks.create"].click()
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 3))
+        XCTAssertTrue(sheet.staticTexts["Plugin Options"].exists)
+        XCTAssertFalse(sheet.staticTexts["Plugin Variant"].exists)
+        let name = sheet.textFields["networks.create.name"]
+        name.click()
+        name.typeText("created-network")
+        sheet.buttons["networks.create.submit"].click()
+        XCTAssertTrue(app.staticTexts["created-network"].waitForExistence(timeout: 3))
+
+        let defaultNetwork = app.staticTexts["default"]
+        defaultNetwork.click()
+        XCTAssertFalse(app.buttons["networks.delete"].isEnabled)
+    }
+
+    func testLegacyNetworkCreateUsesPluginVariant() {
+        let app = launch(scenario: "networkLegacy")
+        let destination = app.descendants(matching: .any)["destination.networks"]
+        XCTAssertTrue(destination.waitForExistence(timeout: 3))
+        destination.click()
+        XCTAssertTrue(app.buttons["networks.create"].waitForExistence(timeout: 3))
+        app.buttons["networks.create"].click()
+
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.staticTexts["Plugin Variant"].waitForExistence(timeout: 3))
+        XCTAssertFalse(sheet.staticTexts["Plugin Options"].exists)
+    }
+
     func testLogViewerShowsNumberedSelectableMockLogs() {
         let app = launch(scenario: "ready")
         let fixture = app.staticTexts["demo-stopped"]

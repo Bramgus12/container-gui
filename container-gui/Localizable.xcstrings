@@ -4,6 +4,129 @@
     "" : {
 
     },
+    "Add Network" : {
+      "comment" : "Button that adds another explicit network attachment to the Run Container form."
+    },
+    "Addressing" : {
+      "comment" : "Network inspector section for configured and effective subnets and gateways."
+    },
+    "All currently unused user-created networks may be permanently deleted. Built-in and default networks are preserved." : {
+      "comment" : "Warning shown before pruning unused networks."
+    },
+    "Built-in" : {
+      "comment" : "Badge identifying a network managed by Apple Container that cannot be deleted."
+    },
+    "Configured IPv4 Subnet" : {
+      "comment" : "Network inspector label for the requested IPv4 CIDR."
+    },
+    "Configured IPv6 Subnet" : {
+      "comment" : "Network inspector label for the requested IPv6 CIDR."
+    },
+    "Create Network…" : {
+      "comment" : "Toolbar button that opens the network creation form."
+    },
+    "Creating network…" : {
+      "comment" : "Progress message while Apple Container creates a network."
+    },
+    "Delete Network?" : {
+      "comment" : "Destructive confirmation title for deleting one selected network."
+    },
+    "Delete Network…" : {
+      "comment" : "Toolbar button that requests deletion of the selected network."
+    },
+    "Destructive Actions" : {
+      "comment" : "Toolbar menu containing destructive network actions."
+    },
+    "Effective IPv4 Subnet" : {
+      "comment" : "Network inspector label for the active IPv4 CIDR."
+    },
+    "Effective IPv6 Subnet" : {
+      "comment" : "Network inspector label for the active IPv6 CIDR."
+    },
+    "Internal / host-only" : {
+      "comment" : "Network creation mode that does not provide external NAT access."
+    },
+    "Inspecting network…" : {
+      "comment" : "Progress message while loading the selected network inspection."
+    },
+    "IPv4 Gateway" : {
+      "comment" : "Network inspector label for the active IPv4 gateway."
+    },
+    "IPv4 subnet" : {
+      "comment" : "Optional IPv4 CIDR field in the network creation form."
+    },
+    "IPv6 subnet" : {
+      "comment" : "Optional IPv6 CIDR field in the network creation form."
+    },
+    "Loading networks…" : {
+      "comment" : "Progress message while loading the authoritative network inventory."
+    },
+    "MAC address (optional)" : {
+      "comment" : "Optional MAC address field for an explicit container network attachment."
+    },
+    "MTU (optional)" : {
+      "comment" : "Optional maximum transmission unit field for a container network attachment."
+    },
+    "Network access" : {
+      "comment" : "Picker label for NAT versus internal network creation mode."
+    },
+    "Network Couldn’t Be Inspected" : {
+      "comment" : "Title shown when loading a selected network inspection fails."
+    },
+    "Network Prune Complete" : {
+      "comment" : "Title reporting the result of confirmed unused-network pruning."
+    },
+    "Networks" : {
+      "comment" : "Navigation destination and section title for Apple Container networks."
+    },
+    "Networks Couldn’t Be Loaded" : {
+      "comment" : "Title shown when the initial network inventory load fails."
+    },
+    "No labels" : {
+      "comment" : "Empty state in the network inspector when a network has no labels."
+    },
+    "No Networks" : {
+      "comment" : "Empty-state title when Apple Container reports no networks."
+    },
+    "No plugin options" : {
+      "comment" : "Empty state in the network inspector when a network has no plugin options."
+    },
+    "No unused networks were found." : {
+      "comment" : "Success message when network pruning deleted nothing."
+    },
+    "Plugin Options" : {
+      "comment" : "Network creation and inspector section for repeatable Apple Container 1.x plugin options."
+    },
+    "Plugin Variant" : {
+      "comment" : "Optional Apple Container 0.12 network plugin variant field."
+    },
+    "Prune Unused Networks?" : {
+      "comment" : "Destructive confirmation title for pruning every unused user-created network."
+    },
+    "Prune Unused Networks…" : {
+      "comment" : "Destructive menu item that requests unused-network pruning."
+    },
+    "Search networks" : {
+      "comment" : "Search field prompt for filtering the network inventory."
+    },
+    "Select a Network" : {
+      "comment" : "Network inspector empty state before a network is selected."
+    },
+    "Select a network" : {
+      "comment" : "Placeholder choice in an explicit Run Container network attachment."
+    },
+    "The network inventory is unavailable. The CLI will use its default network." : {
+      "comment" : "Run Container message when explicit network choices cannot be loaded."
+    },
+    "This network is no longer available. Select another network." : {
+      "comment" : "Inline Run Container validation when a previously selected network was deleted."
+    },
+    "Waiting for the selected network’s inspection." : {
+      "comment" : "Network inspector message while a stale response is replaced for a new selection."
+    },
+    "“%@” will be permanently deleted. If a container is attached, the CLI may reject the deletion." : {
+      "comment" : "Network deletion warning; the placeholder is the exact selected network name."
+    },
     "—" : {
       "localizations" : {
         "nl" : {
