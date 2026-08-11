@@ -177,6 +177,30 @@ nonisolated struct ImageSummary: Identifiable, Equatable, Sendable {
     }
 }
 
+nonisolated struct ImageDeletionPlan: Identifiable, Equatable, Sendable {
+    var id: String { image.id }
+
+    let image: ImageSummary
+    let dependentContainers: [ContainerSummary]
+    let unresolvedContainers: [ContainerSummary]
+
+    var hasStableIdentity: Bool { image.digest != nil }
+
+    var blockedContainers: [ContainerSummary] {
+        dependentContainers.filter { container in
+            if image.digest != nil && container.imageDigest == nil {
+                return true
+            }
+            switch container.state {
+            case .created, .running, .stopped, .paused:
+                return false
+            case .unknown:
+                return true
+            }
+        }
+    }
+}
+
 nonisolated struct ImageInspection: Equatable, Sendable {
     let reference: String
     let descriptor: ImageDescriptorDTO?

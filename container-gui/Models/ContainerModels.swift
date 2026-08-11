@@ -429,6 +429,7 @@ nonisolated enum ContainerState: Equatable, Sendable {
 nonisolated struct ContainerSummary: Identifiable, Equatable, Sendable {
     let id: String
     let image: String?
+    let imageDigest: String?
     let state: ContainerState
     let operatingSystem: String?
     let architecture: String?
@@ -442,6 +443,7 @@ nonisolated struct ContainerSummary: Identifiable, Equatable, Sendable {
         let networks = dto.status?.networks ?? dto.networks ?? dto.configuration?.networks
         self.id = id
         image = dto.configuration?.image?.reference
+        imageDigest = dto.configuration?.image?.digest
         state = ContainerState(dto.status?.state)
         operatingSystem = dto.configuration?.platform?.os
         architecture = dto.configuration?.platform?.architecture

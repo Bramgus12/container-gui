@@ -4,6 +4,12 @@ struct RunContainerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: RunContainerModel
     let appModel: AppModel
+    @State private var runRequestID: UUID?
+    @State private var isCancelling = false
+
+    private var operationIsActive: Bool {
+        runRequestID != nil || model.isRunning || isCancelling
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -151,33 +157,53 @@ struct RunContainerSheet: View {
                 }
             }
             .formStyle(.grouped)
+            .disabled(operationIsActive)
 
             Divider()
 
             HStack {
-                Button("Cancel", role: .cancel) {
-                    dismiss()
+                Button(role: .cancel) {
+                    if operationIsActive {
+                        isCancelling = true
+                        runRequestID = nil
+                    } else {
+                        dismiss()
+                    }
+                } label: {
+                    Text(isCancelling ? "Cancelling…" : operationIsActive ? "Cancel Run" : "Cancel")
                 }
                 .keyboardShortcut(.cancelAction)
-                .disabled(model.isRunning)
+                .disabled(isCancelling)
+                .accessibilityIdentifier("run.cancel")
 
                 Spacer()
 
                 Button("Run") {
-                    Task {
-                        if await model.run(using: appModel) {
-                            dismiss()
-                        }
-                    }
+                    runRequestID = UUID()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(!model.canRun)
+                .disabled(operationIsActive || !model.canRun)
                 .accessibilityIdentifier("run.submit")
             }
             .padding()
         }
         .frame(minWidth: 720, minHeight: 680)
-        .interactiveDismissDisabled(model.isRunning)
+        .interactiveDismissDisabled(operationIsActive)
+        .task(id: runRequestID) {
+            guard let requestID = runRequestID else { return }
+            let outcome = await model.run(using: appModel)
+
+            guard runRequestID == requestID else {
+                isCancelling = false
+                return
+            }
+
+            runRequestID = nil
+            isCancelling = false
+            if outcome == .succeeded {
+                dismiss()
+            }
+        }
     }
 
     @ViewBuilder

@@ -191,6 +191,52 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["image-secret"].exists)
     }
 
+    func testImageCleanupDeletesDependentContainerBeforeImage() {
+        let app = launch(scenario: "imageCleanup")
+        let imagesDestination = app.staticTexts["Images"].firstMatch
+        XCTAssertTrue(imagesDestination.waitForExistence(timeout: 3))
+        imagesDestination.click()
+
+        let image = app.staticTexts["ghcr.io/example/demo:1.0"].firstMatch
+        XCTAssertTrue(image.waitForExistence(timeout: 3))
+        image.click()
+        app.buttons["images.delete"].click()
+
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 3))
+        XCTAssertTrue(sheet.staticTexts["image-dependent"].exists)
+        let confirm = app.buttons["images.deletion.confirm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+        confirm.click()
+
+        XCTAssertTrue(waitUntil(timeout: 3) { !image.exists })
+    }
+
+    func testActiveRunCanBeCancelledWithoutClosingDraft() {
+        let app = launch(scenario: "cancelRun")
+        let runButton = app.buttons["containers.run"]
+        XCTAssertTrue(runButton.waitForExistence(timeout: 3))
+        runButton.click()
+
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 3))
+        let imageField = sheet.textFields["run.image"]
+        XCTAssertTrue(imageField.waitForExistence(timeout: 3))
+        imageField.click()
+        imageField.typeText("alpine:3.21")
+        sheet.buttons["run.submit"].click()
+
+        let cancelRun = sheet.buttons["run.cancel"]
+        XCTAssertTrue(cancelRun.waitForExistence(timeout: 3))
+        XCTAssertEqual(cancelRun.label, "Cancel Run")
+        cancelRun.click()
+
+        XCTAssertTrue(waitUntil(timeout: 3) {
+            sheet.exists && sheet.buttons["run.submit"].isEnabled
+        })
+        XCTAssertEqual(imageField.value as? String, "alpine:3.21")
+    }
+
     func testSystemLogViewerShowsNumberedLogsAndSharedActionsAtLatest() {
         let app = launch(scenario: "ready")
         let systemDestination = app.staticTexts["System"].firstMatch

@@ -119,28 +119,295 @@ final class ImageManagementTests: XCTestCase {
         }
     }
 
-    func testDeleteRefreshesAndPreservesConflictMessage() async {
-        let conflict = CLIError.nonZeroExit(
-            invocation: "container image delete alpine:3.21",
-            exitCode: 1,
-            standardError: "image is in use by container web"
+    func testDeletionPlanFindsOnlyContainersUsingSelectedReference() async throws {
+        let image = makeImage(reference: "alpine:3.21")
+        let service = ImageServiceStub(images: [image])
+        let store = ImageContainerStore(containers: [
+            makeContainer(id: "web", image: "alpine:3.21", state: "running"),
+            makeContainer(id: "db", image: "postgres:17", state: "stopped"),
+        ])
+        let model = AppModel(
+            setup: SetupModel(),
+            containerLister: store,
+            containerMutator: store,
+            imageService: service
         )
-        let service = ImageServiceStub(
-            images: [makeImage(reference: "alpine:3.21")],
-            deletionError: conflict
-        )
-        let model = AppModel(setup: SetupModel(), imageService: service)
         await model.refreshImages()
 
-        await model.deleteImage(reference: "alpine:3.21")
-        let deletedReferences = await service.deletedReferences
-        let listCallCount = await service.listCallCount
+        let preparedPlan = await model.prepareImageDeletion(reference: image.reference)
+        let plan = try XCTUnwrap(preparedPlan)
 
-        XCTAssertTrue(
-            model.imageDeletionFailure?.message.contains("image is in use by container web") == true
+        XCTAssertEqual(plan.dependentContainers.map(\.id), ["web"])
+        XCTAssertTrue(plan.blockedContainers.isEmpty)
+    }
+
+    func testDeletionPlanUsesDigestToAvoidRepointedTag() async throws {
+        let image = makeImage(reference: "example/app:latest", digest: "sha256:new")
+        let service = ImageServiceStub(images: [image])
+        let store = ImageContainerStore(containers: [
+            makeContainer(
+                id: "old-release",
+                image: image.reference,
+                imageDigest: "sha256:old",
+                state: "stopped"
+            ),
+        ])
+        let model = AppModel(
+            setup: SetupModel(),
+            containerLister: store,
+            containerMutator: store,
+            imageService: service
         )
-        XCTAssertEqual(deletedReferences, ["alpine:3.21"])
-        XCTAssertEqual(listCallCount, 2)
+        await model.refreshImages()
+
+        let preparedPlan = await model.prepareImageDeletion(reference: image.reference)
+        let plan = try XCTUnwrap(preparedPlan)
+
+        XCTAssertTrue(plan.dependentContainers.isEmpty)
+    }
+
+    func testCleanupDeletesStoppedAndRunningDependenciesBeforeImage() async throws {
+        let image = makeImage(reference: "alpine:3.21", digest: "sha256:alpine")
+        let service = ImageServiceStub(images: [image])
+        let store = ImageContainerStore(containers: [
+            makeContainer(
+                id: "api",
+                image: image.reference,
+                imageDigest: image.digest,
+                state: "running"
+            ),
+            makeContainer(
+                id: "worker",
+                image: image.reference,
+                imageDigest: image.digest,
+                state: "stopped"
+            ),
+        ])
+        let model = AppModel(
+            setup: SetupModel(),
+            containerLister: store,
+            containerMutator: store,
+            imageService: service
+        )
+        await model.refreshImages()
+        let preparedPlan = await model.prepareImageDeletion(reference: image.reference)
+        let plan = try XCTUnwrap(preparedPlan)
+
+        await model.deleteImage(using: plan)
+
+        let mutations = await store.recordedMutations
+        let deletedReferences = await service.deletedReferences
+        XCTAssertEqual(mutations.map(\.containerID), ["api", "worker"])
+        XCTAssertEqual(mutations.map(\.mutation), [
+            .delete(force: true),
+            .delete(force: false),
+        ])
+        XCTAssertEqual(deletedReferences, ["sha256:alpine"])
+        XCTAssertTrue(model.images.isEmpty)
+        XCTAssertNil(model.imageDeletionFailure)
+    }
+
+    func testCleanupRejectsChangedDependenciesBeforeDeletingAnything() async throws {
+        let image = makeImage(reference: "alpine:3.21", digest: "sha256:alpine")
+        let service = ImageServiceStub(images: [image])
+        let store = ImageContainerStore(containers: [
+            makeContainer(
+                id: "web",
+                image: image.reference,
+                imageDigest: image.digest,
+                state: "stopped"
+            ),
+        ])
+        let model = AppModel(
+            setup: SetupModel(),
+            containerLister: store,
+            containerMutator: store,
+            imageService: service
+        )
+        await model.refreshImages()
+        let preparedPlan = await model.prepareImageDeletion(reference: image.reference)
+        let plan = try XCTUnwrap(preparedPlan)
+        await store.add(makeContainer(
+            id: "new",
+            image: image.reference,
+            imageDigest: image.digest,
+            state: "running"
+        ))
+
+        await model.deleteImage(using: plan)
+
+        let mutations = await store.recordedMutations
+        let deletedReferences = await service.deletedReferences
+        XCTAssertTrue(
+            model.imageDeletionFailure?.message.contains("Dependent containers changed") == true
+        )
+        XCTAssertTrue(mutations.isEmpty)
+        XCTAssertTrue(deletedReferences.isEmpty)
+    }
+
+    func testCleanupRejectsImageRepointedAfterConfirmation() async throws {
+        let reference = "example/app:latest"
+        let original = makeImage(reference: reference, digest: "sha256:old")
+        let replacement = makeImage(reference: reference, digest: "sha256:new")
+        let service = ImageServiceStub(images: [original])
+        let store = ImageContainerStore(containers: [
+            makeContainer(
+                id: "old-release",
+                image: reference,
+                imageDigest: original.digest,
+                state: "stopped"
+            ),
+        ])
+        let model = AppModel(
+            setup: SetupModel(),
+            containerLister: store,
+            containerMutator: store,
+            imageService: service
+        )
+        await model.refreshImages()
+        let preparedPlan = await model.prepareImageDeletion(reference: reference)
+        let plan = try XCTUnwrap(preparedPlan)
+        await service.setImages([replacement])
+
+        await model.deleteImage(using: plan)
+
+        let mutations = await store.recordedMutations
+        let deletedReferences = await service.deletedReferences
+        XCTAssertEqual(model.imageDeletionFailure?.message, "The image changed. Review the deletion again.")
+        XCTAssertTrue(mutations.isEmpty)
+        XCTAssertTrue(deletedReferences.isEmpty)
+    }
+
+    func testCleanupStopsAfterPartialFailureAndPreservesImage() async throws {
+        let image = makeImage(reference: "alpine:3.21", digest: "sha256:alpine")
+        let service = ImageServiceStub(images: [image])
+        let store = ImageContainerStore(
+            containers: [
+                makeContainer(
+                    id: "a-done",
+                    image: image.reference,
+                    imageDigest: image.digest,
+                    state: "stopped"
+                ),
+                makeContainer(
+                    id: "b-fails",
+                    image: image.reference,
+                    imageDigest: image.digest,
+                    state: "running"
+                ),
+            ],
+            failingContainerID: "b-fails"
+        )
+        let model = AppModel(
+            setup: SetupModel(),
+            containerLister: store,
+            containerMutator: store,
+            imageService: service
+        )
+        await model.refreshImages()
+        let preparedPlan = await model.prepareImageDeletion(reference: image.reference)
+        let plan = try XCTUnwrap(preparedPlan)
+
+        await model.deleteImage(using: plan)
+
+        let deletedReferences = await service.deletedReferences
+        let containerIDs = await store.containerIDs
+        XCTAssertTrue(
+            model.imageDeletionFailure?.message.contains("1 dependent container(s) were deleted")
+                == true
+        )
+        XCTAssertTrue(model.imageDeletionFailure?.message.contains("b-fails") == true)
+        XCTAssertTrue(deletedReferences.isEmpty)
+        XCTAssertEqual(containerIDs, ["b-fails"])
+    }
+
+    func testCleanupReportsDeletedContainersWhenFinalImageDeleteFails() async throws {
+        let image = makeImage(reference: "alpine:3.21", digest: "sha256:alpine")
+        let deletionError = CLIError.nonZeroExit(
+            invocation: "container image delete alpine:3.21",
+            exitCode: 1,
+            standardError: "image store rejected deletion"
+        )
+        let service = ImageServiceStub(images: [image], deletionError: deletionError)
+        let store = ImageContainerStore(containers: [
+            makeContainer(
+                id: "removed",
+                image: image.reference,
+                imageDigest: image.digest,
+                state: "stopped"
+            ),
+        ])
+        let model = AppModel(
+            setup: SetupModel(),
+            containerLister: store,
+            containerMutator: store,
+            imageService: service
+        )
+        await model.refreshImages()
+        let preparedPlan = await model.prepareImageDeletion(reference: image.reference)
+        let plan = try XCTUnwrap(preparedPlan)
+
+        await model.deleteImage(using: plan)
+
+        let containerIDs = await store.containerIDs
+        XCTAssertTrue(
+            model.imageDeletionFailure?.message.contains("1 dependent container(s) were deleted")
+                == true
+        )
+        XCTAssertTrue(
+            model.imageDeletionFailure?.message.contains("image store rejected deletion") == true
+        )
+        XCTAssertTrue(containerIDs.isEmpty)
+        XCTAssertEqual(model.images.map(\.reference), [image.reference])
+    }
+
+    func testCleanupBlocksImageWithoutStableDigest() async throws {
+        let image = makeImage(reference: "legacy/image:latest")
+        let service = ImageServiceStub(images: [image])
+        let store = ImageContainerStore(containers: [])
+        let model = AppModel(
+            setup: SetupModel(),
+            containerLister: store,
+            containerMutator: store,
+            imageService: service
+        )
+        await model.refreshImages()
+        let preparedPlan = await model.prepareImageDeletion(reference: image.reference)
+        let plan = try XCTUnwrap(preparedPlan)
+
+        await model.deleteImage(using: plan)
+
+        let deletedReferences = await service.deletedReferences
+        XCTAssertTrue(model.imageDeletionFailure?.message.contains("no stable digest") == true)
+        XCTAssertTrue(deletedReferences.isEmpty)
+    }
+
+    func testCleanupBlocksUnresolvedContainerWithDifferentReference() async throws {
+        let image = makeImage(reference: "legacy/image:latest", digest: "sha256:current")
+        let service = ImageServiceStub(images: [image])
+        let store = ImageContainerStore(containers: [
+            makeContainer(id: "legacy", image: "alias/image:old", state: "stopped"),
+        ])
+        let model = AppModel(
+            setup: SetupModel(),
+            containerLister: store,
+            containerMutator: store,
+            imageService: service
+        )
+        await model.refreshImages()
+        let preparedPlan = await model.prepareImageDeletion(reference: image.reference)
+        let plan = try XCTUnwrap(preparedPlan)
+
+        XCTAssertEqual(plan.unresolvedContainers.map(\.id), ["legacy"])
+        await model.deleteImage(using: plan)
+
+        let deletedReferences = await service.deletedReferences
+        let mutations = await store.recordedMutations
+        XCTAssertTrue(
+            model.imageDeletionFailure?.message.contains("do not report stable image digests") == true
+        )
+        XCTAssertTrue(deletedReferences.isEmpty)
+        XCTAssertTrue(mutations.isEmpty)
     }
 
     func testRunModelAcceptsSelectedImageAsDefault() {
@@ -152,12 +419,14 @@ final class ImageManagementTests: XCTestCase {
 
     private func makeImage(
         reference: String,
+        digest: String? = nil,
         architecture: String = "arm64"
     ) -> ImageSummary {
+        let digestField = digest.map { #", "digest": "\#($0)""# } ?? ""
         let data = Data(
             """
             [{
-              "reference": "\(reference)",
+              "reference": "\(reference)"\(digestField),
               "platform": { "os": "linux", "architecture": "\(architecture)" }
             }]
             """.utf8
@@ -166,6 +435,27 @@ final class ImageManagementTests: XCTestCase {
             .decode([ImageDTO].self, from: data)
             .compactMap(ImageSummary.init(dto:))
             .first!
+    }
+
+    private func makeContainer(
+        id: String,
+        image: String,
+        imageDigest: String? = nil,
+        state: String
+    ) -> ContainerSummary {
+        let digestField = imageDigest.map { #", "digest": "\#($0)""# } ?? ""
+        let json = """
+            {
+              "configuration": {
+                "id": "\(id)",
+                "image": { "reference": "\(image)"\(digestField) },
+                "platform": { "architecture": "arm64" }
+              },
+              "status": { "state": "\(state)" }
+            }
+            """
+        let dto = try! JSONDecoder().decode(ContainerDTO.self, from: Data(json.utf8))
+        return ContainerSummary(dto: dto)!
     }
 }
 
@@ -196,7 +486,7 @@ private actor ImageCLIStub: ContainerCLI {
 }
 
 private actor ImageServiceStub: ImageManaging {
-    private let imagesResult: [ImageSummary]
+    private var imagesResult: [ImageSummary]
     private let pullEvents: [ProcessEvent]
     private let deletionError: CLIError?
     private(set) var listCallCount = 0
@@ -242,5 +532,57 @@ private actor ImageServiceStub: ImageManaging {
         if let deletionError {
             throw deletionError
         }
+        imagesResult.removeAll { image in
+            image.reference == reference || image.digest == reference
+        }
+    }
+
+    func setImages(_ images: [ImageSummary]) {
+        imagesResult = images
+    }
+}
+
+private actor ImageContainerStore: ContainerListing, ContainerMutating {
+    struct RecordedMutation: Equatable, Sendable {
+        let mutation: ContainerMutation
+        let containerID: String
+    }
+
+    private var containers: [ContainerSummary]
+    private let failingContainerID: String?
+    private(set) var recordedMutations: [RecordedMutation] = []
+
+    init(
+        containers: [ContainerSummary],
+        failingContainerID: String? = nil
+    ) {
+        self.containers = containers
+        self.failingContainerID = failingContainerID
+    }
+
+    var containerIDs: [String] {
+        containers.map(\.id).sorted()
+    }
+
+    func listContainers() -> [ContainerSummary] {
+        containers
+    }
+
+    func mutate(_ mutation: ContainerMutation, containerID: String) throws {
+        recordedMutations.append(RecordedMutation(mutation: mutation, containerID: containerID))
+        if containerID == failingContainerID {
+            throw CLIError.nonZeroExit(
+                invocation: "container delete \(containerID)",
+                exitCode: 1,
+                standardError: "fixture deletion failed"
+            )
+        }
+        if case .delete = mutation {
+            containers.removeAll { $0.id == containerID }
+        }
+    }
+
+    func add(_ container: ContainerSummary) {
+        containers.append(container)
     }
 }

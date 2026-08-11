@@ -45,6 +45,12 @@ struct CommandArgumentDraft: Identifiable, Equatable {
     }
 }
 
+enum RunContainerOutcome: Equatable {
+    case succeeded
+    case failed
+    case cancelled
+}
+
 @MainActor
 @Observable
 final class RunContainerModel: Identifiable {
@@ -161,8 +167,8 @@ final class RunContainerModel: Identifiable {
         arguments.removeAll { $0.id == id }
     }
 
-    func run(using appModel: AppModel) async -> Bool {
-        guard let configuration, !isRunning else { return false }
+    func run(using appModel: AppModel) async -> RunContainerOutcome {
+        guard let configuration, !isRunning else { return .failed }
 
         isRunning = true
         progress = ""
@@ -173,14 +179,16 @@ final class RunContainerModel: Identifiable {
             try await appModel.runContainer(configuration) { [weak self] event in
                 self?.record(event)
             }
-            return true
+            return .succeeded
         } catch is CancellationError {
-            return false
+            await appModel.reconcileAfterCancelledRun()
+            return .cancelled
         } catch CLIError.cancelled {
-            return false
+            await appModel.reconcileAfterCancelledRun()
+            return .cancelled
         } catch {
             errorMessage = DiagnosticSanitizer.sanitize(error.localizedDescription)
-            return false
+            return .failed
         }
     }
 

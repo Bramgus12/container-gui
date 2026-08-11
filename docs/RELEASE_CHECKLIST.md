@@ -33,8 +33,10 @@ hardware, CLI version, app commit, tester, and date in the release notes.
 - Traverse all controls with Tab and Shift-Tab; verify visible, logical focus.
 - Test Increase Contrast, Reduce Motion, and the largest supported text size.
 - Verify status is conveyed by labels and symbols, not color alone.
-- Confirm delete, force delete, image delete, and service stop show a
-  descriptive confirmation and that Cancel preserves the resource.
+- Confirm delete, force delete, dependency-aware image cleanup, and service stop
+  show a descriptive confirmation and that Cancel preserves every resource.
+- Cancel an active container run and verify its draft remains available, its
+  child process terminates, and container/image state refreshes afterward.
 - Inspect copied setup and system diagnostics plus displayed service logs using
   seeded secrets. Confirm environment values, credentials, bearer tokens,
   private keys, and URL userinfo are absent.

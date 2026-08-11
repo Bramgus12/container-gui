@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ImageListView: View {
     @Bindable var model: AppModel
-    @State private var pendingDeletion: String?
+    @State private var pendingDeletion: ImageDeletionPlan?
     @State private var pullModel: ImagePullModel?
     @State private var runContainerModel: RunContainerModel?
 
@@ -57,6 +57,7 @@ struct ImageListView: View {
                     }
                     .disabled(
                         model.selectedImage == nil
+                            || model.preparingImageDeletionReference != nil
                             || model.deletingImageReference != nil
                     )
                     .accessibilityIdentifier("images.delete")
@@ -77,28 +78,8 @@ struct ImageListView: View {
             .task(id: model.selectedImageID) {
                 await model.inspectSelectedImage()
             }
-            .alert(
-                "Delete Image?",
-                isPresented: Binding(
-                    get: { pendingDeletion != nil },
-                    set: { if !$0 { pendingDeletion = nil } }
-                ),
-                presenting: pendingDeletion
-            ) { reference in
-                Button("Delete", role: .destructive) {
-                    Task { await model.deleteImage(reference: reference) }
-                    pendingDeletion = nil
-                }
-                Button("Cancel", role: .cancel) {
-                    pendingDeletion = nil
-                }
-            } message: { reference in
-                Text(
-                    """
-                    This permanently deletes “\(reference)”. Containers that use the image \
-                    can cause this operation to fail.
-                    """
-                )
+            .sheet(item: $pendingDeletion) { plan in
+                ImageDeletionSheet(plan: plan, model: model)
             }
             .sheet(item: $pullModel) { pullModel in
                 ImagePullSheet(model: pullModel, appModel: model)
@@ -151,14 +132,19 @@ struct ImageListView: View {
                 Button("Delete…", role: .destructive) {
                     requestDeletion(image.reference)
                 }
-                .disabled(model.deletingImageReference != nil)
+                .disabled(
+                    model.preparingImageDeletionReference != nil
+                        || model.deletingImageReference != nil
+                )
             }
         }
         .accessibilityIdentifier("images.table")
     }
 
     private func requestDeletion(_ reference: String) {
-        pendingDeletion = reference
+        Task {
+            pendingDeletion = await model.prepareImageDeletion(reference: reference)
+        }
     }
 
     @ViewBuilder
@@ -250,6 +236,148 @@ struct ImageListView: View {
     nonisolated private static func platformDescription(_ image: ImageSummary) -> String {
         let values = [image.operatingSystem, image.architecture].compactMap { $0 }
         return values.isEmpty ? "—" : values.joined(separator: " / ")
+    }
+}
+
+private struct ImageDeletionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let plan: ImageDeletionPlan
+    @Bindable var model: AppModel
+    @State private var deletionStarted = false
+
+    private var isDeleting: Bool {
+        deletionStarted || model.deletingImageReference == plan.image.reference
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Label(
+                plan.dependentContainers.isEmpty
+                    ? "Delete Image"
+                    : "Delete Containers and Image",
+                systemImage: "exclamationmark.triangle.fill"
+            )
+            .font(.title2.bold())
+            .foregroundStyle(.red)
+
+            Text(message)
+
+            if !plan.dependentContainers.isEmpty {
+                List(plan.dependentContainers) { container in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(container.id)
+                                .fontWeight(.medium)
+                            Text(container.state.displayName)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(deletionMethod(for: container))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(minHeight: 140, maxHeight: 280)
+            }
+
+            if !plan.blockedContainers.isEmpty {
+                Label(
+                    "Automatic cleanup is unavailable when a container has an unsupported state or no stable image digest.",
+                    systemImage: "hand.raised.fill"
+                )
+                .foregroundStyle(.orange)
+            }
+
+            if !plan.unresolvedContainers.isEmpty {
+                Label(
+                    "Some containers do not report image digests, so their dependency cannot be verified. Review them manually before deleting this image.",
+                    systemImage: "hand.raised.fill"
+                )
+                .foregroundStyle(.orange)
+            }
+
+            if !plan.hasStableIdentity {
+                Label(
+                    "Automatic deletion requires a stable image digest. Refresh the image list or delete the image from Terminal.",
+                    systemImage: "hand.raised.fill"
+                )
+                .foregroundStyle(.orange)
+            }
+
+            Spacer()
+
+            HStack {
+                Button("Cancel", role: .cancel) {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+                .disabled(isDeleting)
+
+                if !plan.dependentContainers.isEmpty || !plan.unresolvedContainers.isEmpty {
+                    Button("View Containers") {
+                        model.destination = .containers
+                        model.selectedContainerID = plan.dependentContainers.first?.id
+                            ?? plan.unresolvedContainers.first?.id
+                        dismiss()
+                    }
+                    .disabled(isDeleting)
+                }
+
+                Spacer()
+
+                Button(role: .destructive) {
+                    deletionStarted = true
+                    Task {
+                        await model.deleteImage(using: plan)
+                        dismiss()
+                    }
+                } label: {
+                    if isDeleting {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Text(
+                            plan.dependentContainers.isEmpty
+                                ? "Delete Image"
+                                : "Delete Containers and Image"
+                        )
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(
+                    isDeleting
+                        || !plan.blockedContainers.isEmpty
+                        || !plan.unresolvedContainers.isEmpty
+                        || !plan.hasStableIdentity
+                )
+                .accessibilityIdentifier("images.deletion.confirm")
+            }
+        }
+        .padding(24)
+        .frame(minWidth: 560, minHeight: plan.dependentContainers.isEmpty ? 260 : 420)
+        .interactiveDismissDisabled(isDeleting)
+    }
+
+    private var message: String {
+        if plan.dependentContainers.isEmpty {
+            return "This permanently deletes “\(plan.image.reference)”. This action cannot be undone."
+        }
+        return "This permanently deletes “\(plan.image.reference)” and every container listed below. Running containers will be force deleted. Completed deletions cannot be undone if a later deletion fails."
+    }
+
+    private func deletionMethod(for container: ContainerSummary) -> String {
+        if plan.image.digest != nil && container.imageDigest == nil {
+            return "Manual cleanup required"
+        }
+        switch container.state {
+        case .running, .paused:
+            return "Force delete"
+        case .created, .stopped:
+            return "Delete"
+        case .unknown:
+            return "Manual cleanup required"
+        }
     }
 }
 

@@ -15,7 +15,7 @@ enum AppDependencies {
             )
             return AppModel(
                 setup: setup,
-                cliFactory: UITestContainerCLIFactory()
+                cliFactory: UITestContainerCLIFactory(scenario: scenario)
             )
         }
         #endif
@@ -37,6 +37,8 @@ nonisolated private enum UITestPreflightScenario: String, Sendable {
     case failed
     case ready
     case lifecycle
+    case imageCleanup
+    case cancelRun
 
     init?(arguments: [String]) {
         guard let flagIndex = arguments.firstIndex(of: "--ui-test-preflight"),
@@ -62,7 +64,7 @@ nonisolated private enum UITestPreflightScenario: String, Sendable {
                     standardError: "service unavailable"
                 ))
             )
-        case .ready, .lifecycle:
+        case .ready, .lifecycle, .imageCleanup, .cancelRun:
             .ready(Self.context(isRunning: true))
         }
     }
@@ -120,7 +122,11 @@ private actor UITestPreflightService: PreflightServicing {
 }
 
 nonisolated private struct UITestContainerCLIFactory: ContainerCLIMaking {
-    private let cli = UITestContainerCLI()
+    private let cli: UITestContainerCLI
+
+    init(scenario: UITestPreflightScenario) {
+        cli = UITestContainerCLI(scenario: scenario)
+    }
 
     func makeCLI(executableURL: URL) -> any ContainerCLI {
         cli
@@ -131,12 +137,33 @@ private actor UITestContainerCLI: ContainerCLI {
     private struct FixtureContainer: Sendable {
         var id: String
         var image: String
+        var imageDigest: String? = nil
         var state: String
     }
 
-    private var containers = [
-        FixtureContainer(id: "demo-stopped", image: "alpine:3.21", state: "stopped"),
-    ]
+    private let scenario: UITestPreflightScenario
+    private var containers: [FixtureContainer]
+    private var images = ["ghcr.io/example/demo:1.0"]
+
+    init(scenario: UITestPreflightScenario) {
+        self.scenario = scenario
+        containers = [
+            FixtureContainer(
+                id: "demo-stopped",
+                image: "alpine:3.21",
+                imageDigest: "sha256:alpine",
+                state: "stopped"
+            ),
+        ]
+        if scenario == .imageCleanup {
+            containers.append(FixtureContainer(
+                id: "image-dependent",
+                image: "ghcr.io/example/demo:1.0",
+                imageDigest: "sha256:demo-index",
+                state: "running"
+            ))
+        }
+    }
 
     func run(_ command: ContainerCommand) async throws -> CommandResult {
         let output: String
@@ -167,14 +194,25 @@ private actor UITestContainerCLI: ContainerCLI {
                 .map { "UI test service log line \($0)." }
                 .joined(separator: "\n")
         case .listImages:
-            output = """
-            [{"name":"ghcr.io/example/demo:1.0","descriptor":{"digest":"sha256:demo-index","size":9218,"mediaType":"application/vnd.oci.image.index.v1+json"},"createdAt":"2026-06-16T00:00:15Z","platform":{"os":"linux","architecture":"arm64"}}]
-            """
+            output = imageListJSON
         case .inspectImage:
             output = """
             [{"configuration":{"name":"ghcr.io/example/demo:1.0","creationDate":"2026-06-16T00:00:15Z","descriptor":{"digest":"sha256:demo-index","size":9218,"mediaType":"application/vnd.oci.image.index.v1+json"}},"variants":[{"digest":"sha256:demo-manifest","size":4184689,"platform":{"os":"linux","architecture":"arm64","variant":"v8"},"config":{"created":"2026-06-15T22:00:00Z","author":"UI Test","architecture":"arm64","os":"linux","config":{"User":"1000:1000","Env":["TOKEN=image-secret","MODE=test"],"Entrypoint":["/bin/demo"],"Cmd":["serve"],"WorkingDir":"/app","Labels":{"org.example.fixture":"true"},"StopSignal":"SIGTERM"},"rootfs":{"type":"layers","diff_ids":["sha256:demo-layer"]},"history":[{"created_by":"COPY demo /bin/demo","empty_layer":false}]}}]}]
             """
-        case .systemStart, .systemStop, .pullImage, .deleteImage, .run, .logs, .stats:
+        case .deleteImage(let reference):
+            let imageReference = reference.rawValue == "sha256:demo-index"
+                ? "ghcr.io/example/demo:1.0"
+                : reference.rawValue
+            if containers.contains(where: { $0.image == imageReference }) {
+                throw CLIError.nonZeroExit(
+                    invocation: "ui-test-container image delete \(reference.rawValue)",
+                    exitCode: 1,
+                    standardError: "image is in use"
+                )
+            }
+            images.removeAll { $0 == imageReference }
+            output = ""
+        case .systemStart, .systemStop, .pullImage, .run, .logs, .stats:
             output = ""
         }
         return CommandResult(
@@ -193,6 +231,15 @@ private actor UITestContainerCLI: ContainerCLI {
             let task = Task {
                 switch command {
                 case .run(let configuration):
+                    if scenario == .cancelRun {
+                        continuation.yield(.standardError("Starting cancellable run…\n"))
+                        do {
+                            try await Task.sleep(for: .seconds(30))
+                        } catch {
+                            continuation.finish(throwing: CLIError.cancelled)
+                            return
+                        }
+                    }
                     let id = configuration.name?.rawValue ?? "ui-test-container"
                     await addContainer(
                         id: id,
@@ -222,8 +269,18 @@ private actor UITestContainerCLI: ContainerCLI {
 
     private var containerListJSON: String {
         let rows = containers.map { container in
+            let digest = container.imageDigest.map { #", "digest":"\#($0)""# } ?? ""
+            return """
+            {"id":"\(container.id)","configuration":{"id":"\(container.id)","image":{"reference":"\(container.image)"\(digest)},"platform":{"os":"linux","architecture":"arm64"}},"status":{"state":"\(container.state)"}}
             """
-            {"id":"\(container.id)","configuration":{"id":"\(container.id)","image":"\(container.image)","platform":{"os":"linux","architecture":"arm64"}},"status":{"state":"\(container.state)"}}
+        }
+        return "[\(rows.joined(separator: ","))]"
+    }
+
+    private var imageListJSON: String {
+        let rows = images.map { reference in
+            """
+            {"name":"\(reference)","descriptor":{"digest":"sha256:demo-index","size":9218,"mediaType":"application/vnd.oci.image.index.v1+json"},"createdAt":"2026-06-16T00:00:15Z","platform":{"os":"linux","architecture":"arm64"}}
             """
         }
         return "[\(rows.joined(separator: ","))]"

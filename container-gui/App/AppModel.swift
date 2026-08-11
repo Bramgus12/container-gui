@@ -278,6 +278,7 @@ final class AppModel {
     private(set) var filteredImages: [ImageSummary] = []
     private(set) var imageListState: ImageListState = .idle
     private(set) var imageInspectionState: ImageInspectionState = .idle
+    private(set) var preparingImageDeletionReference: String?
     private(set) var deletingImageReference: String?
     private(set) var imageDeletionFailure: ImageDeletionFailure?
 
@@ -383,6 +384,7 @@ final class AppModel {
             selectedImageID = nil
             imageListState = .idle
             imageInspectionState = .idle
+            preparingImageDeletionReference = nil
             deletingImageReference = nil
             imageDeletionFailure = nil
         }
@@ -489,9 +491,52 @@ final class AppModel {
         }
     }
 
-    func deleteImage(reference: String) async {
+    func prepareImageDeletion(reference: String) async -> ImageDeletionPlan? {
+        guard preparingImageDeletionReference == nil,
+              deletingImageReference == nil else { return nil }
+        guard let image = images.first(where: { $0.reference == reference }) else {
+            imageDeletionFailure = ImageDeletionFailure(
+                reference: reference,
+                message: "The image changed. Refresh the list and try again."
+            )
+            return nil
+        }
+
+        imageDeletionFailure = nil
+        preparingImageDeletionReference = reference
+        defer { preparingImageDeletionReference = nil }
+
+        await refreshContainers()
+        guard case .loaded = containerListState else {
+            let message: String
+            if case .failed(let failure) = containerListState {
+                message = "Dependent containers could not be checked: \(failure)"
+            } else {
+                message = "Dependent containers could not be checked. Try again."
+            }
+            imageDeletionFailure = ImageDeletionFailure(reference: reference, message: message)
+            return nil
+        }
+        guard images.contains(where: { $0.id == image.id }) else {
+            imageDeletionFailure = ImageDeletionFailure(
+                reference: reference,
+                message: "The image changed. Refresh the list and try again."
+            )
+            return nil
+        }
+
+        let dependencies = dependentContainers(for: image)
+        return ImageDeletionPlan(
+            image: image,
+            dependentContainers: dependencies,
+            unresolvedContainers: unresolvedContainers(excluding: dependencies)
+        )
+    }
+
+    func deleteImage(using plan: ImageDeletionPlan) async {
+        let reference = plan.image.reference
         guard deletingImageReference == nil else { return }
-        guard images.contains(where: { $0.reference == reference }) else {
+        guard images.contains(where: { $0.id == plan.image.id }) else {
             imageDeletionFailure = ImageDeletionFailure(
                 reference: reference,
                 message: "The image changed. Refresh the list and try again."
@@ -505,23 +550,154 @@ final class AppModel {
             )
             return
         }
+        guard let imageDigest = plan.image.digest else {
+            imageDeletionFailure = ImageDeletionFailure(
+                reference: reference,
+                message: "The image has no stable digest. Refresh the image list or delete it from Terminal."
+            )
+            return
+        }
 
         imageDeletionFailure = nil
         deletingImageReference = reference
         defer { deletingImageReference = nil }
+
+        await refreshImages()
+        guard case .loaded = imageListState,
+              images.first(where: { $0.id == plan.image.id }) == plan.image else {
+            imageDeletionFailure = ImageDeletionFailure(
+                reference: reference,
+                message: "The image changed. Review the deletion again."
+            )
+            return
+        }
+
+        await refreshContainers()
+        guard case .loaded = containerListState else {
+            let message: String
+            if case .failed(let failure) = containerListState {
+                message = "Dependent containers could not be rechecked: \(failure)"
+            } else {
+                message = "Dependent containers could not be rechecked. Try again."
+            }
+            imageDeletionFailure = ImageDeletionFailure(reference: reference, message: message)
+            await refreshImages()
+            return
+        }
+
+        let currentDependencies = dependentContainers(for: plan.image)
+        guard deletionSnapshots(currentDependencies) == deletionSnapshots(plan.dependentContainers)
+        else {
+            imageDeletionFailure = ImageDeletionFailure(
+                reference: reference,
+                message: "Dependent containers changed. Review the deletion again."
+            )
+            await refreshImages()
+            return
+        }
+        let currentUnresolvedContainers = unresolvedContainers(excluding: currentDependencies)
+        guard deletionSnapshots(currentUnresolvedContainers)
+            == deletionSnapshots(plan.unresolvedContainers) else {
+            imageDeletionFailure = ImageDeletionFailure(
+                reference: reference,
+                message: "Containers with unresolved image identities changed. Review the deletion again."
+            )
+            await refreshImages()
+            return
+        }
+        guard currentUnresolvedContainers.isEmpty else {
+            imageDeletionFailure = ImageDeletionFailure(
+                reference: reference,
+                message: "Some containers do not report stable image digests. Review them manually before deleting this image."
+            )
+            await refreshImages()
+            return
+        }
+        guard currentDependencies.allSatisfy({ cleanupMutation(for: $0) != nil }) else {
+            imageDeletionFailure = ImageDeletionFailure(
+                reference: reference,
+                message: "A dependent container has an unsupported state. Delete it manually and try again."
+            )
+            await refreshImages()
+            return
+        }
+        guard currentDependencies.allSatisfy({ $0.imageDigest != nil }) else {
+            imageDeletionFailure = ImageDeletionFailure(
+                reference: reference,
+                message: "A dependent container has no stable image digest. Delete it manually and try again."
+            )
+            await refreshImages()
+            return
+        }
+        let cleanupOperations = currentDependencies.compactMap { container in
+            cleanupMutation(for: container).map { (container, $0) }
+        }
+        guard cleanupOperations.allSatisfy({ containerMutations[$0.0.id] == nil }) else {
+            imageDeletionFailure = ImageDeletionFailure(
+                reference: reference,
+                message: "Another operation is using a dependent container. Try again when it finishes."
+            )
+            await refreshImages()
+            return
+        }
+        for (container, mutation) in cleanupOperations {
+            containerMutations[container.id] = mutation
+        }
+        defer {
+            for (container, mutation) in cleanupOperations
+            where containerMutations[container.id] == mutation {
+                containerMutations[container.id] = nil
+            }
+        }
+
+        var deletedContainerCount = 0
         do {
-            try await imageService.deleteImage(reference: reference)
+            for (container, mutation) in cleanupOperations {
+                do {
+                    try await execute(mutation, on: container, reservationIsHeld: true)
+                    deletedContainerCount += 1
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch CLIError.cancelled {
+                    throw CLIError.cancelled
+                } catch {
+                    let prefix = deletedContainerCount == 0
+                        ? "No dependent containers were deleted."
+                        : "\(deletedContainerCount) dependent container(s) were deleted and cannot be restored."
+                    throw ImageCleanupError(
+                        message: "\(prefix) Failed to delete \(container.id): \(error.localizedDescription)"
+                    )
+                }
+            }
+            do {
+                try await imageService.deleteImage(
+                    reference: imageDigest
+                )
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch CLIError.cancelled {
+                throw CLIError.cancelled
+            } catch {
+                let prefix = deletedContainerCount == 0
+                    ? ""
+                    : "\(deletedContainerCount) dependent container(s) were deleted and cannot be restored. "
+                throw ImageCleanupError(
+                    message: "\(prefix)Failed to delete the image: \(error.localizedDescription)"
+                )
+            }
         } catch is CancellationError {
-            // Cancellation is intentional.
+            // Refresh below because completed mutations cannot be rolled back.
         } catch CLIError.cancelled {
-            // Process cancellation is normalized by ProcessContainerCLI.
+            // ProcessContainerCLI normalizes process cancellation.
         } catch {
-            failureLog.record(operation: "Delete image", error: error)
+            failureLog.record(operation: "Delete image and dependent containers", error: error)
             imageDeletionFailure = ImageDeletionFailure(
                 reference: reference,
                 message: DiagnosticSanitizer.sanitize(error.localizedDescription)
             )
         }
+
+        await refreshContainers()
         await refreshImages()
     }
 
@@ -586,21 +762,9 @@ final class AppModel {
             )
             return
         }
-        guard let containerMutator else {
-            mutationFailure = ContainerMutationFailure(
-                containerID: containerID,
-                mutation: mutation,
-                message: "The container executable is not ready."
-            )
-            return
-        }
-
         mutationFailure = nil
-        containerMutations[containerID] = mutation
-        defer { containerMutations[containerID] = nil }
-
         do {
-            try await containerMutator.mutate(mutation, containerID: containerID)
+            try await execute(mutation, on: container)
         } catch is CancellationError {
             // Cancellation is an intentional transition, not a user-facing failure.
         } catch CLIError.cancelled {
@@ -615,6 +779,80 @@ final class AppModel {
         }
 
         await refreshContainers()
+    }
+
+    private func execute(
+        _ mutation: ContainerMutation,
+        on container: ContainerSummary,
+        reservationIsHeld: Bool = false
+    ) async throws {
+        guard mutation.isAllowed(for: container.state) else {
+            throw ImageCleanupError(
+                message: "The state of \(container.id) changed. Refresh and try again."
+            )
+        }
+        guard let containerMutator else {
+            throw CLIError.launchFailed(message: "The container executable is not ready.")
+        }
+
+        if reservationIsHeld {
+            guard containerMutations[container.id] == mutation else {
+                throw ImageCleanupError(message: "The cleanup reservation for \(container.id) was lost.")
+            }
+            try await containerMutator.mutate(mutation, containerID: container.id)
+            return
+        }
+
+        guard containerMutations[container.id] == nil else {
+            throw ImageCleanupError(message: "Another operation is using \(container.id).")
+        }
+        containerMutations[container.id] = mutation
+        defer { containerMutations[container.id] = nil }
+        try await containerMutator.mutate(mutation, containerID: container.id)
+    }
+
+    private func dependentContainers(for image: ImageSummary) -> [ContainerSummary] {
+        return containers
+            .filter { container in
+                if let imageDigest = image.digest, let containerDigest = container.imageDigest {
+                    return imageDigest == containerDigest
+                }
+                return container.image == image.reference
+            }
+            .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
+    }
+
+    private func unresolvedContainers(
+        excluding dependencies: [ContainerSummary]
+    ) -> [ContainerSummary] {
+        let dependencyIDs = Set(dependencies.map(\.id))
+        return containers
+            .filter { $0.imageDigest == nil && !dependencyIDs.contains($0.id) }
+            .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
+    }
+
+    private func cleanupMutation(for container: ContainerSummary) -> ContainerMutation? {
+        switch container.state {
+        case .created, .stopped:
+            .delete(force: false)
+        case .running, .paused:
+            .delete(force: true)
+        case .unknown:
+            nil
+        }
+    }
+
+    private func deletionSnapshots(
+        _ containers: [ContainerSummary]
+    ) -> [ImageDeletionDependencySnapshot] {
+        containers.map {
+            ImageDeletionDependencySnapshot(
+                id: $0.id,
+                state: $0.state,
+                image: $0.image,
+                imageDigest: $0.imageDigest
+            )
+        }
     }
 
     func dismissMutationFailure() {
@@ -673,15 +911,30 @@ final class AppModel {
                 onEvent(event)
             }
 
+            try Task.checkCancellation()
             await refreshContainers()
             if imageService != nil {
                 await refreshImages()
             }
+            try Task.checkCancellation()
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch CLIError.cancelled {
+            throw CLIError.cancelled
         } catch {
             failureLog.record(operation: "Run container", error: error)
             throw error
         }
         selectNewContainer(configuration: configuration, standardOutput: standardOutput)
+    }
+
+    func reconcileAfterCancelledRun() async {
+        await Task { @MainActor in
+            await refreshContainers()
+            if imageService != nil {
+                await refreshImages()
+            }
+        }.value
     }
 
     private func matchesFilter(_ container: ContainerSummary) -> Bool {
@@ -733,4 +986,17 @@ final class AppModel {
             selectedContainerID = container.id
         }
     }
+}
+
+private struct ImageDeletionDependencySnapshot: Equatable {
+    let id: String
+    let state: ContainerState
+    let image: String?
+    let imageDigest: String?
+}
+
+private struct ImageCleanupError: LocalizedError {
+    let message: String
+
+    var errorDescription: String? { message }
 }

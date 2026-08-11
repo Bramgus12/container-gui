@@ -77,9 +77,9 @@ final class RunContainerModelTests: XCTestCase {
         form.image = "alpine:3.21"
         form.name = "web"
 
-        let succeeded = await form.run(using: appModel)
+        let outcome = await form.run(using: appModel)
 
-        XCTAssertTrue(succeeded)
+        XCTAssertEqual(outcome, .succeeded)
         XCTAssertNil(form.errorMessage)
         XCTAssertTrue(form.progress.contains("pulling layer"))
         XCTAssertTrue(form.progress.contains("Process exited with status 0."))
@@ -112,9 +112,9 @@ final class RunContainerModelTests: XCTestCase {
         form.name = "keep-this"
         form.environment = [EnvironmentVariableDraft(key: "MODE", value: "debug")]
 
-        let succeeded = await form.run(using: appModel)
+        let outcome = await form.run(using: appModel)
 
-        XCTAssertFalse(succeeded)
+        XCTAssertEqual(outcome, .failed)
         XCTAssertEqual(form.image, "alpine:3.21")
         XCTAssertEqual(form.name, "keep-this")
         XCTAssertEqual(form.environment.first?.value, "debug")
@@ -126,6 +126,31 @@ final class RunContainerModelTests: XCTestCase {
         XCTAssertFalse(form.errorMessage?.contains("error-secret") == true)
         let refreshCount = await lister.callCount
         XCTAssertEqual(refreshCount, 0)
+    }
+
+    func testCancellingRunTerminatesStreamAndRefreshesAuthoritativeState() async {
+        let runner = CancellableContainerRunner()
+        let lister = RunContainerLister(containers: [])
+        let appModel = AppModel(
+            setup: SetupModel(),
+            containerLister: lister,
+            containerRunner: runner
+        )
+        let form = RunContainerModel(image: "alpine:3.21")
+        let task = Task { await form.run(using: appModel) }
+
+        while !form.isRunning {
+            await Task.yield()
+        }
+        task.cancel()
+        let outcome = await task.value
+
+        XCTAssertEqual(outcome, .cancelled)
+        XCTAssertFalse(form.isRunning)
+        XCTAssertNil(form.errorMessage)
+        XCTAssertTrue(runner.wasTerminated)
+        let refreshCount = await lister.callCount
+        XCTAssertEqual(refreshCount, 1)
     }
 }
 
@@ -158,6 +183,27 @@ nonisolated private final class StubContainerRunner: ContainerRunning, @unchecke
                 continuation.finish(throwing: error)
             } else {
                 continuation.finish()
+            }
+        }
+    }
+}
+
+nonisolated private final class CancellableContainerRunner: ContainerRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var terminated = false
+
+    var wasTerminated: Bool {
+        lock.withLock { terminated }
+    }
+
+    func streamRun(
+        _ configuration: RunConfiguration
+    ) -> AsyncThrowingStream<ProcessEvent, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.onTermination = { [weak self] _ in
+                self?.lock.withLock {
+                    self?.terminated = true
+                }
             }
         }
     }

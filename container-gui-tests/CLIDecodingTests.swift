@@ -21,6 +21,7 @@ final class CLIDecodingTests: XCTestCase {
 
         XCTAssertEqual(details.id, "current-web")
         XCTAssertEqual(details.summary.architecture, "arm64")
+        XCTAssertEqual(details.summary.imageDigest, "sha256:2222")
         XCTAssertEqual(details.summary.address, "192.168.64.4")
         XCTAssertEqual(details.networks.first?.name, "default")
         XCTAssertEqual(details.ports.first?.hostPort, 8_080)

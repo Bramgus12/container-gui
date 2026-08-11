@@ -32,7 +32,7 @@ directly, never through a shell.
 | 📦 | **Containers** | Search, filter, run, start, stop, and safely delete containers. |
 | 🔎 | **Deep inspection** | Explore structured container configuration, networking, ports, mounts, image variants, and OCI metadata. |
 | 📜 | **Logs & stats** | Follow bounded logs and monitor CPU, memory, network, and block I/O. |
-| 🖼️ | **Images** | Search local images, inspect metadata, stream pull progress, run, and delete. |
+| 🖼️ | **Images** | Search local images, inspect metadata, stream pull progress, run, and delete with dependency-aware cleanup. |
 | ❤️ | **System health** | Check CLI and server versions, control the service, and review disk usage and recent logs. |
 | 🩺 | **Diagnostics** | Copy a sanitized support report with common secrets and credentials redacted. |
 
@@ -195,9 +195,8 @@ workflows. It does not yet manage:
 - prune operations; or
 - remote container hosts.
 
-Image deletion may fail while a container still depends on the image. New major
-Apple Container CLI versions remain unsupported until their JSON formats have
-fixture and smoke-test coverage.
+New major Apple Container CLI versions remain unsupported until their JSON
+formats have fixture and smoke-test coverage.
 
 ## Project resources
 

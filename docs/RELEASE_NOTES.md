@@ -1,3 +1,12 @@
+# Unreleased
+
+## Changes
+
+- Adds dependency-aware image deletion that confirms and removes dependent
+  containers before deleting an image.
+- Adds cancellation for active container runs while preserving the draft and
+  refreshing authoritative container and image state.
+
 # Container GUI 1.0.2
 
 Container GUI 1.0.2 improves the container log viewer.
@@ -60,6 +69,5 @@ environment.
 
 Version 1 does not manage networks, volumes, builds, registry authentication,
 interactive terminals, import/export, DNS, kernel settings, prune operations,
-or remote hosts. Image deletion can fail while a container depends on the
-image. Compatibility with a new major Apple Container CLI version is disabled
-until its JSON formats have been tested.
+or remote hosts. Compatibility with a new major Apple Container CLI version is
+disabled until its JSON formats have been tested.

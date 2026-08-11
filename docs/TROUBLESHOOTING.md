@@ -31,13 +31,17 @@ private-key, and URL-userinfo patterns.
 
 ## Pulls or commands hang
 
-Cancel the operation and retry after checking network connectivity. Container
-GUI terminates cancelled child processes and caps retained command and log
+Cancel the operation and retry after checking network connectivity. Image pulls
+and container runs expose cancellation while active. Container GUI terminates
+cancelled child processes, refreshes authoritative state because cancellation
+cannot undo completed container creation, and caps retained command and log
 output. If the service remains unhealthy, restart it outside any active
 container workload.
 
 ## A container or image cannot be deleted
 
 Refresh first. A normal container delete requires it to be stopped; force
-delete is available with a separate confirmation. An image cannot be deleted
-while containers still depend on it. Delete those containers first.
+delete is available with a separate confirmation. When containers depend on an
+image, image deletion lists them and can delete them before deleting the image.
+Running containers are force deleted. Cleanup is not transactional: if one
+deletion fails, earlier deletions remain applied and the image is preserved.
