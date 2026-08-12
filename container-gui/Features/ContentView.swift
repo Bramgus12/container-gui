@@ -4,23 +4,27 @@ import UniformTypeIdentifiers
 @MainActor
 struct ContentView: View {
     @State private var model: AppModel
+    @State private var updates: UpdateModel
 
     init() {
         _model = State(initialValue: AppModel())
+        _updates = State(initialValue: AppDependencies.makeUpdateModel())
     }
 
-    init(model: AppModel) {
+    init(model: AppModel, updates: UpdateModel? = nil) {
         _model = State(initialValue: model)
+        _updates = State(initialValue: updates ?? AppDependencies.makeUpdateModel())
     }
 
     init(model: SetupModel) {
         _model = State(initialValue: AppModel(setup: model))
+        _updates = State(initialValue: AppDependencies.makeUpdateModel())
     }
 
     var body: some View {
         Group {
             if case .ready(let context) = model.setup.readiness {
-                MainNavigationView(model: model, context: context)
+                MainNavigationView(model: model, updates: updates, context: context)
             } else {
                 SetupView(model: model.setup)
             }
@@ -28,6 +32,19 @@ struct ContentView: View {
         .frame(minWidth: 720, minHeight: 480)
         .task {
             await model.setup.checkIfNeeded()
+        }
+        .task {
+            await updates.checkIfNeeded()
+        }
+        .sheet(isPresented: Binding(
+            get: { updates.pendingManualResult != nil },
+            set: { isPresented in
+                if !isPresented { updates.dismissManualResult() }
+            }
+        )) {
+            if let result = updates.pendingManualResult {
+                UpdateResultSheet(model: updates, result: result)
+            }
         }
     }
 }
@@ -331,6 +348,7 @@ private struct SetupView: View {
 
 private struct MainNavigationView: View {
     @Bindable var model: AppModel
+    let updates: UpdateModel
     let context: PreflightContext
 
     var body: some View {
@@ -354,7 +372,10 @@ private struct MainNavigationView: View {
                     ProgressView("Loading networks…")
                 }
             case .system:
-                SystemView(model: model.makeSystemModel(context: context))
+                SystemView(
+                    model: model.makeSystemModel(context: context),
+                    updates: updates
+                )
             case nil:
                 ContentUnavailableView(
                     "Select a Section",

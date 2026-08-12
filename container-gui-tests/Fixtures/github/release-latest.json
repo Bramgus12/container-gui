@@ -1,0 +1,47 @@
+{
+  "url": "https://api.github.com/repos/Bramgus12/container-gui/releases/369049036",
+  "html_url": "https://github.com/Bramgus12/container-gui/releases/tag/v1.1.0",
+  "id": 369049036,
+  "node_id": "RE_kwDOTohcDM4V_z3M",
+  "tag_name": "v1.1.0",
+  "target_commitish": "main",
+  "name": "Container GUI 1.1.0",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2026-08-12T07:04:26Z",
+  "published_at": "2026-08-12T07:04:30Z",
+  "tarball_url": "https://api.github.com/repos/Bramgus12/container-gui/tarball/v1.1.0",
+  "zipball_url": "https://api.github.com/repos/Bramgus12/container-gui/zipball/v1.1.0",
+  "body": "Container GUI 1.1.0 adds network management and safer container and image workflows.\n\n## Changes\n\n- Adds first-class network listing, search, structured inspection, creation, deletion, and confirmed pruning.\n- Supports both Apple Container 0.12 and 1.x network schemas and version-specific creation options.\n- Adds multiple network attachments to container runs, with optional MAC address and MTU values.\n- Adds structured container and image inspection views for configuration, networking, ports, mounts, image variants, OCI metadata, and masked sensitive values.\n- Adds dependency-aware image cleanup that confirms and removes dependent containers before deleting an image.\n- Adds cancellation for active container runs while preserving drafts and refreshing authoritative state.\n- Shares log viewing behavior and improves CLI command handling.\n- Fixes network label, plugin-option, and legacy variant validation on current Swift toolchains.\n\n## Compatibility\n\n- macOS 26 or later on Apple-silicon Macs.\n- Apple Container CLI `0.12.0` or later and earlier than `2.0.0`.\n\n## Download verification\n\nSHA-256: `d30d30d33ee7cfc7ea6a1cc684429cfbc8ee2988e978f051c824b1b6b96ba4ac`\n\nThe distributed DMG is ad-hoc signed and is not notarized. Follow the README Privacy & Security installation instructions when macOS blocks first launch.",
+  "author": {
+    "login": "Bramgus12",
+    "id": 42220620,
+    "node_id": "MDQ6VXNlcjQyMjIwNjIw",
+    "type": "User",
+    "site_admin": false
+  },
+  "assets": [
+    {
+      "url": "https://api.github.com/repos/Bramgus12/container-gui/releases/assets/511213290",
+      "id": 511213290,
+      "node_id": "RA_kwDOTohcDM4eeH7q",
+      "name": "Container-GUI.dmg",
+      "label": "Container-GUI.dmg",
+      "content_type": "application/x-apple-diskimage",
+      "state": "uploaded",
+      "size": 4665344,
+      "digest": "sha256:d30d30d33ee7cfc7ea6a1cc684429cfbc8ee2988e978f051c824b1b6b96ba4ac",
+      "download_count": 2,
+      "created_at": "2026-08-12T07:04:29Z",
+      "updated_at": "2026-08-12T07:04:29Z",
+      "browser_download_url": "https://github.com/Bramgus12/container-gui/releases/download/v1.1.0/Container-GUI.dmg",
+      "uploader": {
+        "login": "Bramgus12",
+        "id": 42220620,
+        "node_id": "MDQ6VXNlcjQyMjIwNjIw",
+        "type": "User",
+        "site_admin": false
+      }
+    }
+  ]
+}

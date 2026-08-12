@@ -58,8 +58,34 @@ README warning and installation instructions are present. Install the app from
 the DMG on a second clean Mac, approve it through Privacy & Security, complete
 onboarding, and repeat the lifecycle smoke test through the GUI.
 
+After the release and its `Container-GUI.dmg` asset are published, verify the
+one-command installer against it on a clean Apple-silicon Mac:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+```
+
+- Confirm the printed SHA-256 matches the checksum in the release notes and that
+  the installer reports the expected release tag.
+- Confirm the app opens with no Gatekeeper dialog and that
+  `xattr -r -l "/Applications/Container GUI.app"` reports no
+  `com.apple.quarantine` attribute.
+- Re-run the command over the existing install and confirm it upgrades in place.
+- Confirm `--version <previous tag>`, `--user`, and `--uninstall` each behave,
+  and that `--uninstall` leaves settings at
+  `~/Library/Preferences/com.gussekloo.container-gui.plist`.
+- Confirm a failed run leaves no mounted disk image behind (`hdiutil info`).
+
+Then confirm the in-app update check sees the new release. Launch the previous
+version and open **System → Updates**: it must report the new version, its
+notes, and a working **Copy Install Command**. Confirm the new version reports
+up to date, that **Skip This Version** hides only the automatic result, and that
+`container-gui-tests/Fixtures/github/release-latest.json` still matches the
+shape GitHub returns for the release.
+
 ## Release notes
 
+- Lead with the one-command install line so it appears in the release body.
 - State the supported macOS and Apple Container CLI range.
 - Link the command reference for the exact current tested CLI tag, not `main`.
 - List known limitations from the README.

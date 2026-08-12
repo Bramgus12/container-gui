@@ -6,10 +6,12 @@ nonisolated struct SemanticVersion: Comparable, CustomStringConvertible, Sendabl
     let patch: Int
 
     init(_ value: String) throws {
-        let core = value
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .split(separator: "-", maxSplits: 1)[0]
-            .split(separator: "+", maxSplits: 1)[0]
+        // `split` drops empty subsequences, so values such as "", "-", and "+"
+        // yield no elements at all. Take the first element defensively rather
+        // than subscripting, which traps on those inputs.
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let core = (trimmed.split(separator: "-", maxSplits: 1).first ?? "")
+            .split(separator: "+", maxSplits: 1).first ?? ""
         let components = core.split(separator: ".", omittingEmptySubsequences: false)
 
         guard (2...3).contains(components.count),

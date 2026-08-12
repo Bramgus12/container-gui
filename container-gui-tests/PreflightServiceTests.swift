@@ -341,6 +341,14 @@ final class PreflightServiceTests: XCTestCase {
         XCTAssertThrowsError(try SemanticVersion("not-a-version"))
     }
 
+    func testSemanticVersionRejectsDegenerateValuesWithoutTrapping() {
+        // A CLI reporting an empty or punctuation-only version must surface as
+        // an unsupported version, never as a crash.
+        for value in ["", " ", "-", "+", "-+", "+-", "\n"] {
+            XCTAssertThrowsError(try SemanticVersion(value), "\(value.debugDescription) must throw")
+        }
+    }
+
     private func makeService(
         architecture: String = "arm64",
         osMajorVersion: Int = 26,

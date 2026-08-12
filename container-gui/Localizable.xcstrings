@@ -4,129 +4,6 @@
     "" : {
 
     },
-    "Add Network" : {
-      "comment" : "Button that adds another explicit network attachment to the Run Container form."
-    },
-    "Addressing" : {
-      "comment" : "Network inspector section for configured and effective subnets and gateways."
-    },
-    "All currently unused user-created networks may be permanently deleted. Built-in and default networks are preserved." : {
-      "comment" : "Warning shown before pruning unused networks."
-    },
-    "Built-in" : {
-      "comment" : "Badge identifying a network managed by Apple Container that cannot be deleted."
-    },
-    "Configured IPv4 Subnet" : {
-      "comment" : "Network inspector label for the requested IPv4 CIDR."
-    },
-    "Configured IPv6 Subnet" : {
-      "comment" : "Network inspector label for the requested IPv6 CIDR."
-    },
-    "Create Network…" : {
-      "comment" : "Toolbar button that opens the network creation form."
-    },
-    "Creating network…" : {
-      "comment" : "Progress message while Apple Container creates a network."
-    },
-    "Delete Network?" : {
-      "comment" : "Destructive confirmation title for deleting one selected network."
-    },
-    "Delete Network…" : {
-      "comment" : "Toolbar button that requests deletion of the selected network."
-    },
-    "Destructive Actions" : {
-      "comment" : "Toolbar menu containing destructive network actions."
-    },
-    "Effective IPv4 Subnet" : {
-      "comment" : "Network inspector label for the active IPv4 CIDR."
-    },
-    "Effective IPv6 Subnet" : {
-      "comment" : "Network inspector label for the active IPv6 CIDR."
-    },
-    "Internal / host-only" : {
-      "comment" : "Network creation mode that does not provide external NAT access."
-    },
-    "Inspecting network…" : {
-      "comment" : "Progress message while loading the selected network inspection."
-    },
-    "IPv4 Gateway" : {
-      "comment" : "Network inspector label for the active IPv4 gateway."
-    },
-    "IPv4 subnet" : {
-      "comment" : "Optional IPv4 CIDR field in the network creation form."
-    },
-    "IPv6 subnet" : {
-      "comment" : "Optional IPv6 CIDR field in the network creation form."
-    },
-    "Loading networks…" : {
-      "comment" : "Progress message while loading the authoritative network inventory."
-    },
-    "MAC address (optional)" : {
-      "comment" : "Optional MAC address field for an explicit container network attachment."
-    },
-    "MTU (optional)" : {
-      "comment" : "Optional maximum transmission unit field for a container network attachment."
-    },
-    "Network access" : {
-      "comment" : "Picker label for NAT versus internal network creation mode."
-    },
-    "Network Couldn’t Be Inspected" : {
-      "comment" : "Title shown when loading a selected network inspection fails."
-    },
-    "Network Prune Complete" : {
-      "comment" : "Title reporting the result of confirmed unused-network pruning."
-    },
-    "Networks" : {
-      "comment" : "Navigation destination and section title for Apple Container networks."
-    },
-    "Networks Couldn’t Be Loaded" : {
-      "comment" : "Title shown when the initial network inventory load fails."
-    },
-    "No labels" : {
-      "comment" : "Empty state in the network inspector when a network has no labels."
-    },
-    "No Networks" : {
-      "comment" : "Empty-state title when Apple Container reports no networks."
-    },
-    "No plugin options" : {
-      "comment" : "Empty state in the network inspector when a network has no plugin options."
-    },
-    "No unused networks were found." : {
-      "comment" : "Success message when network pruning deleted nothing."
-    },
-    "Plugin Options" : {
-      "comment" : "Network creation and inspector section for repeatable Apple Container 1.x plugin options."
-    },
-    "Plugin Variant" : {
-      "comment" : "Optional Apple Container 0.12 network plugin variant field."
-    },
-    "Prune Unused Networks?" : {
-      "comment" : "Destructive confirmation title for pruning every unused user-created network."
-    },
-    "Prune Unused Networks…" : {
-      "comment" : "Destructive menu item that requests unused-network pruning."
-    },
-    "Search networks" : {
-      "comment" : "Search field prompt for filtering the network inventory."
-    },
-    "Select a Network" : {
-      "comment" : "Network inspector empty state before a network is selected."
-    },
-    "Select a network" : {
-      "comment" : "Placeholder choice in an explicit Run Container network attachment."
-    },
-    "The network inventory is unavailable. The CLI will use its default network." : {
-      "comment" : "Run Container message when explicit network choices cannot be loaded."
-    },
-    "This network is no longer available. Select another network." : {
-      "comment" : "Inline Run Container validation when a previously selected network was deleted."
-    },
-    "Waiting for the selected network’s inspection." : {
-      "comment" : "Network inspector message while a stale response is replaced for a new selection."
-    },
-    "“%@” will be permanently deleted. If a container is attached, the CLI may reject the deletion." : {
-      "comment" : "Network deletion warning; the placeholder is the exact selected network name."
-    },
     "—" : {
       "localizations" : {
         "nl" : {
@@ -136,6 +13,9 @@
           }
         }
       }
+    },
+    "“%@” will be permanently deleted. If a container is attached, the CLI may reject the deletion." : {
+      "comment" : "Network deletion warning; the placeholder is the exact selected network name."
     },
     "%@ failed for %@" : {
       "localizations" : {
@@ -167,6 +47,10 @@
         }
       }
     },
+    "Add" : {
+      "comment" : "A button that adds a new key-value pair to a network request.",
+      "isCommentAutoGenerated" : true
+    },
     "Add Argument" : {
       "localizations" : {
         "nl" : {
@@ -176,6 +60,9 @@
           }
         }
       }
+    },
+    "Add Network" : {
+      "comment" : "Button that adds another explicit network attachment to the Run Container form."
     },
     "Add Port" : {
       "localizations" : {
@@ -211,6 +98,9 @@
         }
       }
     },
+    "Addressing" : {
+      "comment" : "Network inspector section for configured and effective subnets and gateways."
+    },
     "All" : {
       "localizations" : {
         "nl" : {
@@ -220,6 +110,9 @@
           }
         }
       }
+    },
+    "All currently unused user-created networks may be permanently deleted. Built-in and default networks are preserved." : {
+      "comment" : "Warning shown before pruning unused networks."
     },
     "Alternate locations" : {
       "comment" : "A heading for the alternate locations of an image.",
@@ -273,6 +166,9 @@
       "comment" : "A button that shows a list of build history entries.",
       "isCommentAutoGenerated" : true
     },
+    "Built-in" : {
+      "comment" : "Badge identifying a network managed by Apple Container that cannot be deleted."
+    },
     "Cancel" : {
       "localizations" : {
         "nl" : {
@@ -299,6 +195,18 @@
     "Cancelling…" : {
 
     },
+    "Check automatically once a day" : {
+      "comment" : "A toggle that allows users to enable or disable automatic update checking.",
+      "isCommentAutoGenerated" : true
+    },
+    "Check for Updates…" : {
+      "comment" : "A button that checks for updates.",
+      "isCommentAutoGenerated" : true
+    },
+    "Check Now" : {
+      "comment" : "A button that triggers a check for updates.",
+      "isCommentAutoGenerated" : true
+    },
     "Checking Apple Container…" : {
       "localizations" : {
         "nl" : {
@@ -308,6 +216,14 @@
           }
         }
       }
+    },
+    "Checking for updates" : {
+      "comment" : "The text shown while the system is checking for updates.",
+      "isCommentAutoGenerated" : true
+    },
+    "Checking…" : {
+      "comment" : "A label displayed when the system is checking for updates.",
+      "isCommentAutoGenerated" : true
     },
     "Choose a compatible executable before continuing." : {
       "localizations" : {
@@ -369,6 +285,10 @@
         }
       }
     },
+    "Command copied. Paste it into Terminal to upgrade in place." : {
+      "comment" : "A label that appears after the install command is copied to the clipboard, providing instructions on how to use it to upgrade.",
+      "isCommentAutoGenerated" : true
+    },
     "Command Preview" : {
       "localizations" : {
         "nl" : {
@@ -386,6 +306,12 @@
     "Configured attachments" : {
       "comment" : "A heading for the list of network attachments that are configured.",
       "isCommentAutoGenerated" : true
+    },
+    "Configured IPv4 Subnet" : {
+      "comment" : "Network inspector label for the requested IPv4 CIDR."
+    },
+    "Configured IPv6 Subnet" : {
+      "comment" : "Network inspector label for the requested IPv6 CIDR."
     },
     "Container" : {
       "localizations" : {
@@ -479,6 +405,10 @@
       "comment" : "A description of the action of copying inspection data.",
       "isCommentAutoGenerated" : true
     },
+    "Copies full network inspection data. Labels and plugin options may contain sensitive values." : {
+      "comment" : "A tooltip for the \"Copy Raw JSON\" button.",
+      "isCommentAutoGenerated" : true
+    },
     "Copy" : {
       "localizations" : {
         "nl" : {
@@ -499,6 +429,10 @@
         }
       }
     },
+    "Copy Install Command" : {
+      "comment" : "A button that copies the command to install the update to the clipboard.",
+      "isCommentAutoGenerated" : true
+    },
     "Copy Raw JSON" : {
       "comment" : "A button that copies inspection data to the clipboard.",
       "isCommentAutoGenerated" : true
@@ -511,6 +445,17 @@
       "comment" : "Label for the CPU resources setting in the container configuration view.",
       "isCommentAutoGenerated" : true
     },
+    "Create" : {
+      "comment" : "The label of a button that creates a network.",
+      "isCommentAutoGenerated" : true
+    },
+    "Create a network to attach containers to it." : {
+      "comment" : "A description of the action to take to create a network.",
+      "isCommentAutoGenerated" : true
+    },
+    "Create Network…" : {
+      "comment" : "Toolbar button that opens the network creation form."
+    },
     "Created" : {
       "localizations" : {
         "nl" : {
@@ -521,8 +466,10 @@
         }
       }
     },
+    "Creating network…" : {
+      "comment" : "Progress message while Apple Container creates a network."
+    },
     "Delete" : {
-      "extractionState" : "stale",
       "localizations" : {
         "nl" : {
           "stringUnit" : {
@@ -577,6 +524,12 @@
         }
       }
     },
+    "Delete Network?" : {
+      "comment" : "Destructive confirmation title for deleting one selected network."
+    },
+    "Delete Network…" : {
+      "comment" : "Toolbar button that requests deletion of the selected network."
+    },
     "Delete…" : {
       "localizations" : {
         "nl" : {
@@ -586,6 +539,21 @@
           }
         }
       }
+    },
+    "Deleted %lld network(s): %@." : {
+      "comment" : "A message that announces the number of deleted networks and lists their names. The first argument is the count of deleted networks. The second argument is a list of the names of the deleted networks.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Deleted %1$lld network(s): %2$@."
+          }
+        }
+      }
+    },
+    "Destructive Actions" : {
+      "comment" : "Toolbar menu containing destructive network actions."
     },
     "Detail" : {
       "localizations" : {
@@ -711,6 +679,12 @@
     "Dropped capabilities" : {
       "comment" : "A heading for the list of dropped capabilities.",
       "isCommentAutoGenerated" : true
+    },
+    "Effective IPv4 Subnet" : {
+      "comment" : "Network inspector label for the active IPv4 CIDR."
+    },
+    "Effective IPv6 Subnet" : {
+      "comment" : "Network inspector label for the active IPv6 CIDR."
     },
     "Enabled" : {
       "comment" : "The text and icon for a \"enabled\" state.",
@@ -928,7 +902,6 @@
       }
     },
     "Inspect" : {
-      "extractionState" : "stale",
       "localizations" : {
         "nl" : {
           "stringUnit" : {
@@ -957,6 +930,9 @@
           }
         }
       }
+    },
+    "Inspecting network…" : {
+      "comment" : "Progress message while loading the selected network inspection."
     },
     "Inspection Failed" : {
       "localizations" : {
@@ -988,12 +964,36 @@
         }
       }
     },
+    "Installed version" : {
+      "comment" : "The label for the installed version of the app.",
+      "isCommentAutoGenerated" : true
+    },
+    "Internal / host-only" : {
+      "comment" : "Network creation mode that does not provide external NAT access."
+    },
     "IPv4" : {
       "comment" : "IPv4 address label in container inspection details.",
       "isCommentAutoGenerated" : true
     },
+    "IPv4 Gateway" : {
+      "comment" : "Network inspector label for the active IPv4 gateway."
+    },
+    "IPv4 subnet" : {
+      "comment" : "Optional IPv4 CIDR field in the network creation form."
+    },
+    "IPv4 Subnet" : {
+      "comment" : "A column in the networks list showing the IPv4 subnet of a network.",
+      "isCommentAutoGenerated" : true
+    },
     "IPv6" : {
       "comment" : "Label for the IPv6 address of a container network.",
+      "isCommentAutoGenerated" : true
+    },
+    "IPv6 subnet" : {
+      "comment" : "Optional IPv6 CIDR field in the network creation form."
+    },
+    "IPv6 Subnet" : {
+      "comment" : "A column in the networks list for the IPv6 subnet of a network.",
       "isCommentAutoGenerated" : true
     },
     "Jump to Latest" : {
@@ -1029,6 +1029,14 @@
           }
         }
       }
+    },
+    "Last checked" : {
+      "comment" : "A label for the last time the user checked for updates.",
+      "isCommentAutoGenerated" : true
+    },
+    "Latest version" : {
+      "comment" : "A label for the latest version of the app.",
+      "isCommentAutoGenerated" : true
     },
     "Launch Defaults" : {
       "comment" : "A section of the image inspection that displays the launch defaults for the image.",
@@ -1086,6 +1094,9 @@
         }
       }
     },
+    "Loading networks…" : {
+      "comment" : "Progress message while loading the authoritative network inventory."
+    },
     "Loading recent logs…" : {
       "localizations" : {
         "nl" : {
@@ -1119,6 +1130,9 @@
     "MAC address" : {
       "comment" : "Label for the MAC address of a container network interface.",
       "isCommentAutoGenerated" : true
+    },
+    "MAC address (optional)" : {
+      "comment" : "Optional MAC address field for an explicit container network attachment."
     },
     "Masked paths" : {
       "comment" : "A heading for the list of masked paths.",
@@ -1154,6 +1168,10 @@
       "comment" : "Label for a boolean value indicating whether the container is using the minimal init.",
       "isCommentAutoGenerated" : true
     },
+    "Mode" : {
+      "comment" : "A column in the table that displays the mode of a network",
+      "isCommentAutoGenerated" : true
+    },
     "More Actions" : {
       "localizations" : {
         "nl" : {
@@ -1172,17 +1190,47 @@
       "comment" : "Label for the MTU (Maximum Transmission Unit) value in the container details view.",
       "isCommentAutoGenerated" : true
     },
+    "MTU (optional)" : {
+      "comment" : "Optional maximum transmission unit field for a container network attachment."
+    },
+    "Name" : {
+      "comment" : "A column header for the name of a network",
+      "isCommentAutoGenerated" : true
+    },
     "Nameservers" : {
       "comment" : "Label for the DNS nameservers value in the container inspection section.",
+      "isCommentAutoGenerated" : true
+    },
+    "NAT" : {
+      "comment" : "A label for a network mode.",
       "isCommentAutoGenerated" : true
     },
     "Nested virtualization" : {
       "comment" : "Label for a boolean value indicating whether nested virtualization is enabled.",
       "isCommentAutoGenerated" : true
     },
+    "Network" : {
+      "comment" : "A label for selecting a network.",
+      "isCommentAutoGenerated" : true
+    },
+    "Network access" : {
+      "comment" : "Picker label for NAT versus internal network creation mode."
+    },
+    "Network Couldn’t Be Inspected" : {
+      "comment" : "Title shown when loading a selected network inspection fails."
+    },
+    "Network Prune Complete" : {
+      "comment" : "Title reporting the result of confirmed unused-network pruning."
+    },
     "Networking" : {
       "comment" : "Section title for networking information in the container inspection view.",
       "isCommentAutoGenerated" : true
+    },
+    "Networks" : {
+      "comment" : "Navigation destination and section title for Apple Container networks."
+    },
+    "Networks Couldn’t Be Loaded" : {
+      "comment" : "Title shown when the initial network inventory load fails."
     },
     "No %@ Containers" : {
       "localizations" : {
@@ -1238,6 +1286,9 @@
         }
       }
     },
+    "No labels" : {
+      "comment" : "Empty state in the network inspector when a network has no labels."
+    },
     "No mounts" : {
       "localizations" : {
         "nl" : {
@@ -1258,9 +1309,18 @@
         }
       }
     },
+    "No Networks" : {
+      "comment" : "Empty-state title when Apple Container reports no networks."
+    },
+    "No networks are available. Without an explicit attachment, the CLI uses its default network." : {
+
+    },
     "No platform variants were reported" : {
       "comment" : "A description of the user interface when a model does not have any platform variants.",
       "isCommentAutoGenerated" : true
+    },
+    "No plugin options" : {
+      "comment" : "Empty state in the network inspector when a network has no plugin options."
     },
     "No published ports" : {
       "localizations" : {
@@ -1286,8 +1346,19 @@
         }
       }
     },
+    "No unused networks were found." : {
+      "comment" : "Success message when network pruning deleted nothing."
+    },
     "None" : {
       "comment" : "A token is a small piece of information that is displayed in a list.",
+      "isCommentAutoGenerated" : true
+    },
+    "Not checked yet" : {
+      "comment" : "A description of the update status when the update check has not yet been performed.",
+      "isCommentAutoGenerated" : true
+    },
+    "OK" : {
+      "comment" : "The label of a button that dismisses an alert.",
       "isCommentAutoGenerated" : true
     },
     "Open Apple Container installation instructions" : {
@@ -1346,6 +1417,16 @@
         }
       }
     },
+    "Plugin" : {
+      "comment" : "A column in the networks table that displays the network's plugin",
+      "isCommentAutoGenerated" : true
+    },
+    "Plugin Options" : {
+      "comment" : "Network creation and inspector section for repeatable Apple Container 1.x plugin options."
+    },
+    "Plugin Variant" : {
+      "comment" : "Optional Apple Container 0.12 network plugin variant field."
+    },
     "Process" : {
       "comment" : "Section title for the process information in the container inspection view.",
       "isCommentAutoGenerated" : true
@@ -1369,6 +1450,16 @@
           }
         }
       }
+    },
+    "Prune" : {
+      "comment" : "A button that deletes unused networks.",
+      "isCommentAutoGenerated" : true
+    },
+    "Prune Unused Networks?" : {
+      "comment" : "Destructive confirmation title for pruning every unused user-created network."
+    },
+    "Prune Unused Networks…" : {
+      "comment" : "Destructive menu item that requests unused-network pruning."
     },
     "Published Endpoints" : {
       "comment" : "Section title for published ports and sockets.",
@@ -1511,6 +1602,10 @@
           }
         }
       }
+    },
+    "Release Notes…" : {
+      "comment" : "A button that opens a web page with release notes.",
+      "isCommentAutoGenerated" : true
     },
     "Remove" : {
       "localizations" : {
@@ -1700,9 +1795,18 @@
         }
       }
     },
+    "Search networks" : {
+      "comment" : "Search field prompt for filtering the network inventory."
+    },
     "Security" : {
       "comment" : "Section title for container security information.",
       "isCommentAutoGenerated" : true
+    },
+    "Select a network" : {
+      "comment" : "Placeholder choice in an explicit Run Container network attachment."
+    },
+    "Select a Network" : {
+      "comment" : "Network inspector empty state before a network is selected."
     },
     "Select a Section" : {
       "localizations" : {
@@ -1713,6 +1817,10 @@
           }
         }
       }
+    },
+    "Selection Changed" : {
+      "comment" : "A message displayed when the user changes the selected network.",
+      "isCommentAutoGenerated" : true
     },
     "Server version" : {
       "localizations" : {
@@ -1779,6 +1887,10 @@
       "comment" : "Label for the shared memory size of a container.",
       "isCommentAutoGenerated" : true
     },
+    "Show Again" : {
+      "comment" : "A button that lets the user see the update again after skipping it.",
+      "isCommentAutoGenerated" : true
+    },
     "Size" : {
       "localizations" : {
         "nl" : {
@@ -1788,6 +1900,10 @@
           }
         }
       }
+    },
+    "Skip This Version" : {
+      "comment" : "A button that skips the current version of a system update.",
+      "isCommentAutoGenerated" : true
     },
     "Some containers do not report image digests, so their dependency cannot be verified. Review them manually before deleting this image." : {
       "comment" : "A warning that some containers cannot be deleted because their image digests are not available.",
@@ -1878,6 +1994,10 @@
           }
         }
       }
+    },
+    "Status" : {
+      "comment" : "A label displayed under the update status.",
+      "isCommentAutoGenerated" : true
     },
     "Stop" : {
       "localizations" : {
@@ -2009,6 +2129,9 @@
         }
       }
     },
+    "The network inventory is unavailable. The CLI will use its default network." : {
+      "comment" : "Run Container message when explicit network choices cannot be loaded."
+    },
     "The saved executable is no longer available at %@." : {
       "localizations" : {
         "nl" : {
@@ -2104,6 +2227,18 @@
         }
       }
     },
+    "Up to date" : {
+      "comment" : "A label indicating that the app is up to date.",
+      "isCommentAutoGenerated" : true
+    },
+    "Updates" : {
+      "comment" : "The title of the section that displays update information.",
+      "isCommentAutoGenerated" : true
+    },
+    "Upgrade by running the install command in Terminal." : {
+      "comment" : "A description of how to upgrade to a new version of the app.",
+      "isCommentAutoGenerated" : true
+    },
     "User" : {
       "comment" : "Label for the user field in the container inspection details.",
       "isCommentAutoGenerated" : true
@@ -2136,6 +2271,14 @@
         }
       }
     },
+    "Version %@ is available" : {
+      "comment" : "A label that indicates that a new version of the app is available. The argument is the version number.",
+      "isCommentAutoGenerated" : true
+    },
+    "Version %@ was skipped." : {
+      "comment" : "A message indicating that a specific version of an app was skipped during the update process. The argument is the version number of the skipped release.",
+      "isCommentAutoGenerated" : true
+    },
     "View Containers" : {
       "comment" : "A button that shows a list of containers when pressed.",
       "isCommentAutoGenerated" : true
@@ -2149,6 +2292,9 @@
           }
         }
       }
+    },
+    "Waiting for the selected network’s inspection." : {
+      "comment" : "Network inspector message while a stale response is replaced for a new selection."
     },
     "Working directory" : {
       "comment" : "Label for the working directory of the container process.",

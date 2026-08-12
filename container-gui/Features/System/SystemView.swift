@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SystemView: View {
     @Bindable var model: SystemModel
+    let updates: UpdateModel
     @State private var confirmsStop = false
     @State private var showsDiagnostics = false
 
@@ -12,6 +13,7 @@ struct SystemView: View {
                 SystemHealthSection(model: model, confirmsStop: $confirmsStop)
                 SystemDiskUsageSection(model: model)
                 SystemLogsSection(model: model)
+                UpdateSection(model: updates)
             }
             .padding(24)
             .frame(maxWidth: 1_000, alignment: .leading)

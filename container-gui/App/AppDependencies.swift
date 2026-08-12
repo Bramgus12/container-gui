@@ -22,6 +22,24 @@ enum AppDependencies {
         return AppModel()
     }
 
+    static func makeUpdateModel(
+        processInfo: ProcessInfo = .processInfo
+    ) -> UpdateModel {
+        #if DEBUG || UI_TESTING
+        let isUITest = UITestPreflightScenario(arguments: processInfo.arguments) != nil
+            || isHostedXCTest(environment: processInfo.environment)
+        if isUITest {
+            // Tests never reach the network.
+            return UpdateModel(
+                service: UITestUpdateService(),
+                preferences: InMemoryUpdatePreferences(),
+                installCommandCopier: NoopDiagnosticsCopier()
+            )
+        }
+        #endif
+        return UpdateModel(service: GitHubUpdateService())
+    }
+
     #if DEBUG || UI_TESTING
     private static func isHostedXCTest(environment: [String: String]) -> Bool {
         environment["XCTestConfigurationFilePath"] != nil
@@ -31,6 +49,39 @@ enum AppDependencies {
 }
 
 #if DEBUG || UI_TESTING
+/// Reports the running build as current so UI tests never show an update
+/// banner and never make a network request.
+nonisolated private struct UITestUpdateService: UpdateChecking {
+    func latestRelease() throws -> AppRelease {
+        AppRelease(
+            version: AppVersion.semantic() ?? SemanticVersion(major: 0, minor: 0, patch: 0),
+            tag: "v\(AppVersion.current)",
+            name: "Container GUI \(AppVersion.current)",
+            notes: "",
+            pageURL: AppDistribution.releasesURL,
+            publishedAt: nil
+        )
+    }
+}
+
+private actor InMemoryUpdatePreferences: UpdatePreferencesStoring {
+    private var automatic = true
+    private var lastCheck: Date?
+    private var skipped: SemanticVersion?
+
+    func automaticChecksEnabled() -> Bool { automatic }
+    func setAutomaticChecksEnabled(_ enabled: Bool) { automatic = enabled }
+    func lastCheckDate() -> Date? { lastCheck }
+    func setLastCheckDate(_ date: Date) { lastCheck = date }
+    func skippedVersion() -> SemanticVersion? { skipped }
+    func setSkippedVersion(_ version: SemanticVersion?) { skipped = version }
+}
+
+@MainActor
+private struct NoopDiagnosticsCopier: DiagnosticsCopying {
+    func copy(_ value: String) {}
+}
+
 nonisolated private enum UITestPreflightScenario: String, Sendable {
     case missing
     case stopped

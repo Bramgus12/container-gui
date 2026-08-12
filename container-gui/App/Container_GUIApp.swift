@@ -23,10 +23,23 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct Container_GUIApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var updates: UpdateModel
+
+    init() {
+        _updates = State(initialValue: AppDependencies.makeUpdateModel())
+    }
 
     var body: some Scene {
         WindowGroup {
-            ContentView(model: AppDependencies.makeAppModel())
+            ContentView(model: AppDependencies.makeAppModel(), updates: updates)
+        }
+        .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    Task { await updates.checkNow() }
+                }
+                .disabled(updates.isChecking)
+            }
         }
     }
 }
