@@ -1,4 +1,7 @@
-# Unreleased
+# Container GUI 1.1.0
+
+Container GUI 1.1.0 adds network management and safer container and image
+workflows.
 
 ## Changes
 
@@ -14,6 +17,15 @@
 - Supports both Apple Container 0.12 network JSON and the redesigned 1.x
   schema. Network creation exposes `--plugin-variant` on 0.12 and repeatable
   plugin `--option` values on 1.x.
+
+## Compatibility
+
+- macOS 26 or later on Apple-silicon Macs.
+- Apple Container CLI `0.12.0` or later and earlier than `2.0.0`.
+
+The distributed DMG is ad-hoc signed and is not notarized. Follow the README's
+Privacy & Security installation instructions when macOS blocks the first
+launch.
 
 # Container GUI 1.0.2
 
