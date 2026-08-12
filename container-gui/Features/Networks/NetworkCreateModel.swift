@@ -68,7 +68,7 @@ final class NetworkCreateModel: Identifiable {
     }
 
     var pluginVariantError: String? {
-        guard pluginVariant.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+        guard pluginVariant.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })
         else { return nil }
         return "Plugin variant cannot contain control characters."
     }

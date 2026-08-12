@@ -78,7 +78,7 @@ nonisolated struct NetworkKeyValue: Hashable, Sendable {
         }) else {
             throw CommandValidationError.invalid(field: "Network key", value: key)
         }
-        guard !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+        guard !value.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
             throw CommandValidationError.invalid(field: "Network value", value: value)
         }
         self.key = key
@@ -159,7 +159,7 @@ nonisolated struct NetworkCreateConfiguration: Equatable, Sendable {
             try Self.requireUniqueKeys(options, field: "Network plugin option")
         }
         if case .legacyVariant(let variant?) = customization,
-           variant.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) {
+           variant.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) {
             throw CommandValidationError.invalid(field: "Network plugin variant", value: variant)
         }
         self.customization = customization
