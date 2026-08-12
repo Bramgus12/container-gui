@@ -166,6 +166,45 @@ nonisolated struct PortMapping: Equatable, Sendable {
     }
 }
 
+nonisolated enum ContainerMountSource: Equatable, Sendable {
+    case volume(VolumeName)
+    case hostPath(LocalPath)
+}
+
+nonisolated struct ContainerMount: Equatable, Sendable {
+    let source: ContainerMountSource
+    let target: LocalPath
+    let isReadOnly: Bool
+
+    init(volumeName: String, target: String, isReadOnly: Bool = false) throws {
+        source = .volume(try VolumeName(validating: volumeName))
+        self.target = try LocalPath(validating: target, field: "Container mount target")
+        self.isReadOnly = isReadOnly
+    }
+
+    init(hostPath: String, target: String, isReadOnly: Bool = false) throws {
+        source = .hostPath(try LocalPath(validating: hostPath, field: "Host mount source"))
+        self.target = try LocalPath(validating: target, field: "Container mount target")
+        self.isReadOnly = isReadOnly
+    }
+
+    var argument: String {
+        let type: String
+        let sourceValue: String
+        switch source {
+        case .volume(let name):
+            type = "volume"
+            sourceValue = name.rawValue
+        case .hostPath(let path):
+            type = "bind"
+            sourceValue = path.rawValue
+        }
+        var values = ["type=\(type)", "source=\(sourceValue)", "target=\(target.rawValue)"]
+        if isReadOnly { values.append("readonly") }
+        return values.joined(separator: ",")
+    }
+}
+
 nonisolated struct RunConfiguration: Equatable, Sendable {
     let image: ImageReference
     let name: ContainerIdentifier?
@@ -174,6 +213,7 @@ nonisolated struct RunConfiguration: Equatable, Sendable {
     let cpuLimit: CPULimit?
     let memoryLimit: MemoryLimit?
     let networks: [NetworkAttachment]
+    let mounts: [ContainerMount]
     let ports: [PortMapping]
     let environment: [EnvironmentVariable]
     let command: [String]
@@ -186,6 +226,7 @@ nonisolated struct RunConfiguration: Equatable, Sendable {
         cpuLimit: String? = nil,
         memoryLimit: String? = nil,
         networks: [NetworkAttachment] = [],
+        mounts: [ContainerMount] = [],
         ports: [PortMapping] = [],
         environment: [EnvironmentVariable] = [],
         command: [String] = []
@@ -216,6 +257,14 @@ nonisolated struct RunConfiguration: Equatable, Sendable {
             )
         }
         self.networks = networks
+        var mountTargets = Set<String>()
+        guard mounts.allSatisfy({ mountTargets.insert($0.target.rawValue).inserted }) else {
+            throw CommandValidationError.invalid(
+                field: "Container mount",
+                value: "Duplicate target"
+            )
+        }
+        self.mounts = mounts
         self.ports = ports
         self.environment = environment
         self.command = command
@@ -240,6 +289,9 @@ nonisolated struct RunConfiguration: Equatable, Sendable {
         }
         for network in networks {
             result += ["--network", network.argument]
+        }
+        for mount in mounts {
+            result += ["--mount", mount.argument]
         }
         for port in ports {
             result += ["--publish", port.argument]

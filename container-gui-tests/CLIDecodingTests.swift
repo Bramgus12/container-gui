@@ -80,6 +80,20 @@ final class CLIDecodingTests: XCTestCase {
         XCTAssertEqual(currentInspection.summary.ipv6Subnet, "fd20::/64")
     }
 
+    func testDecodesBothVolumeFixtureShapes() throws {
+        let legacy: [VolumeDTO] = try decodeFixture("0.12.0/volumes-0.12.0.json")
+        let current: [VolumeDTO] = try decodeFixture("1.0.0/volumes-1.0.0.json")
+        let legacyVolume = try XCTUnwrap(legacy.first.flatMap(VolumeSummary.init(dto:)))
+        let currentVolume = try XCTUnwrap(current.first.flatMap(VolumeSummary.init(dto:)))
+
+        XCTAssertEqual(legacyVolume.name, "legacy-volume")
+        XCTAssertEqual(legacyVolume.sizeInBytes, 8_388_608)
+        XCTAssertEqual(legacyVolume.labels["team"], "legacy")
+        XCTAssertEqual(currentVolume.name, "current-volume")
+        XCTAssertEqual(currentVolume.sizeInBytes, 1_048_576)
+        XCTAssertEqual(currentVolume.options["size"], "1M")
+    }
+
     func testDecodesCurrentNestedImageListShape() throws {
         let data = Data(
             #"""

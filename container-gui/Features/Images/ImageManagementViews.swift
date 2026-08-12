@@ -5,6 +5,7 @@ struct ImageListView: View {
     @Bindable var model: AppModel
     @State private var pendingDeletion: ImageDeletionPlan?
     @State private var pullModel: ImagePullModel?
+    @State private var buildModel: ImageBuildModel?
     @State private var runContainerModel: RunContainerModel?
 
     var body: some View {
@@ -16,6 +17,15 @@ struct ImageListView: View {
                 prompt: "Search images"
             )
             .toolbar {
+                ToolbarItem {
+                    Button {
+                        buildModel = ImageBuildModel()
+                    } label: {
+                        Label("Build Image", systemImage: "hammer")
+                    }
+                    .accessibilityIdentifier("images.build")
+                }
+
                 ToolbarItem {
                     Button {
                         pullModel = ImagePullModel()
@@ -30,7 +40,8 @@ struct ImageListView: View {
                         guard let selectedImage = model.selectedImage else { return }
                         runContainerModel = RunContainerModel(
                             image: selectedImage.reference,
-                            networkModel: model.networkModel
+                            networkModel: model.networkModel,
+                            volumeModel: model.volumeModel
                         )
                     } label: {
                         Label("Run Image", systemImage: "play.fill")
@@ -87,11 +98,15 @@ struct ImageListView: View {
             .sheet(item: $pullModel) { pullModel in
                 ImagePullSheet(model: pullModel, appModel: model)
             }
+            .sheet(item: $buildModel) { buildModel in
+                ImageBuildSheet(model: buildModel, appModel: model)
+            }
             .sheet(item: $runContainerModel) { runModel in
                 RunContainerSheet(
                     model: runModel,
                     appModel: model,
-                    networkModel: model.networkModel
+                    networkModel: model.networkModel,
+                    volumeModel: model.volumeModel
                 )
             }
             .inspector(isPresented: $model.isImageInspectorPresented) {
@@ -136,7 +151,8 @@ struct ImageListView: View {
                 Button("Run Image…") {
                     runContainerModel = RunContainerModel(
                         image: image.reference,
-                        networkModel: model.networkModel
+                        networkModel: model.networkModel,
+                        volumeModel: model.volumeModel
                     )
                 }
                 Button("Delete…", role: .destructive) {

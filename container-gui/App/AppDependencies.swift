@@ -208,6 +208,11 @@ private actor UITestContainerCLI: ContainerCLI {
         var isBuiltIn: Bool
     }
 
+    private struct FixtureVolume: Sendable {
+        var name: String
+        var sizeInBytes: UInt64
+    }
+
     private let scenario: UITestPreflightScenario
     private var containers: [FixtureContainer]
     private var images = ["ghcr.io/example/demo:1.0"]
@@ -229,6 +234,8 @@ private actor UITestContainerCLI: ContainerCLI {
             isBuiltIn: false
         ),
     ]
+    private var volumes = [FixtureVolume(name: "ui-test-volume", sizeInBytes: 10_485_760)]
+    private var builderState: String?
 
     init(scenario: UITestPreflightScenario) {
         self.scenario = scenario
@@ -318,7 +325,39 @@ private actor UITestContainerCLI: ContainerCLI {
             let deleted = networks.filter { !$0.isBuiltIn }.map(\.name)
             networks.removeAll { !$0.isBuiltIn }
             output = deleted.joined(separator: "\n")
-        case .systemStart, .systemStop, .pullImage, .run, .logs, .stats:
+        case .listVolumes:
+            output = volumeListJSON
+        case .inspectVolume(let name):
+            output = volumeInspectionJSON(name: name.rawValue)
+        case .createVolume(let configuration):
+            volumes.append(FixtureVolume(
+                name: configuration.name.rawValue,
+                sizeInBytes: 10_485_760
+            ))
+            output = ""
+        case .deleteVolume(let name):
+            volumes.removeAll { $0.name == name.rawValue }
+            output = ""
+        case .pruneVolumes:
+            let deleted = volumes.map(\.name)
+            volumes.removeAll()
+            output = "Reclaimed 10,5 MB in disk space\n" + deleted.joined(separator: "\n")
+        case .builderStatus:
+            if let builderState {
+                output = #"[{"id":"buildkit","configuration":{"image":{"reference":"ghcr.io/apple/container-builder-shim/builder:1.0.0"}},"status":{"state":"\#(builderState)","address":"192.168.64.2"}}]"#
+            } else {
+                output = "[]"
+            }
+        case .builderStart:
+            builderState = "running"
+            output = ""
+        case .builderStop:
+            builderState = "stopped"
+            output = ""
+        case .builderDelete:
+            builderState = nil
+            output = ""
+        case .systemStart, .systemStop, .pullImage, .build, .run, .logs, .stats:
             output = ""
         }
         return CommandResult(
@@ -364,6 +403,12 @@ private actor UITestContainerCLI: ContainerCLI {
                     continuation.yield(.standardError("final UI test log line\n"))
                     continuation.yield(.terminated(exitCode: 0))
                     continuation.finish()
+                case .build(let configuration):
+                    continuation.yield(.standardError("Building image…\n"))
+                    await addImage(configuration.tag.rawValue)
+                    continuation.yield(.standardOutput("\(configuration.tag.rawValue)\n"))
+                    continuation.yield(.terminated(exitCode: 0))
+                    continuation.finish()
                 default:
                     continuation.yield(.terminated(exitCode: 0))
                     continuation.finish()
@@ -394,6 +439,21 @@ private actor UITestContainerCLI: ContainerCLI {
 
     private var networkListJSON: String {
         "[\(networks.map(networkJSON).joined(separator: ","))]"
+    }
+
+    private var volumeListJSON: String {
+        "[\(volumes.map(volumeJSON).joined(separator: ","))]"
+    }
+
+    private func volumeInspectionJSON(name: String) -> String {
+        guard let volume = volumes.first(where: { $0.name == name }) else { return "[]" }
+        return "[\(volumeJSON(volume))]"
+    }
+
+    private func volumeJSON(_ volume: FixtureVolume) -> String {
+        """
+        {"id":"\(volume.name)","configuration":{"creationDate":"2026-08-12T19:42:52Z","driver":"local","format":"ext4","labels":{"org.example.fixture":"true"},"name":"\(volume.name)","options":{"size":"10M"},"sizeInBytes":\(volume.sizeInBytes),"source":"/test/volumes/\(volume.name)/volume.img"}}
+        """
     }
 
     private func networkInspectionJSON(name: String) -> String {
@@ -435,6 +495,10 @@ private actor UITestContainerCLI: ContainerCLI {
     private func addContainer(id: String, image: String) {
         containers.removeAll { $0.id == id }
         containers.append(FixtureContainer(id: id, image: image, state: "running"))
+    }
+
+    private func addImage(_ reference: String) {
+        if !images.contains(reference) { images.append(reference) }
     }
 }
 #endif

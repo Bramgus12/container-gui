@@ -365,6 +365,12 @@ private struct MainNavigationView: View {
                 ContainerListView(model: model)
             case .images:
                 ImageListView(model: model)
+            case .volumes:
+                if let volumeModel = model.volumeModel {
+                    VolumesView(model: volumeModel)
+                } else {
+                    ProgressView("Loading volumes…")
+                }
             case .networks:
                 if let networkModel = model.networkModel {
                     NetworksView(model: networkModel)
@@ -374,6 +380,7 @@ private struct MainNavigationView: View {
             case .system:
                 SystemView(
                     model: model.makeSystemModel(context: context),
+                    builder: model.builderModel,
                     updates: updates
                 )
             case nil:
@@ -416,7 +423,10 @@ private struct ContainerListView: View {
 
                 ToolbarItem {
                     Button {
-                        runContainerModel = RunContainerModel(networkModel: model.networkModel)
+                        runContainerModel = RunContainerModel(
+                            networkModel: model.networkModel,
+                            volumeModel: model.volumeModel
+                        )
                     } label: {
                         Label("Run Container", systemImage: "plus")
                     }
@@ -513,7 +523,8 @@ private struct ContainerListView: View {
                 RunContainerSheet(
                     model: runModel,
                     appModel: model,
-                    networkModel: model.networkModel
+                    networkModel: model.networkModel,
+                    volumeModel: model.volumeModel
                 )
             }
             .inspector(isPresented: $model.isContainerInspectorPresented) {

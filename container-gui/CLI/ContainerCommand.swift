@@ -28,6 +28,18 @@ nonisolated enum ContainerCommand: Equatable, Sendable {
     case deleteNetwork(name: NetworkName)
     case pruneNetworks
 
+    case listVolumes
+    case inspectVolume(name: VolumeName)
+    case createVolume(configuration: VolumeCreateConfiguration)
+    case deleteVolume(name: VolumeName)
+    case pruneVolumes
+
+    case build(BuildConfiguration)
+    case builderStatus
+    case builderStart(configuration: BuilderStartConfiguration)
+    case builderStop
+    case builderDelete
+
     var arguments: [String] {
         switch self {
         case .systemStart:
@@ -84,7 +96,48 @@ nonisolated enum ContainerCommand: Equatable, Sendable {
             ["network", "delete", name.rawValue]
         case .pruneNetworks:
             ["network", "prune"]
+
+        case .listVolumes:
+            ["volume", "list", "--format", "json"]
+        case .inspectVolume(let name):
+            ["volume", "inspect", name.rawValue]
+        case .createVolume(let configuration):
+            Self.createVolumeArguments(configuration)
+        case .deleteVolume(let name):
+            ["volume", "delete", name.rawValue]
+        case .pruneVolumes:
+            ["volume", "prune"]
+
+        case .build(let configuration):
+            configuration.arguments
+        case .builderStatus:
+            ["builder", "status", "--format", "json"]
+        case .builderStart(let configuration):
+            ["builder", "start"]
+                + (configuration.cpuLimit.map { ["--cpus", $0.value] } ?? [])
+                + (configuration.memoryLimit.map { ["--memory", $0.value] } ?? [])
+        case .builderStop:
+            ["builder", "stop"]
+        case .builderDelete:
+            ["builder", "delete"]
         }
+    }
+
+    private static func createVolumeArguments(
+        _ configuration: VolumeCreateConfiguration
+    ) -> [String] {
+        var result = ["volume", "create"]
+        for label in configuration.labels {
+            result += ["--label", label.argument]
+        }
+        for option in configuration.options {
+            result += ["--opt", option.argument]
+        }
+        if let size = configuration.size {
+            result += ["-s", size.rawValue]
+        }
+        result.append(configuration.name.rawValue)
+        return result
     }
 
     private static func createNetworkArguments(

@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SystemView: View {
     @Bindable var model: SystemModel
+    let builder: BuilderModel?
     let updates: UpdateModel
     @State private var confirmsStop = false
     @State private var showsDiagnostics = false
@@ -11,6 +12,9 @@ struct SystemView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
                 SystemHealthSection(model: model, confirmsStop: $confirmsStop)
+                if let builder {
+                    SystemBuilderSection(model: builder)
+                }
                 SystemDiskUsageSection(model: model)
                 SystemLogsSection(model: model)
                 UpdateSection(model: updates)
@@ -22,7 +26,10 @@ struct SystemView: View {
         .toolbar {
             ToolbarItemGroup {
                 Button {
-                    Task { await model.refresh() }
+                    Task {
+                        await model.refresh()
+                        await builder?.refresh()
+                    }
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
@@ -73,10 +80,177 @@ struct SystemView: View {
             if model.snapshotState == .idle {
                 await model.refresh()
             }
+            await builder?.loadIfNeeded()
         }
         .accessibilityIdentifier("system.screen")
     }
 
+}
+
+private struct SystemBuilderSection: View {
+    let model: BuilderModel
+    @State private var cpuLimit = ""
+    @State private var memoryLimit = ""
+    @State private var confirmsDelete = false
+
+    var body: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label("Image Builder", systemImage: "hammer")
+                        .font(.headline)
+                    Spacer()
+                    if model.operation != nil {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        BuilderActions(
+                            state: model.status.state,
+                            isBusy: model.isBusy,
+                            start: {
+                                Task {
+                                    await model.start(
+                                        cpuLimit: optionalTrimmed(cpuLimit),
+                                        memoryLimit: optionalTrimmed(memoryLimit)
+                                    )
+                                }
+                            },
+                            stop: { Task { await model.stop() } },
+                            delete: { confirmsDelete = true }
+                        )
+                    }
+                }
+                Divider()
+                switch model.loadingState {
+                case .idle, .loading:
+                    ProgressView("Loading builder status…")
+                case .failed(let message):
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                    Button("Try Again") { Task { await model.refresh() } }
+                case .loaded:
+                    BuilderStatusGrid(status: model.status)
+                    if model.status.state == .absent {
+                        Divider()
+                        HStack {
+                            TextField("CPUs (optional)", text: $cpuLimit).frame(width: 150)
+                            TextField("Memory (optional, e.g. 4G)", text: $memoryLimit)
+                                .frame(width: 230)
+                        }
+                    }
+                }
+                if let error = model.actionError {
+                    HStack {
+                        Label(error, systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.red)
+                            .textSelection(.enabled)
+                        Spacer()
+                        Button("Dismiss") { model.dismissActionError() }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .alert("Delete Image Builder?", isPresented: $confirmsDelete) {
+            Button("Delete", role: .destructive) { Task { await model.delete() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The stopped builder container will be permanently deleted. A future image build can create it again.")
+        }
+    }
+
+    private func optionalTrimmed(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+private struct BuilderStatusGrid: View {
+    let status: BuilderStatus
+
+    var body: some View {
+        Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
+            GridRow {
+                Text("Status").foregroundStyle(.secondary)
+                Label(statusLabel, systemImage: statusIcon)
+                    .foregroundStyle(statusColor)
+            }
+            if let id = status.id {
+                GridRow {
+                    Text("ID").foregroundStyle(.secondary)
+                    Text(id).textSelection(.enabled)
+                }
+            }
+            if let image = status.image {
+                GridRow {
+                    Text("Image").foregroundStyle(.secondary)
+                    Text(image).textSelection(.enabled)
+                }
+            }
+            if let address = status.address {
+                GridRow {
+                    Text("Address").foregroundStyle(.secondary)
+                    Text(address).textSelection(.enabled)
+                }
+            }
+        }
+    }
+
+    private var statusLabel: LocalizedStringResource {
+        switch status.state {
+        case .absent: "Not created"
+        case .running: "Running"
+        case .stopped: "Stopped"
+        case .unknown: "Unknown"
+        }
+    }
+
+    private var statusIcon: String {
+        switch status.state {
+        case .absent: "minus.circle"
+        case .running: "checkmark.circle.fill"
+        case .stopped: "stop.circle.fill"
+        case .unknown: "questionmark.circle"
+        }
+    }
+
+    private var statusColor: Color {
+        switch status.state {
+        case .running: .green
+        case .stopped: .orange
+        case .absent, .unknown: .secondary
+        }
+    }
+}
+
+private struct BuilderActions: View {
+    let state: BuilderState
+    let isBusy: Bool
+    let start: () -> Void
+    let stop: () -> Void
+    let delete: () -> Void
+
+    var body: some View {
+        switch state {
+        case .absent:
+            Button("Start Builder", action: start)
+                .disabled(isBusy)
+                .accessibilityIdentifier("system.builder.start")
+        case .running:
+            Button("Stop Builder", action: stop)
+                .disabled(isBusy)
+                .accessibilityIdentifier("system.builder.stop")
+        case .stopped:
+            Button("Start Builder", action: start)
+                .disabled(isBusy)
+                .accessibilityIdentifier("system.builder.start")
+            Button("Delete Builder…", role: .destructive, action: delete)
+                .disabled(isBusy)
+                .accessibilityIdentifier("system.builder.delete")
+        case .unknown:
+            EmptyView()
+        }
+    }
 }
 
 private struct SystemHealthSection: View {

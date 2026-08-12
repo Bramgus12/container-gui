@@ -183,6 +183,7 @@ nonisolated struct ContainerMutationFailure: Identifiable, Equatable, Sendable {
 enum AppDestination: String, CaseIterable, Identifiable, Sendable {
     case containers = "Containers"
     case images = "Images"
+    case volumes = "Volumes"
     case networks = "Networks"
     case system = "System"
 
@@ -192,6 +193,7 @@ enum AppDestination: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .containers: "Containers"
         case .images: "Images"
+        case .volumes: "Volumes"
         case .networks: "Networks"
         case .system: "System"
         }
@@ -201,6 +203,7 @@ enum AppDestination: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .containers: "shippingbox"
         case .images: "square.stack.3d.up"
+        case .volumes: "externaldrive"
         case .networks: "network"
         case .system: "gauge.with.dots.needle.67percent"
         }
@@ -285,6 +288,8 @@ final class AppModel {
     private(set) var deletingImageReference: String?
     private(set) var imageDeletionFailure: ImageDeletionFailure?
     private(set) var networkModel: NetworkModel?
+    private(set) var volumeModel: VolumeModel?
+    private(set) var builderModel: BuilderModel?
 
     private let cliFactory: any ContainerCLIMaking
     private var containerLister: (any ContainerListing)?
@@ -292,6 +297,7 @@ final class AppModel {
     private var containerRunner: (any ContainerRunning)?
     private var containerDiagnoser: (any ContainerDiagnosing)?
     private var imageService: (any ImageManaging)?
+    private var imageBuilder: (any ImageBuilding)?
     private let failureLog: OperationFailureLog
     private var systemModel: SystemModel?
     private var configuredExecutableURL: URL?
@@ -311,8 +317,11 @@ final class AppModel {
         containerRunner: (any ContainerRunning)? = nil,
         containerDiagnoser: (any ContainerDiagnosing)? = nil,
         imageService: (any ImageManaging)? = nil,
+        imageBuilder: (any ImageBuilding)? = nil,
         networkService: (any NetworkManaging)? = nil,
         networkCapabilities: NetworkCapabilities? = nil,
+        volumeService: (any VolumeManaging)? = nil,
+        builderService: (any BuilderManaging)? = nil,
         failureLog: OperationFailureLog? = nil
     ) {
         self.setup = setup
@@ -322,6 +331,7 @@ final class AppModel {
         self.containerRunner = containerRunner
         self.containerDiagnoser = containerDiagnoser
         self.imageService = imageService
+        self.imageBuilder = imageBuilder
         self.failureLog = failureLog ?? OperationFailureLog()
         if let networkService {
             self.networkModel = NetworkModel(
@@ -331,6 +341,12 @@ final class AppModel {
                 ),
                 failureLog: self.failureLog
             )
+        }
+        if let volumeService {
+            volumeModel = VolumeModel(service: volumeService, failureLog: self.failureLog)
+        }
+        if let builderService {
+            builderModel = BuilderModel(service: builderService, failureLog: self.failureLog)
         }
     }
 
@@ -385,11 +401,20 @@ final class AppModel {
             containerRunner = CLIContainerRunService(cli: cli)
             containerDiagnoser = CLIContainerDiagnosticsService(cli: cli)
             imageService = CLIImageService(cli: cli)
+            imageBuilder = CLIImageBuildService(cli: cli)
             let cliVersion = (try? context.versions.cli.map { try SemanticVersion($0.version) })
                 ?? SemanticVersion(major: 1, minor: 0, patch: 0)
             networkModel = NetworkModel(
                 service: CLINetworkService(cli: cli),
                 capabilities: NetworkCapabilities(version: cliVersion),
+                failureLog: failureLog
+            )
+            volumeModel = VolumeModel(
+                service: CLIVolumeService(cli: cli),
+                failureLog: failureLog
+            )
+            builderModel = BuilderModel(
+                service: CLIBuilderService(cli: cli),
                 failureLog: failureLog
             )
             systemModel = SystemModel(
@@ -898,6 +923,42 @@ final class AppModel {
         )
         systemModel = model
         return model
+    }
+
+    func buildImage(
+        _ configuration: BuildConfiguration,
+        onEvent: (ProcessEvent) -> Void
+    ) async throws {
+        guard let imageBuilder else {
+            throw CLIError.launchFailed(message: "The container executable is not ready.")
+        }
+        do {
+            var standardError = ""
+            for try await event in imageBuilder.buildImage(configuration) {
+                if case .standardError(let output) = event { standardError.append(output) }
+                if case .terminated(let exitCode) = event, exitCode != 0 {
+                    onEvent(event)
+                    throw CLIError.nonZeroExit(
+                        invocation: ProcessContainerCLI.displayInvocation(
+                            executable: "container",
+                            arguments: ContainerCommand.build(configuration).arguments
+                        ),
+                        exitCode: exitCode,
+                        standardError: standardError
+                    )
+                }
+                onEvent(event)
+            }
+            await refreshImages()
+            selectedImageID = images.first { $0.reference == configuration.tag.rawValue }?.id
+        } catch {
+            failureLog.record(operation: "Build image", error: error)
+            throw error
+        }
+    }
+
+    func reconcileAfterCancelledBuild() async {
+        await refreshImages()
     }
 
     func runContainer(

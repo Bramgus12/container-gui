@@ -64,6 +64,33 @@ struct NetworkAttachmentDraft: Identifiable, Equatable {
     }
 }
 
+enum ContainerMountKind: String, CaseIterable, Equatable {
+    case volume = "Named volume"
+    case hostPath = "Host path"
+}
+
+struct ContainerMountDraft: Identifiable, Equatable {
+    let id: UUID
+    var kind: ContainerMountKind
+    var source: String
+    var target: String
+    var isReadOnly: Bool
+
+    init(
+        id: UUID = UUID(),
+        kind: ContainerMountKind = .volume,
+        source: String = "",
+        target: String = "",
+        isReadOnly: Bool = false
+    ) {
+        self.id = id
+        self.kind = kind
+        self.source = source
+        self.target = target
+        self.isReadOnly = isReadOnly
+    }
+}
+
 enum RunContainerOutcome: Equatable {
     case succeeded
     case failed
@@ -81,6 +108,7 @@ final class RunContainerModel: Identifiable {
     var cpuLimit = ""
     var memoryLimit = ""
     var networks: [NetworkAttachmentDraft] = []
+    var mounts: [ContainerMountDraft] = []
     var ports: [PortMappingDraft] = []
     var environment: [EnvironmentVariableDraft] = []
     var command = ""
@@ -90,10 +118,16 @@ final class RunContainerModel: Identifiable {
     private(set) var progress = ""
     private(set) var errorMessage: String?
     private weak var networkModel: NetworkModel?
+    private weak var volumeModel: VolumeModel?
 
-    init(image: String = "", networkModel: NetworkModel? = nil) {
+    init(
+        image: String = "",
+        networkModel: NetworkModel? = nil,
+        volumeModel: VolumeModel? = nil
+    ) {
         self.image = image
         self.networkModel = networkModel
+        self.volumeModel = volumeModel
     }
 
     var imageError: String? {
@@ -153,6 +187,20 @@ final class RunContainerModel: Identifiable {
         }
     }
 
+    func mountError(for draft: ContainerMountDraft) -> String? {
+        if mounts.filter({ trimmed($0.target) == trimmed(draft.target) }).count > 1,
+           !trimmed(draft.target).isEmpty {
+            return "Each container target can be mounted only once."
+        }
+        if draft.kind == .volume,
+           volumeModel?.volumes.contains(where: { $0.name == trimmed(draft.source) }) != true {
+            return trimmed(draft.source).isEmpty
+                ? "Select a volume."
+                : "This volume is no longer available. Select another volume."
+        }
+        return validationMessage { _ = try makeMount(draft) }
+    }
+
     var commandError: String? {
         if trimmed(command).isEmpty && !arguments.isEmpty {
             return "Enter a command before adding arguments."
@@ -192,6 +240,21 @@ final class RunContainerModel: Identifiable {
 
     func removeNetworkAttachment(id: UUID) {
         networks.removeAll { $0.id == id }
+    }
+
+    func addMount(kind: ContainerMountKind = .volume) {
+        let source: String
+        if kind == .volume {
+            let selected = Set(mounts.filter { $0.kind == .volume }.map(\.source))
+            source = volumeModel?.volumes.first { !selected.contains($0.name) }?.name ?? ""
+        } else {
+            source = ""
+        }
+        mounts.append(ContainerMountDraft(kind: kind, source: source))
+    }
+
+    func removeMount(id: UUID) {
+        mounts.removeAll { $0.id == id }
     }
 
     func removePort(id: UUID) {
@@ -257,6 +320,7 @@ final class RunContainerModel: Identifiable {
             cpuLimit: cpuLimit.isEmpty ? nil : cpuLimit,
             memoryLimit: memoryLimit.isEmpty ? nil : memoryLimit,
             networks: try networks.map(makeNetworkAttachment),
+            mounts: try mounts.map(makeMount),
             ports: try ports.map(makePort),
             environment: try environment.map {
                 try EnvironmentVariable(key: trimmed($0.key), value: $0.value)
@@ -289,6 +353,28 @@ final class RunContainerModel: Identifiable {
             macAddress: macAddress.isEmpty ? nil : macAddress,
             mtu: mtu
         )
+    }
+
+    private func makeMount(_ draft: ContainerMountDraft) throws -> ContainerMount {
+        let source = trimmed(draft.source)
+        let target = trimmed(draft.target)
+        switch draft.kind {
+        case .volume:
+            guard volumeModel?.volumes.contains(where: { $0.name == source }) == true else {
+                throw CommandValidationError.invalid(field: "Volume mount", value: source)
+            }
+            return try ContainerMount(
+                volumeName: source,
+                target: target,
+                isReadOnly: draft.isReadOnly
+            )
+        case .hostPath:
+            return try ContainerMount(
+                hostPath: source,
+                target: target,
+                isReadOnly: draft.isReadOnly
+            )
+        }
     }
 
     private func makePort(_ draft: PortMappingDraft) throws -> PortMapping {

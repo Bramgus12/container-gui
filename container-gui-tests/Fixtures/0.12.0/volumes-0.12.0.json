@@ -1,0 +1,16 @@
+[
+  {
+    "id": "legacy-volume",
+    "config": {
+      "id": "legacy-volume",
+      "creationDate": "2026-06-01T10:11:12Z",
+      "driver": "local",
+      "format": "ext4",
+      "labels": { "team": "legacy" },
+      "options": { "size": "8M" },
+      "size": "8388608",
+      "source": "/tmp/legacy-volume.img"
+    },
+    "future": true
+  }
+]

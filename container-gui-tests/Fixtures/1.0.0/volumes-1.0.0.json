@@ -1,0 +1,15 @@
+[
+  {
+    "id": "current-volume",
+    "configuration": {
+      "creationDate": "2026-08-12T19:42:52Z",
+      "driver": "local",
+      "format": "ext4",
+      "labels": { "com.example.fixture": "true" },
+      "name": "current-volume",
+      "options": { "size": "1M" },
+      "sizeInBytes": 1048576,
+      "source": "/tmp/current-volume.img"
+    }
+  }
+]

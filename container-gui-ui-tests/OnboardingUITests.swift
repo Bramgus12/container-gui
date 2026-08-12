@@ -137,6 +137,55 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertFalse(sheet.staticTexts["Plugin Options"].exists)
     }
 
+    func testVolumeInventoryCreateAndRunMountControls() {
+        let app = launch(scenario: "ready")
+        let destination = app.descendants(matching: .any)["destination.volumes"]
+        XCTAssertTrue(destination.waitForExistence(timeout: 3))
+        destination.click()
+
+        let fixture = app.staticTexts["ui-test-volume"]
+        XCTAssertTrue(fixture.waitForExistence(timeout: 3))
+        fixture.click()
+        XCTAssertTrue(app.staticTexts["/test/volumes/ui-test-volume/volume.img"].waitForExistence(timeout: 3))
+
+        app.buttons["volumes.create"].click()
+        let createSheet = app.sheets.firstMatch
+        let name = createSheet.textFields["volumes.create.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 3))
+        name.click()
+        name.typeText("created-volume")
+        createSheet.buttons["volumes.create.submit"].click()
+        XCTAssertTrue(app.staticTexts["created-volume"].waitForExistence(timeout: 3))
+
+        app.descendants(matching: .any)["destination.containers"].click()
+        app.buttons["containers.run"].click()
+        let runSheet = app.sheets.firstMatch
+        XCTAssertTrue(runSheet.buttons["Add Volume"].waitForExistence(timeout: 3))
+        XCTAssertTrue(runSheet.buttons["Add Host Folder"].exists)
+    }
+
+    func testBuildSheetAndBuilderLifecycleControls() {
+        let app = launch(scenario: "ready")
+        app.descendants(matching: .any)["destination.images"].click()
+        XCTAssertTrue(app.buttons["images.build"].waitForExistence(timeout: 3))
+        app.buttons["images.build"].click()
+        let buildSheet = app.sheets.firstMatch
+        XCTAssertTrue(buildSheet.textFields["images.build.tag"].waitForExistence(timeout: 3))
+        XCTAssertTrue(buildSheet.textFields["images.build.context"].exists)
+        XCTAssertTrue(buildSheet.staticTexts["Build secrets and SSH forwarding are not supported in this version of Container GUI."].exists)
+        buildSheet.buttons["Cancel"].click()
+        XCTAssertTrue(buildSheet.waitForNonExistence(timeout: 3))
+
+        let systemDestination = app.descendants(matching: .any)["destination.system"]
+        XCTAssertTrue(systemDestination.waitForExistence(timeout: 3))
+        systemDestination.click()
+        XCTAssertTrue(app.descendants(matching: .any)["system.screen"].waitForExistence(timeout: 3))
+        let start = app.buttons["system.builder.start"]
+        XCTAssertTrue(start.waitForExistence(timeout: 3))
+        start.click()
+        XCTAssertTrue(app.buttons["system.builder.stop"].waitForExistence(timeout: 3))
+    }
+
     func testLogViewerShowsNumberedSelectableMockLogs() {
         let app = launch(scenario: "ready")
         let fixture = app.staticTexts["demo-stopped"]

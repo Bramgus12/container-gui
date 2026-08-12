@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct RunContainerSheet: View {
@@ -5,6 +6,7 @@ struct RunContainerSheet: View {
     @Bindable var model: RunContainerModel
     let appModel: AppModel
     let networkModel: NetworkModel?
+    let volumeModel: VolumeModel?
     @State private var runRequestID: UUID?
     @State private var isCancelling = false
 
@@ -91,6 +93,8 @@ struct RunContainerSheet: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+
+                ContainerMountsSection(model: model, volumeModel: volumeModel)
 
                 Section("Published Ports") {
                     ForEach($model.ports) { $port in
@@ -236,6 +240,7 @@ struct RunContainerSheet: View {
         .interactiveDismissDisabled(operationIsActive)
         .task {
             await networkModel?.loadIfNeeded()
+            await volumeModel?.loadIfNeeded()
         }
         .task(id: runRequestID) {
             guard let requestID = runRequestID else { return }
@@ -281,6 +286,104 @@ struct RunContainerSheet: View {
             Text(message)
                 .font(.caption)
                 .foregroundStyle(.red)
+        }
+    }
+}
+
+private struct ContainerMountsSection: View {
+    @Bindable var model: RunContainerModel
+    let volumeModel: VolumeModel?
+
+    var body: some View {
+        Section("Storage") {
+            if let volumeModel,
+               case .failed(let message) = volumeModel.listState,
+               volumeModel.volumes.isEmpty {
+                Label(message, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                    .textSelection(.enabled)
+            }
+
+            ForEach($model.mounts) { $mount in
+                ContainerMountDraftRow(
+                    mount: $mount,
+                    volumeChoices: volumeModel?.volumes ?? [],
+                    error: model.mountError(for: mount),
+                    onRemove: { model.removeMount(id: mount.id) }
+                )
+            }
+
+            HStack {
+                Button("Add Volume", systemImage: "externaldrive.badge.plus") {
+                    model.addMount(kind: .volume)
+                }
+                .disabled(volumeModel == nil || volumeModel?.volumes.isEmpty == true)
+
+                Button("Add Host Folder", systemImage: "folder.badge.plus") {
+                    model.addMount(kind: .hostPath)
+                }
+            }
+
+            Text("Named volumes persist container data. Host folders expose a selected local directory to the container.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct ContainerMountDraftRow: View {
+    @Binding var mount: ContainerMountDraft
+    let volumeChoices: [VolumeSummary]
+    let error: String?
+    let onRemove: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Picker("Source type", selection: $mount.kind) {
+                    ForEach(ContainerMountKind.allCases, id: \.rawValue) { kind in
+                        Text(kind.rawValue).tag(kind)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 130)
+
+                if mount.kind == .volume {
+                    Picker("Volume", selection: $mount.source) {
+                        Text("Select a volume").tag("")
+                        ForEach(volumeChoices) { volume in
+                            Text(volume.name).tag(volume.name)
+                        }
+                    }
+                    .frame(minWidth: 180)
+                } else {
+                    TextField("Host folder", text: $mount.source)
+                    Button("Choose…") { chooseHostFolder() }
+                }
+
+                TextField("Container path", text: $mount.target)
+                    .frame(minWidth: 160)
+                Toggle("Read-only", isOn: $mount.isReadOnly)
+                    .toggleStyle(.checkbox)
+                Button("Remove", systemImage: "minus.circle", action: onRemove)
+                    .labelStyle(.iconOnly)
+            }
+            if let error {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    private func chooseHostFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        if panel.runModal() == .OK, let url = panel.url {
+            mount.source = url.path
         }
     }
 }

@@ -33,9 +33,12 @@ directly, never through a shell.
 | 🔎 | **Deep inspection** | Explore structured container configuration, networking, ports, mounts, image variants, and OCI metadata. |
 | 📜 | **Logs & stats** | Follow bounded logs and monitor CPU, memory, network, and block I/O. |
 | 🖼️ | **Images** | Search local images, inspect metadata, stream pull progress, run, and delete with dependency-aware cleanup. |
+| 🛠️ | **Builds** | Build tagged images from a local Dockerfile with arguments, labels, target/platform, cache, resource, pull, and output controls. |
+| 💾 | **Volumes** | List, search, inspect, create, delete, and prune persistent volumes across Apple Container 0.12 and 1.x JSON shapes. |
+| 📂 | **Container storage** | Mount named volumes or host folders into new containers, with optional read-only access. |
 | 🌐 | **Networks** | List, search, inspect, create, delete, and prune networks, with Apple Container 0.12 and 1.x compatibility. |
 | 🔗 | **Container networking** | Attach a new container to multiple networks with optional MAC addresses and MTUs. |
-| ❤️ | **System health** | Check CLI and server versions, control the service, and review disk usage and recent logs. |
+| ❤️ | **System health** | Check CLI, server, and image-builder status; control their lifecycles; and review disk usage and recent logs. |
 | ⬆️ | **Update checks** | See when a newer Container GUI release exists, read its notes, and copy the upgrade command. |
 | 🩺 | **Diagnostics** | Copy a sanitized support report with common secrets and credentials redacted. |
 
@@ -228,11 +231,11 @@ prune or another bulk deletion command.
 
 ## Current scope
 
-Container GUI intentionally focuses on local container, image, network, and service
+Container GUI intentionally focuses on local container, image, volume, network, build, and service
 workflows. It does not yet manage:
 
-- volumes or builds;
 - registry authentication;
+- build secrets or SSH forwarding;
 - interactive terminals;
 - import and export;
 - DNS or kernel settings;
