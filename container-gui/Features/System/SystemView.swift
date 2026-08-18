@@ -7,15 +7,19 @@ struct SystemView: View {
     let updates: UpdateModel
     @State private var confirmsStop = false
     @State private var showsDiagnostics = false
+    @State private var confirmsReclaim = false
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                SystemHealthSection(model: model, confirmsStop: $confirmsStop)
-                if let builder {
-                    SystemBuilderSection(model: builder)
+                HStack(alignment: .top, spacing: DSMetrics.spacing12) {
+                    ServiceCard(model: model, confirmsStop: $confirmsStop)
+                    if let builder {
+                        BuilderCard(model: builder)
+                    }
+                    UpdateCard(model: updates)
                 }
-                SystemDiskUsageSection(model: model)
+                SystemDiskUsageSection(model: model, reclaim: { confirmsReclaim = true })
                 SystemLogsSection(model: model)
                 UpdateSection(model: updates)
             }
@@ -47,16 +51,14 @@ struct SystemView: View {
         }
         .safeAreaInset(edge: .bottom) {
             if let error = model.actionError {
-                HStack(spacing: 12) {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .textSelection(.enabled)
-                    Spacer()
-                    Button("Dismiss") {
-                        model.dismissActionError()
-                    }
-                }
-                .padding(10)
-                .background(.bar)
+                InlineBanner(
+                    message: "System action failed",
+                    detail: error,
+                    scope: .bar,
+                    severity: .error,
+                    copyValue: error,
+                    onDismiss: model.dismissActionError
+                )
                 .accessibilityIdentifier("system.actionError")
             }
         }
@@ -73,6 +75,15 @@ struct SystemView: View {
                 """
             )
         }
+        .alert("Reclaim Unused Resources?", isPresented: $confirmsReclaim) {
+            Button("Reclaim", role: .destructive) {
+                Task { await model.reclaimUnusedResources() }
+            }
+            .accessibilityIdentifier("system.reclaim.confirm")
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(reclaimMessage)
+        }
         .sheet(isPresented: $showsDiagnostics) {
             SystemDiagnosticsSheet(model: model, isPresented: $showsDiagnostics)
         }
@@ -85,71 +96,177 @@ struct SystemView: View {
         .accessibilityIdentifier("system.screen")
     }
 
+    private var reclaimMessage: String {
+        guard let usage = model.diskUsage else {
+            return "Unused images and volumes will be permanently deleted."
+        }
+        let images = usage.resource(named: "image")?.reclaimableBytes ?? 0
+        let volumes = usage.resource(named: "volume")?.reclaimableBytes ?? 0
+        return "This permanently deletes up to \(Self.formatBytes(images)) of unused images and \(Self.formatBytes(volumes)) of unused volumes."
+    }
+
+    private static func formatBytes(_ bytes: UInt64) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file)
+    }
+
 }
 
-private struct SystemBuilderSection: View {
+/// The shell all three glance cards share: a section label, the state line, the
+/// detail rows, and the card's own actions pinned to the bottom.
+private struct SystemCard<Content: View, Actions: View>: View {
+    let title: LocalizedStringResource
+    let value: LocalizedStringResource
+    let state: DSState
+    private let content: Content
+    private let actions: Actions
+
+    init(
+        title: LocalizedStringResource,
+        value: LocalizedStringResource,
+        state: DSState,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder actions: () -> Actions
+    ) {
+        self.title = title
+        self.value = value
+        self.state = state
+        self.content = content()
+        self.actions = actions()
+    }
+
+    var body: some View {
+        DSCard {
+            VStack(alignment: .leading, spacing: DSMetrics.spacing8) {
+                SectionLabel(title: title)
+                StateDot(state, label: value, accessibilityLabel: value)
+                    .font(.dsCardHeading)
+                content
+                Spacer(minLength: DSMetrics.spacing8)
+                HStack(spacing: DSMetrics.spacing8) { actions }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private struct SystemCardRow: View {
+    let label: LocalizedStringResource
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(Color.dsTextSecondary)
+            Spacer(minLength: DSMetrics.spacing8)
+            MonoText(value: value, dimmed: true, truncation: .middle)
+        }
+    }
+}
+
+private struct ServiceCard: View {
+    let model: SystemModel
+    @Binding var confirmsStop: Bool
+
+    var body: some View {
+        SystemCard(
+            title: "Service",
+            value: model.status.isRunning ? "Running" : "Stopped",
+            state: model.status.isRunning ? .running : .attention
+        ) {
+            SystemCardRow(label: "CLI", value: model.versions.cli?.version ?? "Unavailable")
+            SystemCardRow(
+                label: "Server",
+                value: model.versions.server?.version ?? model.status.version ?? "Unavailable"
+            )
+            if let message = model.status.message, !message.isEmpty {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(Color.dsTextSecondary)
+                    .textSelection(.enabled)
+            }
+        } actions: {
+            if let operation = model.serviceOperation {
+                ProgressView(operation.localizedDescription).controlSize(.small)
+            } else if model.status.isRunning {
+                Button("Stop Service…", role: .destructive) { confirmsStop = true }
+                    .accessibilityIdentifier("system.stop")
+            } else {
+                Button("Start Service") { Task { await model.perform(.start) } }
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityIdentifier("system.start")
+            }
+        }
+    }
+}
+
+private struct BuilderCard: View {
     let model: BuilderModel
     @State private var cpuLimit = ""
     @State private var memoryLimit = ""
     @State private var confirmsDelete = false
 
     var body: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("Image Builder", systemImage: "hammer")
-                        .font(.headline)
-                    Spacer()
-                    if model.operation != nil {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        BuilderActions(
-                            state: model.status.state,
-                            isBusy: model.isBusy,
-                            start: {
-                                Task {
-                                    await model.start(
-                                        cpuLimit: optionalTrimmed(cpuLimit),
-                                        memoryLimit: optionalTrimmed(memoryLimit)
-                                    )
-                                }
-                            },
-                            stop: { Task { await model.stop() } },
-                            delete: { confirmsDelete = true }
-                        )
-                    }
+        SystemCard(title: "Builder", value: value, state: state) {
+            switch model.loadingState {
+            case .idle, .loading:
+                ProgressView().controlSize(.small)
+            case .failed(let message):
+                InlineBanner(
+                    message: "Builder status unavailable",
+                    detail: message,
+                    scope: .row,
+                    severity: .attention,
+                    actionTitle: "Try Again",
+                    action: { Task { await model.refresh() } }
+                )
+            case .loaded:
+                if let image = model.status.image {
+                    SystemCardRow(label: "Image", value: image)
                 }
-                Divider()
-                switch model.loadingState {
-                case .idle, .loading:
-                    ProgressView("Loading builder status…")
-                case .failed(let message):
-                    Label(message, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
-                        .textSelection(.enabled)
-                    Button("Try Again") { Task { await model.refresh() } }
-                case .loaded:
-                    BuilderStatusGrid(status: model.status)
-                    if model.status.state == .absent {
-                        Divider()
-                        HStack {
-                            TextField("CPUs (optional)", text: $cpuLimit).frame(width: 150)
-                            TextField("Memory (optional, e.g. 4G)", text: $memoryLimit)
-                                .frame(width: 230)
-                        }
-                    }
+                if let id = model.status.id {
+                    SystemCardRow(label: "ID", value: id)
                 }
-                if let error = model.actionError {
-                    HStack {
-                        Label(error, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.red)
-                            .textSelection(.enabled)
-                        Spacer()
-                        Button("Dismiss") { model.dismissActionError() }
+                if let address = model.status.address {
+                    SystemCardRow(label: "Address", value: address)
+                }
+                if model.status.state == .absent {
+                    HStack(spacing: DSMetrics.spacing8) {
+                        TextField("CPUs", text: $cpuLimit)
+                        TextField("Memory", text: $memoryLimit)
                     }
+                    .controlSize(.small)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            if let error = model.actionError {
+                InlineBanner(
+                    message: "Builder action failed",
+                    detail: error,
+                    scope: .row,
+                    severity: .error,
+                    copyValue: error,
+                    onDismiss: model.dismissActionError
+                )
+            }
+        } actions: {
+            if model.operation != nil {
+                ProgressView().controlSize(.small)
+            } else {
+                BuilderActions(
+                    state: model.status.state,
+                    isBusy: model.isBusy,
+                    start: {
+                        Task {
+                            await model.start(
+                                cpuLimit: optionalTrimmed(cpuLimit),
+                                memoryLimit: optionalTrimmed(memoryLimit)
+                            )
+                        }
+                    },
+                    stop: { Task { await model.stop() } },
+                    delete: { confirmsDelete = true }
+                )
+            }
         }
         .alert("Delete Image Builder?", isPresented: $confirmsDelete) {
             Button("Delete", role: .destructive) { Task { await model.delete() } }
@@ -159,66 +276,49 @@ private struct SystemBuilderSection: View {
         }
     }
 
+    private var value: LocalizedStringResource {
+        switch model.status.state {
+        case .running: "Running"
+        case .stopped: "Stopped"
+        case .absent: "Not created"
+        case .unknown: "Unknown"
+        }
+    }
+
+    private var state: DSState {
+        switch model.status.state {
+        case .running: .running
+        case .stopped: .attention
+        case .absent, .unknown: .idle
+        }
+    }
+
     private func optionalTrimmed(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
 }
 
-private struct BuilderStatusGrid: View {
-    let status: BuilderStatus
+private struct UpdateCard: View {
+    let model: UpdateModel
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
-            GridRow {
-                Text("Status").foregroundStyle(.secondary)
-                Label(statusLabel, systemImage: statusIcon)
-                    .foregroundStyle(statusColor)
+        SystemCard(
+            title: "Update",
+            value: model.availableRelease == nil ? "Up to date" : "Available",
+            state: model.availableRelease == nil ? .running : .attention
+        ) {
+            SystemCardRow(label: "Installed", value: model.installedVersionDescription)
+            if let release = model.availableRelease {
+                SystemCardRow(label: "Latest", value: release.version.description)
             }
-            if let id = status.id {
-                GridRow {
-                    Text("ID").foregroundStyle(.secondary)
-                    Text(id).textSelection(.enabled)
-                }
+        } actions: {
+            if model.isChecking {
+                ProgressView().controlSize(.small)
+            } else {
+                Button("Check Now") { Task { await model.checkNow() } }
+                    .accessibilityIdentifier("system.update.checkCard")
             }
-            if let image = status.image {
-                GridRow {
-                    Text("Image").foregroundStyle(.secondary)
-                    Text(image).textSelection(.enabled)
-                }
-            }
-            if let address = status.address {
-                GridRow {
-                    Text("Address").foregroundStyle(.secondary)
-                    Text(address).textSelection(.enabled)
-                }
-            }
-        }
-    }
-
-    private var statusLabel: LocalizedStringResource {
-        switch status.state {
-        case .absent: "Not created"
-        case .running: "Running"
-        case .stopped: "Stopped"
-        case .unknown: "Unknown"
-        }
-    }
-
-    private var statusIcon: String {
-        switch status.state {
-        case .absent: "minus.circle"
-        case .running: "checkmark.circle.fill"
-        case .stopped: "stop.circle.fill"
-        case .unknown: "questionmark.circle"
-        }
-    }
-
-    private var statusColor: Color {
-        switch status.state {
-        case .running: .green
-        case .stopped: .orange
-        case .absent, .unknown: .secondary
         }
     }
 }
@@ -253,72 +353,22 @@ private struct BuilderActions: View {
     }
 }
 
-private struct SystemHealthSection: View {
-    let model: SystemModel
-    @Binding var confirmsStop: Bool
-
-    var body: some View {
-        GroupBox {
-            Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
-                GridRow {
-                    Text("Service")
-                        .foregroundStyle(.secondary)
-                    if model.status.isRunning {
-                        Label("Running", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                    } else {
-                        Label("Stopped", systemImage: "stop.circle.fill")
-                            .foregroundStyle(.orange)
-                    }
-                }
-                GridRow {
-                    Text("CLI version").foregroundStyle(.secondary)
-                    Text(model.versions.cli?.version ?? "Unavailable")
-                        .textSelection(.enabled)
-                }
-                GridRow {
-                    Text("Server version").foregroundStyle(.secondary)
-                    Text(model.versions.server?.version ?? model.status.version ?? "Unavailable")
-                        .textSelection(.enabled)
-                }
-                if let message = model.status.message, !message.isEmpty {
-                    GridRow {
-                        Text("Message").foregroundStyle(.secondary)
-                        Text(message).textSelection(.enabled)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            HStack {
-                Label("Service Health", systemImage: "heart.text.square")
-                    .font(.headline)
-                Spacer()
-                if let operation = model.serviceOperation {
-                    ProgressView(operation.localizedDescription)
-                        .controlSize(.small)
-                } else if model.status.isRunning {
-                    Button("Stop Service…", role: .destructive) {
-                        confirmsStop = true
-                    }
-                    .accessibilityIdentifier("system.stop")
-                } else {
-                    Button("Start Service") {
-                        Task { await model.perform(.start) }
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .accessibilityIdentifier("system.start")
-                }
-            }
-        }
-    }
-}
-
 private struct SystemDiskUsageSection: View {
     let model: SystemModel
+    let reclaim: () -> Void
 
     var body: some View {
-        GroupBox {
+        DSCard {
+            VStack(alignment: .leading, spacing: DSMetrics.spacing12) {
+            HStack {
+                Label("Disk Usage", systemImage: "internaldrive").font(.dsCardHeading)
+                Spacer()
+                if let reclaimable = model.diskUsage?.totalReclaimableBytes, reclaimable > 0 {
+                    Button("Reclaim \(Self.formatBytes(reclaimable))…", action: reclaim)
+                        .disabled(model.isReclaiming)
+                        .accessibilityIdentifier("system.reclaim")
+                }
+            }
             switch model.snapshotState {
             case .idle where model.diskUsage == nil,
                  .loading where model.diskUsage == nil:
@@ -332,6 +382,15 @@ private struct SystemDiskUsageSection: View {
                 )
             default:
                 if let resources = model.diskUsage?.resources {
+                    if let usage = model.diskUsage {
+                        Text("\(Self.formatBytes(usage.totalSizeBytes)) used · \(Self.formatBytes(usage.totalReclaimableBytes)) reclaimable")
+                            .foregroundStyle(Color.dsTextSecondary)
+                        StackedUsageBar(segments: usage.usageSegments, height: 10)
+                        VStack(alignment: .leading, spacing: DSMetrics.spacing4) {
+                            StackedUsageLegend(segments: usage.usageSegments)
+                        }
+                        .font(.caption)
+                    }
                     Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
                         GridRow {
                             Text("Resource").fontWeight(.semibold)
@@ -344,19 +403,17 @@ private struct SystemDiskUsageSection: View {
                         ForEach(resources) { resource in
                             GridRow {
                                 Text(resource.type?.capitalized ?? "Unknown")
-                                Text(resource.totalCount.map(String.init) ?? "—")
-                                Text(resource.activeCount.map(String.init) ?? "—")
-                                Text(Self.formatBytes(resource.sizeBytes))
-                                Text(Self.formatBytes(resource.reclaimableBytes))
+                                MonoText(value: resource.totalCount.map(String.init) ?? "—", tabular: true)
+                                MonoText(value: resource.activeCount.map(String.init) ?? "—", tabular: true)
+                                MonoText(value: Self.formatBytes(resource.sizeBytes), tabular: true)
+                                MonoText(value: Self.formatBytes(resource.reclaimableBytes), tabular: true)
                             }
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-        } label: {
-            Label("Disk Usage", systemImage: "internaldrive")
-                .font(.headline)
+            }
         }
     }
 
@@ -367,6 +424,7 @@ private struct SystemDiskUsageSection: View {
             countStyle: .file
         )
     }
+
 }
 
 private struct SystemLogsSection: View {
@@ -375,7 +433,16 @@ private struct SystemLogsSection: View {
     @State private var jumpToLatestRequest = 0
 
     var body: some View {
-        GroupBox {
+        DSCard {
+            VStack(alignment: .leading, spacing: DSMetrics.spacing12) {
+            HStack {
+                Label("Recent Service Logs", systemImage: "text.alignleft")
+                    .font(.dsCardHeading)
+                Spacer()
+                Text("Last 15 minutes")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             switch model.logsState {
             case .idle where model.logs.isEmpty,
                  .loading where model.logs.isEmpty:
@@ -428,14 +495,6 @@ private struct SystemLogsSection: View {
                     .frame(minHeight: 180, maxHeight: 360)
                 }
             }
-        } label: {
-            HStack {
-                Label("Recent Service Logs", systemImage: "text.alignleft")
-                    .font(.headline)
-                Spacer()
-                Text("Last 15 minutes")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .onChange(of: model.logsState) { _, state in
@@ -480,7 +539,7 @@ private struct SystemDiagnosticsSheet: View {
 
             ScrollView {
                 Text(model.diagnosticsText)
-                    .font(.system(.callout, design: .monospaced))
+                    .font(DSFont.mono(size: 12.5, relativeTo: .callout))
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
@@ -497,11 +556,7 @@ private struct SystemUnavailableView: View {
     let model: SystemModel
 
     var body: some View {
-        ContentUnavailableView {
-            Label(title, systemImage: "exclamationmark.triangle")
-        } description: {
-            Text(error).textSelection(.enabled)
-        } actions: {
+        EmptyState(title, systemImage: "exclamationmark.triangle", message: error) {
             Button("Try Again") {
                 Task { await model.refresh() }
             }

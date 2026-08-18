@@ -17,32 +17,39 @@ struct InspectionSection<Content: View>: View {
     }
 
     var body: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 10) {
+        DSCard {
+            VStack(alignment: .leading, spacing: DSMetrics.spacing12) {
+                SectionLabel(title, systemImage: systemImage)
                 content
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            Label(title, systemImage: systemImage)
-                .font(.headline)
         }
     }
 }
 
+/// A label/value pair. The value is always something the CLI emitted, so it is
+/// always mono; the label is ours, so it never is.
 struct InspectionValueRow: View {
-    let label: LocalizedStringKey
+    private let label: Text
     let value: String
 
     init(_ label: LocalizedStringKey, value: String?) {
-        self.label = label
+        self.label = Text(label)
+        self.value = value?.isEmpty == false ? value! : "—"
+    }
+
+    /// For labels that come from the inspected resource itself — annotation and
+    /// label dictionary keys — which must not be looked up in the string catalog.
+    init(rawLabel: String, value: String?) {
+        label = Text(verbatim: rawLabel)
         self.value = value?.isEmpty == false ? value! : "—"
     }
 
     var body: some View {
-        LabeledContent(label) {
-            Text(value)
-                .multilineTextAlignment(.trailing)
-                .textSelection(.enabled)
+        LabeledContent {
+            MonoText(value: value, truncation: .middle)
+        } label: {
+            label
         }
     }
 }
@@ -54,7 +61,7 @@ struct InspectionBooleanRow: View {
     var body: some View {
         LabeledContent(label) {
             Label(value ? "Enabled" : "Disabled", systemImage: value ? "checkmark.circle" : "minus.circle")
-                .foregroundStyle(value ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
+                .foregroundStyle(value ? Color.dsStateRunning : Color.dsTextSecondary)
         }
     }
 }
@@ -76,18 +83,21 @@ struct InspectionTokenList: View {
     var body: some View {
         if tokens.isEmpty {
             Text(emptyText)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.dsTextSecondary)
         } else {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), alignment: .leading)], alignment: .leading) {
                 ForEach(tokens) { token in
-                    Text(token.value)
-                        .font(.callout.monospaced())
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .textSelection(.enabled)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                    MonoText(value: token.value, truncation: .middle)
+                        .padding(.horizontal, DSMetrics.spacing8)
+                        .padding(.vertical, DSMetrics.spacing4)
+                        .background(
+                            Color.dsSurfaceRaised,
+                            in: RoundedRectangle(cornerRadius: DSMetrics.controlRadius)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: DSMetrics.controlRadius)
+                                .stroke(Color.dsHairline)
+                        }
                 }
             }
         }
@@ -111,10 +121,10 @@ struct InspectionKeyValueList: View {
     var body: some View {
         if values.isEmpty {
             Text(emptyText)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.dsTextSecondary)
         } else {
             ForEach(values.keys.sorted(), id: \.self) { key in
-                InspectionValueRow(LocalizedStringKey(key), value: values[key])
+                InspectionValueRow(rawLabel: key, value: values[key])
             }
         }
     }
@@ -132,7 +142,7 @@ struct InspectionEnvironmentList: View {
     var body: some View {
         if entries.isEmpty {
             Text("No environment variables")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.dsTextSecondary)
         } else {
             ForEach(entries) { entry in
                 InspectionSensitiveValueRow(name: entry.name, value: entry.value)
@@ -160,18 +170,16 @@ private struct InspectionSensitiveValueRow: View {
     @State private var revealsValue = false
 
     var body: some View {
-        LabeledContent(name) {
-            HStack(spacing: 6) {
+        LabeledContent {
+            HStack(spacing: DSMetrics.spacing8) {
                 if revealsValue {
-                    Text(value)
-                        .font(.callout.monospaced())
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .textSelection(.enabled)
+                    MonoText(value: value, truncation: .middle)
                 } else {
-                    Text(String(repeating: "•", count: min(max(value.count, 8), 20)))
-                        .font(.callout.monospaced())
-                        .lineLimit(1)
+                    MonoText(
+                        value: String(repeating: "•", count: min(max(value.count, 8), 20)),
+                        dimmed: true,
+                        selectable: false
+                    )
                 }
 
                 Button {
@@ -183,6 +191,8 @@ private struct InspectionSensitiveValueRow: View {
                 .help(revealsValue ? "Hide value" : "Reveal value")
                 .accessibilityLabel(revealsValue ? "Hide \(name)" : "Reveal \(name)")
             }
+        } label: {
+            Text(verbatim: name)
         }
     }
 }

@@ -11,6 +11,7 @@ import SwiftUI
 @MainActor
 private final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        DSFont.registerBundledFontsIfNeeded()
         guard
             let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
             let icon = NSImage(contentsOf: iconURL)
@@ -33,6 +34,9 @@ struct Container_GUIApp: App {
         WindowGroup {
             ContentView(model: AppDependencies.makeAppModel(), updates: updates)
         }
+        // The design puts the app's identity in the sidebar, not in a title bar,
+        // so the title area is hidden and the toolbar keeps the native chrome.
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") {

@@ -435,6 +435,10 @@ nonisolated struct ContainerSummary: Identifiable, Equatable, Sendable {
     let architecture: String?
     let address: String?
     let createdAt: Date?
+    let startedAt: Date?
+    let publishedPorts: [PublishedPortDTO]
+    let mounts: [ContainerMountDTO]
+    let networkNames: [String]
 
     init?(dto: ContainerDTO) {
         guard let id = dto.configuration?.id ?? dto.id, !id.isEmpty else {
@@ -449,6 +453,31 @@ nonisolated struct ContainerSummary: Identifiable, Equatable, Sendable {
         architecture = dto.configuration?.platform?.architecture
         address = networks?.first?.ipv4Address ?? networks?.first?.address ?? networks?.first?.ipv6Address
         createdAt = parseCLIDate(dto.configuration?.creationDate ?? dto.creationDate)
+        startedAt = parseCLIDate(dto.status?.startedDate ?? dto.startedDate)
+        publishedPorts = dto.configuration?.publishedPorts ?? []
+        mounts = dto.configuration?.mounts ?? []
+        networkNames = (networks ?? [])
+            .compactMap(\.network)
+            .uniqued()
+    }
+
+    var portSummary: String {
+        guard !publishedPorts.isEmpty else { return "—" }
+        return publishedPorts.prefix(2).map { port in
+            let container = port.containerPort.map(String.init) ?? "—"
+            let proto = port.proto ?? "tcp"
+            if let hostPort = port.hostPort {
+                return "\(hostPort):\(container)/\(proto)"
+            }
+            return "\(container)/\(proto)"
+        }.joined(separator: ", ") + (publishedPorts.count > 2 ? " +\(publishedPorts.count - 2)" : "")
+    }
+}
+
+private extension Sequence where Element: Hashable {
+    nonisolated func uniqued() -> [Element] {
+        var seen = Set<Element>()
+        return filter { seen.insert($0).inserted }
     }
 }
 

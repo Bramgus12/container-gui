@@ -16,7 +16,7 @@ nonisolated protocol ContainerDiagnosing: Sendable {
     func stats(containerID: String) async throws -> ContainerStats
 }
 
-actor CLIContainerDiagnosticsService: ContainerDiagnosing {
+actor CLIContainerDiagnosticsService: ContainerDiagnosing, ContainerStatsListing {
     private let cli: any ContainerCLI
 
     init(cli: any ContainerCLI) {
@@ -99,22 +99,28 @@ actor CLIContainerDiagnosticsService: ContainerDiagnosing {
             )
         }
     }
-}
 
-enum ContainerDetailTab: String, CaseIterable, Identifiable {
-    case overview = "Overview"
-    case logs = "Logs"
-    case configuration = "Configuration"
-    case stats = "Stats"
+    func allStats() async throws -> [String: ContainerStats] {
+        let result = try await cli.run(.stats(ids: []))
+        let data = Data(result.standardOutput.utf8)
 
-    var id: Self { self }
-
-    var title: LocalizedStringResource {
-        switch self {
-        case .overview: "Overview"
-        case .logs: "Logs"
-        case .configuration: "Configuration"
-        case .stats: "Stats"
+        do {
+            let dtos: [ContainerStatsDTO]
+            if let decoded = try? JSONDecoder().decode([ContainerStatsDTO].self, from: data) {
+                dtos = decoded
+            } else {
+                dtos = [try JSONDecoder().decode(ContainerStatsDTO.self, from: data)]
+            }
+            return Dictionary(
+                uniqueKeysWithValues: dtos.map { dto in
+                    let stats = ContainerStats(dto: dto)
+                    return (stats.id, stats)
+                }
+            )
+        } catch {
+            throw CLIError.invalidOutput(
+                description: "Container stats could not be decoded as JSON: \(error.localizedDescription)"
+            )
         }
     }
 }
@@ -129,12 +135,15 @@ enum ContainerInspectionState: Equatable {
 @Observable
 final class ContainerDetailModel {
     let containerID: String
-    var selectedTab: ContainerDetailTab = .overview {
-        didSet { updateVisibleWork() }
+    var logFilter: LogFilter = .all {
+        didSet { publishLiveLogSnapshot() }
+    }
+    var logSearchText = "" {
+        didSet { publishLiveLogSnapshot() }
     }
     var followsLogs = true {
         didSet {
-            guard followsLogs != oldValue, isVisible, selectedTab == .logs else { return }
+            guard followsLogs != oldValue, isVisible else { return }
             startLogs()
         }
     }
@@ -144,6 +153,7 @@ final class ContainerDetailModel {
     private(set) var isLogPaused = false
     private(set) var isLogStreaming = false
     private(set) var logError: String?
+    private(set) var logCounts = LogCounts(all: 0, warnings: 0, errors: 0)
     private(set) var stats: ContainerStats?
     private(set) var statsError: String?
     private(set) var isStatsLoading = false
@@ -224,18 +234,8 @@ final class ContainerDetailModel {
 
     private func updateVisibleWork() {
         guard isVisible else { return }
-
-        if selectedTab == .logs {
-            startLogs()
-        } else {
-            cancelLogs()
-        }
-
-        if selectedTab == .stats {
-            startStats()
-        } else {
-            cancelStats()
-        }
+        startLogs()
+        startStats()
     }
 
     private func startLogs() {
@@ -305,7 +305,8 @@ final class ContainerDetailModel {
     }
 
     private func publishLiveLogSnapshot() {
-        logSnapshot = liveLogBuffer.snapshot
+        logCounts = liveLogBuffer.counts
+        logSnapshot = liveLogBuffer.snapshot(filter: logFilter, matching: logSearchText)
     }
 
     private func startStats() {

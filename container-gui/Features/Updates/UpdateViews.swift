@@ -5,7 +5,23 @@ struct UpdateSection: View {
     let model: UpdateModel
 
     var body: some View {
-        GroupBox {
+        DSCard {
+            VStack(alignment: .leading, spacing: DSMetrics.spacing12) {
+            HStack {
+                Label("Updates", systemImage: "arrow.down.circle")
+                    .font(.dsCardHeading)
+                Spacer()
+                if model.isChecking {
+                    ProgressView("Checking for updates")
+                        .controlSize(.small)
+                } else {
+                    Button("Check Now") {
+                        Task { await model.checkNow() }
+                    }
+                    .accessibilityIdentifier("system.update.check")
+                }
+            }
+
             Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
                 GridRow {
                     Text("Installed version").foregroundStyle(.secondary)
@@ -56,20 +72,6 @@ struct UpdateSection: View {
             ))
             .accessibilityIdentifier("system.update.automatic")
             .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            HStack {
-                Label("Updates", systemImage: "arrow.down.circle")
-                    .font(.headline)
-                Spacer()
-                if model.isChecking {
-                    ProgressView("Checking for updates")
-                        .controlSize(.small)
-                } else {
-                    Button("Check Now") {
-                        Task { await model.checkNow() }
-                    }
-                    .accessibilityIdentifier("system.update.check")
-                }
             }
         }
         .task {
@@ -99,18 +101,18 @@ struct UpdateSection: View {
             Text("Checking…").foregroundStyle(.secondary)
         case .upToDate:
             Label("Up to date", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(Color.dsStateRunning)
                 .accessibilityIdentifier("system.update.upToDate")
         case .available(let release):
             Label(
                 "Version \(release.version.description) is available",
                 systemImage: "arrow.down.circle.fill"
             )
-            .foregroundStyle(.blue)
+            .foregroundStyle(Color.dsBlue400)
             .accessibilityIdentifier("system.update.available")
         case .failed(let message):
             Label(message, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.dsStateAttention)
                 .textSelection(.enabled)
                 .accessibilityIdentifier("system.update.failed")
         }

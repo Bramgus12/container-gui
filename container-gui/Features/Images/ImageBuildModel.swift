@@ -110,6 +110,14 @@ final class ImageBuildModel: Identifiable {
         )
     }
 
+    var advancedSetCount: Int {
+        [noCache, pull, exportsOutput].count(where: { $0 })
+            + [dockerfile, target, platform, operatingSystem, architecture, cpuLimit, memoryLimit, outputDestination]
+                .count { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            + buildArguments.count
+            + labels.count
+    }
+
     func addBuildArgument() { buildArguments.append(BuildKeyValueDraft()) }
     func removeBuildArgument(id: UUID) { buildArguments.removeAll { $0.id == id } }
     func addLabel() { labels.append(BuildKeyValueDraft()) }

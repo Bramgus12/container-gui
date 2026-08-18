@@ -70,6 +70,16 @@ final class SystemManagementServiceTests: XCTestCase {
         XCTAssertTrue(commands.contains(.systemLogs(follow: false, last: period)))
     }
 
+    func testReclaimComposesImageAndVolumePrune() async throws {
+        let cli = SystemCLIStub(version: "[]", status: "{}", diskUsage: "[]", logs: "")
+        let service = CLISystemService(cli: cli)
+
+        try await service.reclaimUnusedResources()
+
+        let commands = await cli.commands
+        XCTAssertEqual(commands, [.pruneImages(all: true), .pruneVolumes])
+    }
+
     func testSanitizerRedactsJSONBearerURLAndPrivateKeyValues() {
         let value = """
         {"access_token":"json-secret"}

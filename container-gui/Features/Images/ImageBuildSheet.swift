@@ -9,25 +9,49 @@ struct ImageBuildSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Form {
-                BuildSourceSection(model: model)
-                BuildOptionsSection(model: model)
-                BuildArgumentsSection(model: model)
-                BuildLabelsSection(model: model)
-                BuildOutputSection(model: model)
-                Section("Command Preview") {
-                    Text(model.commandPreview)
-                        .font(.system(.callout, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityIdentifier("images.build.preview")
+            HStack(spacing: 0) {
+                Form {
+                    BuildSourceSection(model: model)
+                    if appModel.builderModel?.status.state != .running {
+                        Section {
+                            InlineBanner(
+                                message: "The image builder is stopped",
+                                detail: "It will be started when the build begins.",
+                                scope: .card,
+                                severity: .attention
+                            )
+                        }
+                    }
+                    BuildProgressSection(model: model)
                 }
-                BuildProgressSection(model: model)
+                .formStyle(.grouped)
+                .frame(maxWidth: .infinity)
+
+                Rectangle().fill(Color.dsHairline).frame(width: 1)
+
+                Form {
+                    DisclosureGroup {
+                        BuildOptionsSection(model: model)
+                        BuildArgumentsSection(model: model)
+                        BuildLabelsSection(model: model)
+                        BuildOutputSection(model: model)
+                    } label: {
+                        HStack {
+                            Text("Advanced")
+                            Spacer()
+                            if model.advancedSetCount > 0 {
+                                TagChip(title: "\(model.advancedSetCount) set")
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("images.build.advanced")
+                }
+                .formStyle(.grouped)
+                .frame(maxWidth: .infinity)
             }
-            .formStyle(.grouped)
             .disabled(model.isBuilding)
 
-            Divider()
+            CommandStrip(command: model.commandPreview, accessibilityID: "images.build.preview")
 
             HStack {
                 if model.isBuilding {
@@ -243,7 +267,7 @@ private struct BuildProgressSection: View {
                 if !model.progress.isEmpty {
                     ScrollView {
                         Text(model.progress)
-                            .font(.system(.callout, design: .monospaced))
+                            .font(DSFont.mono(size: 12.5, relativeTo: .callout))
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -251,7 +275,7 @@ private struct BuildProgressSection: View {
                 }
                 if let error = model.errorMessage {
                     Label(error, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.dsStateDestructive)
                         .textSelection(.enabled)
                 }
             }
@@ -268,12 +292,14 @@ private struct BuildKeyValueRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 TextField("Key", text: $draft.key).frame(width: 200)
+                    .dsMonoField()
                 TextField("Value", text: $draft.value)
+                    .dsMonoField()
                 Button("Remove", systemImage: "minus.circle", action: onRemove)
                     .labelStyle(.iconOnly)
             }
             if let error {
-                Text(error).font(.caption).foregroundStyle(.red)
+                Text(error).font(.caption).foregroundStyle(Color.dsStateDestructive)
             }
         }
     }
@@ -290,11 +316,12 @@ private struct BuildValidatedField: View {
         VStack(alignment: .leading, spacing: 6) {
             LabeledContent(title) {
                 TextField(prompt, text: $text)
+                    .dsMonoField()
                     .multilineTextAlignment(.leading)
                     .accessibilityIdentifier(accessibilityIdentifier)
             }
             if let error {
-                Text(error).font(.caption).foregroundStyle(.red)
+                Text(error).font(.caption).foregroundStyle(Color.dsStateDestructive)
             }
         }
     }

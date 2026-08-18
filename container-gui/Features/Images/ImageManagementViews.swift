@@ -5,11 +5,29 @@ struct ImageListView: View {
     @Bindable var model: AppModel
     @State private var pendingDeletion: ImageDeletionPlan?
     @State private var pullModel: ImagePullModel?
+    @State private var activePullModel: ImagePullModel?
+    @State private var activePullTask: Task<Void, Never>?
     @State private var buildModel: ImageBuildModel?
     @State private var runContainerModel: RunContainerModel?
 
     var body: some View {
-        table
+        VStack(spacing: 0) {
+            ImageScreenHeader(count: model.images.count, totalSize: model.images.compactMap(\.size).reduce(0, &+))
+            if let activePullModel {
+                ImagePullProgressRow(model: activePullModel) {
+                    activePullTask?.cancel()
+                } dismiss: {
+                    self.activePullModel = nil
+                    activePullTask = nil
+                }
+            }
+            table
+            ImageListFooter(
+                unused: model.unusedImages,
+                showsUnusedOnly: $model.showsUnusedImagesOnly
+            )
+        }
+            .background(Color.dsCanvas)
             .navigationTitle("Images")
             .searchable(
                 text: $model.imageSearchText,
@@ -96,7 +114,11 @@ struct ImageListView: View {
                 ImageDeletionSheet(plan: plan, model: model)
             }
             .sheet(item: $pullModel) { pullModel in
-                ImagePullSheet(model: pullModel, appModel: model)
+                ImagePullSheet(model: pullModel) {
+                    activePullModel = pullModel
+                    activePullTask = Task { await pullModel.pull(using: model) }
+                    self.pullModel = nil
+                }
             }
             .sheet(item: $buildModel) { buildModel in
                 ImageBuildSheet(model: buildModel, appModel: model)
@@ -116,38 +138,46 @@ struct ImageListView: View {
             }
     }
 
+    private static let columns: [DSTableColumn] = [
+        DSTableColumn("reference", "Reference"),
+        DSTableColumn("digest", "Digest"),
+        DSTableColumn("platform", "Platform", width: 120),
+        DSTableColumn("usedBy", "Used by", width: 120),
+        DSTableColumn("size", "Size", width: 150, alignment: .trailing),
+    ]
+
     private var table: some View {
-        Table(model.filteredImages, selection: $model.selectedImageID) {
-            TableColumn("Reference", value: \.reference)
-            TableColumn("Digest") { image in
-                Text(image.digest ?? "—")
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            TableColumn("Size") { image in
-                Text(image.size.map(Self.formatBytes) ?? "—")
-            }
-            TableColumn("Platform") { image in
-                Text(Self.platformDescription(image))
-            }
-            TableColumn("Created") { image in
-                if let createdAt = image.createdAt {
-                    Text(
-                        createdAt,
-                        format: .dateTime
-                            .year()
-                            .month(.abbreviated)
-                            .day()
-                            .hour()
-                            .minute()
-                    )
+        DSTable(
+            rows: model.filteredImages,
+            columns: Self.columns,
+            selection: $model.selectedImageID
+        ) { image in
+            MonoText(value: image.reference, truncation: .middle, selectable: false)
+                .dsColumn(Self.columns[0])
+
+            MonoText(value: image.digest ?? "—", dimmed: true, truncation: .middle, selectable: false)
+                .dsColumn(Self.columns[1])
+
+            MonoText(value: Self.platformDescription(image), dimmed: true, selectable: false)
+                .dsColumn(Self.columns[2])
+
+            Group {
+                let count = model.inventoryIndex.containers(using: image).count
+                if count == 0 {
+                    TagChip(title: "Unused")
                 } else {
-                    Text("—")
+                    Text("\(count) container(s)")
+                        .foregroundStyle(Color.dsTextSecondary)
                 }
             }
-        }
-        .contextMenu(forSelectionType: String.self) { selection in
-            if let image = model.images.first(where: { selection.contains($0.id) }) {
+            .dsColumn(Self.columns[3])
+
+            HStack(spacing: DSMetrics.spacing8) {
+                UsageBar(value: Self.sizeFraction(image, images: model.images)).frame(width: 52)
+                MonoText(value: image.size.map(Self.formatBytes) ?? "—", dimmed: true, tabular: true, selectable: false)
+            }
+            .dsColumn(Self.columns[4])
+            .contextMenu {
                 Button("Run Image…") {
                     runContainerModel = RunContainerModel(
                         image: image.reference,
@@ -182,12 +212,11 @@ struct ImageListView: View {
                 .controlSize(.large)
 
         case .failed(let message) where model.images.isEmpty:
-            ContentUnavailableView {
-                Label("Images Couldn’t Be Loaded", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(message)
-                    .textSelection(.enabled)
-            } actions: {
+            EmptyState(
+                "Images Couldn’t Be Loaded",
+                systemImage: "exclamationmark.triangle",
+                message: message
+            ) {
                 Button("Try Again") {
                     Task { await model.refreshImages() }
                 }
@@ -196,11 +225,11 @@ struct ImageListView: View {
 
         case .loaded where model.filteredImages.isEmpty:
             if model.images.isEmpty {
-                ContentUnavailableView {
-                    Label("No Images", systemImage: "square.stack.3d.up")
-                } description: {
-                    Text("Pull an image to run your first container.")
-                } actions: {
+                EmptyState(
+                    "No Images",
+                    systemImage: "square.stack.3d.up",
+                    description: "Pull an image to run your first container."
+                ) {
                     Button("Pull Image…") {
                         pullModel = ImagePullModel()
                     }
@@ -217,40 +246,28 @@ struct ImageListView: View {
     @ViewBuilder
     private var refreshErrorBanner: some View {
         if case .failed(let message) = model.imageListState, !model.images.isEmpty {
-            HStack(spacing: 12) {
-                Label(message, systemImage: "exclamationmark.triangle")
-                    .lineLimit(2)
-                Spacer()
-                Button("Try Again") {
-                    Task { await model.refreshImages() }
-                }
-            }
-            .padding(10)
-            .background(.bar)
+            InlineBanner(
+                message: "Refresh failed",
+                detail: message,
+                scope: .bar,
+                severity: .error,
+                actionTitle: "Try Again",
+                action: { Task { await model.refreshImages() } }
+            )
         }
     }
 
     @ViewBuilder
     private var deletionErrorBanner: some View {
         if let failure = model.imageDeletionFailure {
-            HStack(spacing: 12) {
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Delete failed for \(failure.reference)")
-                            .fontWeight(.semibold)
-                        Text(failure.message)
-                            .textSelection(.enabled)
-                    }
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle")
-                }
-                Spacer()
-                Button("Dismiss") {
-                    model.dismissImageDeletionFailure()
-                }
-            }
-            .padding(10)
-            .background(.bar)
+            InlineBanner(
+                message: "Delete failed for \(failure.reference)",
+                detail: failure.message,
+                scope: .bar,
+                severity: .error,
+                copyValue: failure.message,
+                onDismiss: model.dismissImageDeletionFailure
+            )
             .accessibilityIdentifier("images.deletionError")
         }
     }
@@ -262,6 +279,85 @@ struct ImageListView: View {
     nonisolated private static func platformDescription(_ image: ImageSummary) -> String {
         let values = [image.operatingSystem, image.architecture].compactMap { $0 }
         return values.isEmpty ? "—" : values.joined(separator: " / ")
+    }
+
+    nonisolated private static func sizeFraction(_ image: ImageSummary, images: [ImageSummary]) -> Double {
+        guard let size = image.size, let maximum = images.compactMap(\.size).max(), maximum > 0 else { return 0 }
+        return Double(size) / Double(maximum)
+    }
+}
+
+private struct ImageScreenHeader: View {
+    let count: Int
+    let totalSize: UInt64
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Images").font(.dsScreenTitle)
+            Text("\(count) · \(Self.formatBytes(totalSize))")
+                .foregroundStyle(Color.dsTextSecondary)
+            Spacer()
+        }
+        .padding(DSMetrics.spacing16)
+        .background(Color.dsSurface)
+    }
+
+    private static func formatBytes(_ bytes: UInt64) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file)
+    }
+}
+
+private struct ImagePullProgressRow: View {
+    let model: ImagePullModel
+    let cancel: () -> Void
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: DSMetrics.spacing12) {
+            ProgressView(value: model.progressFraction)
+                .frame(width: 100)
+            VStack(alignment: .leading, spacing: DSMetrics.spacing4) {
+                MonoText(value: model.reference, truncation: .middle)
+                Text(model.errorMessage ?? (model.didFinish ? "Image pulled" : model.progressLabel))
+                    .foregroundStyle(model.errorMessage == nil ? Color.dsTextSecondary : Color.dsStateDestructive)
+                    .lineLimit(1)
+            }
+            Spacer()
+            if model.isPulling {
+                Button("Cancel", role: .cancel, action: cancel)
+            } else {
+                Button("Dismiss", systemImage: "xmark", action: dismiss).labelStyle(.iconOnly)
+            }
+        }
+        .padding(.horizontal, DSMetrics.spacing12)
+        .frame(minHeight: 48)
+        .background(Color.dsBlue100.opacity(0.35))
+    }
+}
+
+private struct ImageListFooter: View {
+    let unused: [ImageSummary]
+    @Binding var showsUnusedOnly: Bool
+
+    var body: some View {
+        HStack {
+            Text("\(unused.count) unused images · \(Self.formatBytes(unused.compactMap(\.size).reduce(0, &+)))")
+            Spacer()
+            Toggle("Show unused only", isOn: $showsUnusedOnly)
+                .toggleStyle(.button)
+                .disabled(unused.isEmpty && !showsUnusedOnly)
+                .accessibilityIdentifier("images.showUnusedOnly")
+        }
+        .font(.caption)
+        .foregroundStyle(Color.dsTextSecondary)
+        .padding(.horizontal, DSMetrics.spacing12)
+        .frame(minHeight: 34)
+        .background(Color.dsSurfaceRaised)
+        .overlay(alignment: .top) { Rectangle().fill(Color.dsHairline).frame(height: 1) }
+    }
+
+    private static func formatBytes(_ bytes: UInt64) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file)
     }
 }
 
@@ -284,7 +380,7 @@ private struct ImageDeletionSheet: View {
                 systemImage: "exclamationmark.triangle.fill"
             )
             .font(.title2.bold())
-            .foregroundStyle(.red)
+            .foregroundStyle(Color.dsStateDestructive)
 
             Text(message)
 
@@ -294,7 +390,7 @@ private struct ImageDeletionSheet: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(container.id)
                                 .fontWeight(.medium)
-                            Text(container.state.displayName)
+                            Text(container.state.localizedTitle)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -312,7 +408,7 @@ private struct ImageDeletionSheet: View {
                     "Automatic cleanup is unavailable when a container has an unsupported state or no stable image digest.",
                     systemImage: "hand.raised.fill"
                 )
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.dsStateAttention)
             }
 
             if !plan.unresolvedContainers.isEmpty {
@@ -320,7 +416,7 @@ private struct ImageDeletionSheet: View {
                     "Some containers do not report image digests, so their dependency cannot be verified. Review them manually before deleting this image.",
                     systemImage: "hand.raised.fill"
                 )
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.dsStateAttention)
             }
 
             if !plan.hasStableIdentity {
@@ -328,7 +424,7 @@ private struct ImageDeletionSheet: View {
                     "Automatic deletion requires a stable image digest. Refresh the image list or delete the image from Terminal.",
                     systemImage: "hand.raised.fill"
                 )
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.dsStateAttention)
             }
 
             Spacer()
@@ -410,83 +506,38 @@ private struct ImageDeletionSheet: View {
 private struct ImagePullSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: ImagePullModel
-    let appModel: AppModel
-    @State private var operation: Task<Void, Never>?
+    let onStart: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             Form {
                 Section("Image") {
                     TextField("Reference, for example alpine:3.21", text: $model.reference)
+                        .dsMonoField()
                     if let error = model.referenceError {
                         Text(error)
                             .font(.caption)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(Color.dsStateDestructive)
                     }
                 }
 
-                if model.isPulling || model.didFinish || !model.progress.isEmpty {
-                    Section("Progress") {
-                        if model.isPulling {
-                            ProgressView("Pulling image…")
-                        } else if model.didFinish {
-                            Label("Image pulled successfully", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                        }
-                        if !model.progress.isEmpty {
-                            ScrollView {
-                                Text(model.progress)
-                                    .font(.system(.callout, design: .monospaced))
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .frame(minHeight: 180, maxHeight: 320)
-                        }
-                    }
-                }
-
-                if let errorMessage = model.errorMessage {
-                    Section {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.red)
-                            .textSelection(.enabled)
-                    }
-                }
             }
             .formStyle(.grouped)
 
             Divider()
 
             HStack {
-                if model.isPulling {
-                    Button("Cancel Pull", role: .cancel) {
-                        operation?.cancel()
-                    }
-                } else {
-                    Button(model.didFinish ? "Done" : "Cancel", role: .cancel) {
-                        dismiss()
-                    }
+                Button("Cancel", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                }
                 Spacer()
-                if !model.didFinish {
-                    Button("Pull") {
-                        operation = Task {
-                            await model.pull(using: appModel)
-                        }
-                    }
+                Button("Pull", action: onStart)
                     .keyboardShortcut(.defaultAction)
                     .disabled(!model.canPull)
                     .accessibilityIdentifier("images.pull.submit")
-                }
             }
             .padding()
         }
-        .frame(minWidth: 620, minHeight: 460)
-        .interactiveDismissDisabled(model.isPulling)
-        .onDisappear {
-            operation?.cancel()
-        }
+        .frame(minWidth: 520, minHeight: 220)
         .accessibilityIdentifier("images.pull.sheet")
     }
 }

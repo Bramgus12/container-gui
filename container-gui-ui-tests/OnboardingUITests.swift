@@ -75,14 +75,18 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(start.isEnabled)
         start.click()
         XCTAssertTrue(waitUntil(timeout: 3) {
-            app.staticTexts["Running"].exists
+            app.descendants(matching: .any)
+                .matching(NSPredicate(format: "label == %@", "Running"))
+                .firstMatch.exists
         })
 
         let stop = app.buttons["containers.stop"]
         XCTAssertTrue(stop.isEnabled)
         stop.click()
         XCTAssertTrue(waitUntil(timeout: 3) {
-            app.staticTexts["Stopped"].exists
+            app.descendants(matching: .any)
+                .matching(NSPredicate(format: "label == %@", "Stopped"))
+                .firstMatch.exists
         })
 
         app.menuButtons["containers.moreActions"].click()
@@ -105,7 +109,7 @@ final class OnboardingUITests: XCTestCase {
         let fixture = app.staticTexts["ui-test-network"]
         XCTAssertTrue(fixture.waitForExistence(timeout: 3))
         fixture.click()
-        XCTAssertTrue(app.staticTexts["Addressing"].waitForExistence(timeout: 3))
+        XCTAssertTrue(sectionLabel(app, "Addressing").waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["fd42::/64"].exists)
 
         app.buttons["networks.create"].click()
@@ -160,6 +164,9 @@ final class OnboardingUITests: XCTestCase {
         app.descendants(matching: .any)["destination.containers"].click()
         app.buttons["containers.run"].click()
         let runSheet = app.sheets.firstMatch
+        XCTAssertTrue(runSheet.buttons["run.submit"].waitForExistence(timeout: 3))
+        // Storage lives on its own page in the run sheet's section rail.
+        runSheet.buttons["Storage"].click()
         XCTAssertTrue(runSheet.buttons["Add Volume"].waitForExistence(timeout: 3))
         XCTAssertTrue(runSheet.buttons["Add Host Folder"].exists)
     }
@@ -172,7 +179,7 @@ final class OnboardingUITests: XCTestCase {
         let buildSheet = app.sheets.firstMatch
         XCTAssertTrue(buildSheet.textFields["images.build.tag"].waitForExistence(timeout: 3))
         XCTAssertTrue(buildSheet.textFields["images.build.context"].exists)
-        XCTAssertTrue(buildSheet.staticTexts["Build secrets and SSH forwarding are not supported in this version of Container GUI."].exists)
+        XCTAssertTrue(buildSheet.disclosureTriangles.firstMatch.exists)
         buildSheet.buttons["Cancel"].click()
         XCTAssertTrue(buildSheet.waitForNonExistence(timeout: 3))
 
@@ -186,21 +193,72 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["system.builder.stop"].waitForExistence(timeout: 3))
     }
 
+    func testRedesignedGlanceAndHousekeepingControlsArePresent() {
+        let app = launch(scenario: "ready")
+
+        // The sidebar glance layer.
+        XCTAssertTrue(
+            app.descendants(matching: .any)["sidebar.activity"].waitForExistence(timeout: 3)
+        )
+
+        // The images footer filters to unused images rather than selecting them.
+        app.descendants(matching: .any)["destination.images"].click()
+        let unusedOnly = app.checkBoxes["images.showUnusedOnly"]
+        XCTAssertTrue(unusedOnly.waitForExistence(timeout: 3))
+
+        // The build sheet ends in a command strip instead of a buried preview row.
+        app.buttons["images.build"].click()
+        let buildSheet = app.sheets.firstMatch
+        XCTAssertTrue(buildSheet.textFields["images.build.tag"].waitForExistence(timeout: 3))
+        // The strip's contents are the assertion that matters: the sheet ends in
+        // the command it will run, not in a buried preview row.
+        XCTAssertTrue(commandStripText(app, containing: "container build").waitForExistence(timeout: 3))
+        buildSheet.buttons["Cancel"].click()
+        XCTAssertTrue(buildSheet.waitForNonExistence(timeout: 3))
+
+        // The run sheet's section rail is a real control.
+        app.descendants(matching: .any)["destination.containers"].click()
+        app.buttons["containers.run"].click()
+        let runSheet = app.sheets.firstMatch
+        XCTAssertTrue(
+            app.descendants(matching: .any)["run.rail"].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["run.preview"].exists)
+        // The rail pages the form rather than scrolling one long page.
+        XCTAssertTrue(runSheet.textFields["run.image"].exists)
+        runSheet.buttons["run.next"].click()
+        XCTAssertTrue(runSheet.textFields["run.cpu-limit"].waitForExistence(timeout: 3))
+        XCTAssertFalse(runSheet.textFields["run.image"].exists)
+        runSheet.buttons["run.back"].click()
+        XCTAssertTrue(runSheet.textFields["run.image"].waitForExistence(timeout: 3))
+        runSheet.buttons["run.cancel"].click()
+    }
+
+    func testSystemScreenExposesStatusCardActionsAndReclaim() {
+        let app = launch(scenario: "ready")
+        let systemDestination = app.descendants(matching: .any)["destination.system"]
+        XCTAssertTrue(systemDestination.waitForExistence(timeout: 3))
+        systemDestination.click()
+        XCTAssertTrue(app.descendants(matching: .any)["system.screen"].waitForExistence(timeout: 3))
+
+        // The service action moved onto the status card; it must still be reachable.
+        XCTAssertTrue(
+            app.buttons["system.stop"].waitForExistence(timeout: 3)
+                || app.buttons["system.start"].waitForExistence(timeout: 1),
+            "The service card must carry the start or stop action."
+        )
+        XCTAssertTrue(app.buttons["system.builder.start"].exists)
+    }
+
     func testLogViewerShowsNumberedSelectableMockLogs() {
         let app = launch(scenario: "ready")
         let fixture = app.staticTexts["demo-stopped"]
         XCTAssertTrue(fixture.waitForExistence(timeout: 3))
         fixture.click()
 
-        let logsTab = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label == %@", "Logs"))
-            .firstMatch
-        XCTAssertTrue(logsTab.waitForExistence(timeout: 3))
-        logsTab.click()
-
         let viewer = app.textViews["logs.viewer"]
         XCTAssertTrue(viewer.waitForExistence(timeout: 3))
-        XCTAssertTrue(logsTab.exists, "The detail tabs must remain visible above the log viewer.")
+        XCTAssertTrue(app.textFields["logs.filter"].exists)
         XCTAssertTrue(
             (viewer.value as? String)?.contains("first UI test log line") == true,
             "The native text view must expose the rendered log text."
@@ -242,14 +300,18 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(fixture.waitForExistence(timeout: 3))
         fixture.click()
 
+        let configurationButton = app.buttons["container.detail.config"]
+        XCTAssertTrue(configurationButton.waitForExistence(timeout: 3))
+        configurationButton.click()
+
+        XCTAssertTrue(app.staticTexts["Container configuration"].waitForExistence(timeout: 3))
         let configurationTab = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label == %@", "Configuration"))
             .firstMatch
         XCTAssertTrue(configurationTab.waitForExistence(timeout: 3))
         configurationTab.click()
-
         XCTAssertTrue(app.staticTexts["Container Configuration"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Process"].exists)
+        XCTAssertTrue(sectionLabel(app, "Process").exists)
         let revealToken = app.buttons["Reveal API_TOKEN"]
         XCTAssertTrue(revealToken.exists)
         XCTAssertFalse(app.staticTexts["container-secret"].exists)
@@ -264,7 +326,7 @@ final class OnboardingUITests: XCTestCase {
 
     func testImageInspectionUsesStructuredMaskedUI() {
         let app = launch(scenario: "ready")
-        let images = app.staticTexts["Images"].firstMatch
+        let images = app.descendants(matching: .any)["destination.images"].firstMatch
         XCTAssertTrue(images.waitForExistence(timeout: 3))
         images.click()
 
@@ -283,7 +345,7 @@ final class OnboardingUITests: XCTestCase {
 
     func testImageCleanupDeletesDependentContainerBeforeImage() {
         let app = launch(scenario: "imageCleanup")
-        let imagesDestination = app.staticTexts["Images"].firstMatch
+        let imagesDestination = app.descendants(matching: .any)["destination.images"].firstMatch
         XCTAssertTrue(imagesDestination.waitForExistence(timeout: 3))
         imagesDestination.click()
 
@@ -364,6 +426,38 @@ final class OnboardingUITests: XCTestCase {
             copiedLogs.contains("UI test service log line 40."),
             "Copy should include the newest service-log entry."
         )
+    }
+
+    /// The command strip renders its command as mono static text; like other
+    /// design-system text it can surface through `value` rather than `label`.
+    private func commandStripText(
+        _ app: XCUIApplication,
+        containing command: String
+    ) -> XCUIElement {
+        app.staticTexts
+            .matching(
+                NSPredicate(
+                    format: "value CONTAINS[c] %@ OR label CONTAINS[c] %@",
+                    command,
+                    command
+                )
+            )
+            .firstMatch
+    }
+
+    /// Design-system section labels render uppercased via `.textCase(.uppercase)`,
+    /// which makes AppKit expose the text as the element's *value* rather than
+    /// its label — so both are matched, case-insensitively.
+    private func sectionLabel(_ app: XCUIApplication, _ title: String) -> XCUIElement {
+        app.staticTexts
+            .matching(
+                NSPredicate(
+                    format: "value CONTAINS[c] %@ OR label CONTAINS[c] %@",
+                    title,
+                    title
+                )
+            )
+            .firstMatch
     }
 
     private func launch(scenario: String) -> XCUIApplication {

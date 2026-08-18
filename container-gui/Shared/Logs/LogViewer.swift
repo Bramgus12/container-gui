@@ -2,11 +2,11 @@ import AppKit
 import SwiftUI
 
 struct LogLineMap: Equatable {
-    let firstLogicalLineNumber: Int
+    let logicalLineNumbers: [Int]
     let characterIndexes: [Int]
 
     init(snapshot: LogSnapshot) {
-        firstLogicalLineNumber = snapshot.firstLogicalLineNumber
+        logicalLineNumbers = snapshot.logicalLineNumbers
         guard !snapshot.text.isEmpty else {
             characterIndexes = []
             return
@@ -24,12 +24,13 @@ struct LogLineMap: Equatable {
     }
 
     var lastLogicalLineNumber: Int {
-        firstLogicalLineNumber + max(0, characterIndexes.count - 1)
+        logicalLineNumbers.last ?? 1
     }
 
     func lineNumber(atCharacterIndex index: Int) -> Int? {
         guard let offset = characterIndexes.firstIndex(of: index) else { return nil }
-        return firstLogicalLineNumber + offset
+        guard logicalLineNumbers.indices.contains(offset) else { return nil }
+        return logicalLineNumbers[offset]
     }
 }
 
@@ -351,6 +352,7 @@ final class LogScrollView: NSObject {
             anchor = currentAnchor
         }
         snapshot = newSnapshot
+        applySeverityAttributes(snapshot: newSnapshot)
         lineNumberRuler.lineMap = LogLineMap(snapshot: newSnapshot)
         applyParagraphStyle()
         lineNumberRuler.needsDisplay = true
@@ -480,6 +482,7 @@ final class LogScrollView: NSObject {
                 value: colors.foreground,
                 range: NSRange(location: 0, length: textStorage.length)
             )
+            applySeverityAttributes(snapshot: snapshot)
         }
         lineNumberRuler.needsDisplay = true
         scrollView.needsDisplay = true
@@ -499,6 +502,36 @@ final class LogScrollView: NSObject {
     private func applyTextAttributes(to range: NSRange?) {
         guard let range, range.length > 0 else { return }
         logTextView.textStorage?.addAttributes(textAttributes, range: range)
+    }
+
+    private func applySeverityAttributes(snapshot: LogSnapshot) {
+        guard let textStorage = logTextView.textStorage, textStorage.length > 0 else { return }
+        let fullRange = NSRange(location: 0, length: textStorage.length)
+        textStorage.addAttribute(.backgroundColor, value: NSColor.clear, range: fullRange)
+        let source = textStorage.string as NSString
+        var lineIndex = 0
+        var location = 0
+        while location < source.length, snapshot.severities.indices.contains(lineIndex) {
+            let range = source.lineRange(for: NSRange(location: location, length: 0))
+            switch snapshot.severities[lineIndex] {
+            case .plain:
+                break
+            case .warning:
+                let attention = NSColor(named: "StateAttention") ?? .systemOrange
+                textStorage.addAttributes([
+                    .foregroundColor: attention,
+                    .backgroundColor: attention.withAlphaComponent(0.08),
+                ], range: range)
+            case .error:
+                let destructive = NSColor(named: "StateDestructive") ?? .systemRed
+                textStorage.addAttributes([
+                    .foregroundColor: destructive,
+                    .backgroundColor: destructive.withAlphaComponent(0.10),
+                ], range: range)
+            }
+            lineIndex += 1
+            location = NSMaxRange(range)
+        }
     }
 
     private func restoreSelection(_ ranges: [NSValue], afterRemovingPrefix length: Int) {

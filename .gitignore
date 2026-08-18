@@ -6,7 +6,8 @@
 ._*
 
 # Custom folder icons
-Icon
+Icon
+
 
 # Volume root files
 .DocumentRevisions-V100
@@ -77,3 +78,8 @@ playground.xcworkspace
 
 # Swift Package Manager
 # Package.resolved
+
+### Design source
+# Design-tool exports (mockups plus multi-megabyte icon renders). Kept locally
+# as the reference for docs/design-system-*.md, not carried in the repo.
+design_system/

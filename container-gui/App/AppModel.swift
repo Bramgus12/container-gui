@@ -178,6 +178,8 @@ nonisolated struct ContainerMutationFailure: Identifiable, Equatable, Sendable {
     let containerID: String
     let mutation: ContainerMutation
     let message: String
+    var invocation: String? = nil
+    var exitCode: Int32? = nil
 }
 
 enum AppDestination: String, CaseIterable, Identifiable, Sendable {
@@ -269,17 +271,32 @@ final class AppModel {
     var imageSearchText = "" {
         didSet { updateFilteredImages() }
     }
+    /// Narrows the images table to images no container references. Housekeeping
+    /// is a filter rather than a bulk selection — deleting still goes one image
+    /// at a time, or through Reclaim on the System screen.
+    var showsUnusedImagesOnly = false {
+        didSet { updateFilteredImages() }
+    }
     var selectedImageID: String?
 
     private(set) var containers: [ContainerSummary] = [] {
-        didSet { updateFilteredContainers() }
+        didSet {
+            updateFilteredContainers()
+            rebuildInventoryIndex()
+        }
     }
     private(set) var filteredContainers: [ContainerSummary] = []
     private(set) var containerListState: ContainerListState = .idle
-    private(set) var containerMutations: [String: ContainerMutation] = [:]
+    private(set) var lastContainerRefresh: Date?
+    private(set) var containerMutations: [String: ContainerMutation] = [:] {
+        didSet { statsPoller?.setPaused(!containerMutations.isEmpty) }
+    }
     private(set) var mutationFailure: ContainerMutationFailure?
     private(set) var images: [ImageSummary] = [] {
-        didSet { updateFilteredImages() }
+        didSet {
+            updateFilteredImages()
+            rebuildInventoryIndex()
+        }
     }
     private(set) var filteredImages: [ImageSummary] = []
     private(set) var imageListState: ImageListState = .idle
@@ -290,6 +307,8 @@ final class AppModel {
     private(set) var networkModel: NetworkModel?
     private(set) var volumeModel: VolumeModel?
     private(set) var builderModel: BuilderModel?
+    private(set) var systemModel: SystemModel?
+    private(set) var statsPoller: ContainerStatsPoller?
 
     private let cliFactory: any ContainerCLIMaking
     private var containerLister: (any ContainerListing)?
@@ -299,7 +318,6 @@ final class AppModel {
     private var imageService: (any ImageManaging)?
     private var imageBuilder: (any ImageBuilding)?
     private let failureLog: OperationFailureLog
-    private var systemModel: SystemModel?
     private var configuredExecutableURL: URL?
     private var refreshGeneration = 0
     private var imageRefreshGeneration = 0
@@ -348,6 +366,9 @@ final class AppModel {
         if let builderService {
             builderModel = BuilderModel(service: builderService, failureLog: self.failureLog)
         }
+        if let statsProvider = containerDiagnoser as? any ContainerStatsListing {
+            statsPoller = ContainerStatsPoller(provider: statsProvider)
+        }
     }
 
     var isContainerInspectorPresented: Bool {
@@ -376,20 +397,27 @@ final class AppModel {
 
     private func updateFilteredImages() {
         let query = imageSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else {
-            filteredImages = images
-            return
+        var result = images
+        if showsUnusedImagesOnly {
+            result = result.filter { inventoryIndex.containers(using: $0).isEmpty }
         }
-        filteredImages = images.filter { image in
-            [
-                image.reference,
-                image.digest,
-                image.operatingSystem,
-                image.architecture,
-            ]
-            .compactMap { $0 }
-            .contains { $0.localizedCaseInsensitiveContains(query) }
+        if !query.isEmpty {
+            result = result.filter { image in
+                [
+                    image.reference,
+                    image.digest,
+                    image.operatingSystem,
+                    image.architecture,
+                ]
+                .compactMap { $0 }
+                .contains { $0.localizedCaseInsensitiveContains(query) }
+            }
         }
+        filteredImages = result
+    }
+
+    var unusedImages: [ImageSummary] {
+        images.filter { inventoryIndex.containers(using: $0).isEmpty }
     }
 
     func activate(_ context: PreflightContext) async {
@@ -399,7 +427,9 @@ final class AppModel {
             containerLister = CLIContainerListService(cli: cli)
             containerMutator = CLIContainerMutationService(cli: cli)
             containerRunner = CLIContainerRunService(cli: cli)
-            containerDiagnoser = CLIContainerDiagnosticsService(cli: cli)
+            let diagnostics = CLIContainerDiagnosticsService(cli: cli)
+            containerDiagnoser = diagnostics
+            statsPoller = ContainerStatsPoller(provider: diagnostics)
             imageService = CLIImageService(cli: cli)
             imageBuilder = CLIImageBuildService(cli: cli)
             let cliVersion = (try? context.versions.cli.map { try SemanticVersion($0.version) })
@@ -439,6 +469,59 @@ final class AppModel {
         if containerListState == .idle {
             await refreshContainers()
         }
+        Task { [weak self] in
+            await self?.refreshSidebarData()
+        }
+    }
+
+    /// Rebuilt only when one of its four inputs changes. It is read from inside
+    /// table cell bodies, so deriving it on every access would re-filter the
+    /// whole container list once per row per redraw.
+    private(set) var inventoryIndex: InventoryIndex = .empty
+
+    /// Volumes and networks live in their own observable models, so the screens
+    /// that own them call this when their list changes.
+    func refreshInventoryIndex() {
+        rebuildInventoryIndex()
+    }
+
+    private func rebuildInventoryIndex() {
+        inventoryIndex = InventoryIndex(
+            containers: containers,
+            images: images,
+            volumes: volumeModel?.volumes ?? [],
+            networks: networkModel?.networks ?? []
+        )
+        if showsUnusedImagesOnly {
+            updateFilteredImages()
+        }
+    }
+
+    func inventoryCount(for destination: AppDestination) -> Int? {
+        switch destination {
+        case .containers: containers.count
+        case .images: images.count
+        case .volumes: volumeModel?.volumes.count
+        case .networks: networkModel?.networks.count
+        case .system: nil
+        }
+    }
+
+    var systemNeedsAttention: Bool {
+        guard let systemModel else { return false }
+        return !systemModel.status.isRunning
+            || systemModel.snapshotState.failedMessage != nil
+            || builderModel?.loadingState.failedMessage != nil
+    }
+
+    func refreshSidebarData() async {
+        async let images: Void = refreshImages()
+        async let volumes: Void = volumeModel?.refresh() ?? ()
+        async let networks: Void = networkModel?.refresh() ?? ()
+        async let builder: Void = builderModel?.refresh() ?? ()
+        async let system: Void = systemModel?.refresh() ?? ()
+        _ = await (images, volumes, networks, builder, system)
+        rebuildInventoryIndex()
     }
 
     func refreshImages() async {
@@ -772,6 +855,7 @@ final class AppModel {
             guard generation == refreshGeneration else { return }
 
             containers = refreshedContainers
+            lastContainerRefresh = Date()
             if let selectedContainerID,
                !refreshedContainers.contains(where: { $0.id == selectedContainerID }) {
                 self.selectedContainerID = nil
@@ -818,14 +902,29 @@ final class AppModel {
             // ProcessContainerCLI normalizes process cancellation to CLIError.cancelled.
         } catch {
             failureLog.record(operation: mutation.displayName + " container", error: error)
+            let commandDetails: (String?, Int32?)
+            if case .nonZeroExit(let invocation, let exitCode, _, _) = error as? CLIError {
+                commandDetails = (invocation, exitCode)
+            } else {
+                commandDetails = (nil, nil)
+            }
             mutationFailure = ContainerMutationFailure(
                 containerID: containerID,
                 mutation: mutation,
-                message: DiagnosticSanitizer.sanitize(error.localizedDescription)
+                message: DiagnosticSanitizer.sanitize(error.localizedDescription),
+                invocation: commandDetails.0.map(DiagnosticSanitizer.sanitize),
+                exitCode: commandDetails.1
             )
         }
 
         await refreshContainers()
+
+        // Starting or stopping a container moves the numbers the sidebar shows.
+        // Only the system snapshot is re-read — a full sidebar refresh would
+        // spend five CLI processes to update two figures.
+        Task { [weak self] in
+            await self?.systemModel?.refresh()
+        }
     }
 
     private func execute(

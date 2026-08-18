@@ -2,30 +2,69 @@ import AppKit
 import SwiftUI
 
 struct VolumesView: View {
+    private static let columns: [DSTableColumn] = [
+        DSTableColumn("name", "Name"),
+        DSTableColumn("attached", "Attached to"),
+        DSTableColumn("format", "Format", width: 100),
+        DSTableColumn("size", "Size", width: 150, alignment: .trailing),
+    ]
+
     @Bindable var model: VolumeModel
+    let inventoryIndex: InventoryIndex
     @State private var createModel: VolumeCreateModel?
     @State private var pendingDeletion: VolumeSummary?
     @State private var confirmsPrune = false
 
     var body: some View {
-        Table(model.filteredVolumes, selection: $model.selectedVolumeID) {
-            TableColumn("Name", value: \.name)
-            TableColumn("Driver") { Text($0.driver ?? "—") }
-            TableColumn("Format") { Text($0.format ?? "—") }
-            TableColumn("Size") { volume in
-                Text(volume.sizeInBytes.map(Self.formatBytes) ?? "—")
+        VStack(spacing: 0) {
+            HStack {
+                Text("Volumes").font(.dsScreenTitle)
+                Text("\(model.volumes.count)").foregroundStyle(Color.dsTextSecondary)
+                Spacer()
             }
-            TableColumn("Created") { volume in
-                if let date = volume.creationDate {
-                    Text(
-                        date,
-                        format: .dateTime.year().month(.abbreviated).day().hour().minute()
-                    )
-                } else {
-                    Text("—")
+            .padding(DSMetrics.spacing16)
+            .background(Color.dsSurface)
+            DSTable(
+                rows: model.filteredVolumes,
+                columns: Self.columns,
+                selection: $model.selectedVolumeID
+            ) { volume in
+                HStack(spacing: DSMetrics.spacing8) {
+                    MonoText(value: volume.name, truncation: .middle, selectable: false)
+                    if volume.isAnonymous { TagChip(title: "Anonymous") }
                 }
+                .dsColumn(Self.columns[0])
+
+                Group {
+                    let containers = inventoryIndex.containers(attachedTo: volume)
+                    if let first = containers.first {
+                        MonoText(
+                            value: containers.count == 1 ? first.id : "\(first.id) +\(containers.count - 1)",
+                            dimmed: true,
+                            selectable: false
+                        )
+                    } else {
+                        TagChip(title: "Unused")
+                    }
+                }
+                .dsColumn(Self.columns[1])
+
+                MonoText(value: volume.format ?? "—", dimmed: true, selectable: false)
+                    .dsColumn(Self.columns[2])
+
+                HStack(spacing: DSMetrics.spacing8) {
+                    UsageBar(value: Self.sizeFraction(volume, volumes: model.volumes)).frame(width: 52)
+                    MonoText(value: volume.sizeInBytes.map(Self.formatBytes) ?? "—", dimmed: true, tabular: true, selectable: false)
+                }
+                .dsColumn(Self.columns[3])
             }
+            VolumeHousekeepingFooter(
+                volumes: model.volumes,
+                inventoryIndex: inventoryIndex,
+                prune: { confirmsPrune = true }
+            )
         }
+        .background(Color.dsCanvas)
         .navigationTitle("Volumes")
         .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search volumes")
         .toolbar {
@@ -124,6 +163,37 @@ struct VolumesView: View {
     nonisolated private static func formatBytes(_ bytes: UInt64) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file)
     }
+
+    nonisolated private static func sizeFraction(_ volume: VolumeSummary, volumes: [VolumeSummary]) -> Double {
+        guard let size = volume.sizeInBytes,
+              let maximum = volumes.compactMap(\.sizeInBytes).max(), maximum > 0 else { return 0 }
+        return Double(size) / Double(maximum)
+    }
+}
+
+private struct VolumeHousekeepingFooter: View {
+    let volumes: [VolumeSummary]
+    let inventoryIndex: InventoryIndex
+    let prune: () -> Void
+
+    var body: some View {
+        let unused = volumes.filter { inventoryIndex.containers(attachedTo: $0).isEmpty }
+        HStack {
+            Text("\(unused.count) volumes are attached to nothing — \(Self.formatBytes(unused.compactMap(\.sizeInBytes).reduce(0, &+))) can be reclaimed")
+            Spacer()
+            Button("Prune unused…", action: prune).disabled(unused.isEmpty)
+        }
+        .font(.caption)
+        .foregroundStyle(Color.dsTextSecondary)
+        .padding(.horizontal, DSMetrics.spacing12)
+        .frame(minHeight: 38)
+        .background(Color.dsSurfaceRaised)
+        .overlay(alignment: .top) { Rectangle().fill(Color.dsHairline).frame(height: 1) }
+    }
+
+    private static func formatBytes(_ bytes: UInt64) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file)
+    }
 }
 
 private struct VolumeListOverlay: View {
@@ -135,19 +205,19 @@ private struct VolumeListOverlay: View {
              .loading where model.volumes.isEmpty:
             ProgressView("Loading volumes…").controlSize(.large)
         case .failed(let message) where model.volumes.isEmpty:
-            ContentUnavailableView {
-                Label("Volumes Couldn’t Be Loaded", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(message).textSelection(.enabled)
-            } actions: {
+            EmptyState(
+                "Volumes Couldn’t Be Loaded",
+                systemImage: "exclamationmark.triangle",
+                message: message
+            ) {
                 Button("Try Again") { Task { await model.refresh() } }
             }
         case .loaded where model.filteredVolumes.isEmpty:
             if model.volumes.isEmpty {
-                ContentUnavailableView(
+                EmptyState(
                     "No Volumes",
                     systemImage: "externaldrive",
-                    description: Text("Create a volume for persistent container data.")
+                    description: "Create a volume for persistent container data."
                 )
             } else {
                 ContentUnavailableView.search(text: model.searchText)
@@ -164,24 +234,24 @@ private struct VolumeErrorBanners: View {
     var body: some View {
         VStack(spacing: 0) {
             if let failure = model.mutationFailure {
-                HStack {
-                    Label(failure, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
-                        .textSelection(.enabled)
-                    Spacer()
-                    Button("Dismiss") { model.dismissMutationFailure() }
-                }
-                .padding(10)
-                .background(.bar)
+                InlineBanner(
+                    message: "Volume action failed",
+                    detail: failure,
+                    scope: .bar,
+                    severity: .error,
+                    copyValue: failure,
+                    onDismiss: model.dismissMutationFailure
+                )
             }
             if case .failed(let message) = model.listState, !model.volumes.isEmpty {
-                HStack {
-                    Label(message, systemImage: "arrow.clockwise.circle")
-                    Spacer()
-                    Button("Retry") { Task { await model.refresh() } }
-                }
-                .padding(10)
-                .background(.bar)
+                InlineBanner(
+                    message: "Refresh failed",
+                    detail: message,
+                    scope: .bar,
+                    severity: .error,
+                    actionTitle: "Retry",
+                    action: { Task { await model.refresh() } }
+                )
             }
         }
     }
@@ -195,15 +265,15 @@ private struct VolumeInspector: View {
             VStack(alignment: .leading, spacing: 16) {
                 switch model.inspectionState {
                 case .idle:
-                    ContentUnavailableView("Select a Volume", systemImage: "externaldrive")
+                    EmptyState("Select a Volume", systemImage: "externaldrive")
                 case .loading:
                     ProgressView("Inspecting volume…").frame(maxWidth: .infinity)
                 case .failed(let message):
-                    ContentUnavailableView {
-                        Label("Volume Couldn’t Be Inspected", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(message).textSelection(.enabled)
-                    } actions: {
+                    EmptyState(
+                        "Volume Couldn’t Be Inspected",
+                        systemImage: "exclamationmark.triangle",
+                        message: message
+                    ) {
                         Button("Try Again") { Task { await model.inspectSelection() } }
                     }
                 case .loaded(let inspection):
@@ -308,23 +378,22 @@ private struct CreateVolumeSheet: View {
                     onAdd: draft.addOption,
                     onRemove: draft.removeOption
                 )
-                Section("Command Preview") {
-                    Text(draft.commandPreview)
-                        .font(.system(.callout, design: .monospaced))
-                        .textSelection(.enabled)
-                }
                 if isSubmitting { Section { ProgressView("Creating volume…") } }
                 if let failure = model.mutationFailure {
                     Section {
-                        Label(failure, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.red)
-                            .textSelection(.enabled)
+                        InlineBanner(
+                            message: "Create failed",
+                            detail: failure,
+                            scope: .card,
+                            severity: .error,
+                            copyValue: failure
+                        )
                     }
                 }
             }
             .formStyle(.grouped)
             .disabled(isSubmitting)
-            Divider()
+            CommandStrip(command: draft.commandPreview, accessibilityID: "volumes.create.preview")
             HStack {
                 Button("Cancel", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
@@ -361,12 +430,14 @@ private struct VolumeKeyValueSection: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         TextField("Key", text: $row.key).frame(width: 200)
+                            .dsMonoField()
                         TextField("Value", text: $row.value)
+                            .dsMonoField()
                         Button("Remove", systemImage: "minus.circle") { onRemove(row.id) }
                             .labelStyle(.iconOnly)
                     }
                     if let message = error(row) {
-                        Text(message).font(.caption).foregroundStyle(.red)
+                        Text(message).font(.caption).foregroundStyle(Color.dsStateDestructive)
                     }
                 }
             }
@@ -386,10 +457,11 @@ private struct VolumeValidatedField: View {
         VStack(alignment: .leading, spacing: 6) {
             LabeledContent(title) {
                 TextField(prompt, text: $text)
+                    .dsMonoField()
                     .multilineTextAlignment(.leading)
                     .accessibilityIdentifier(accessibilityIdentifier)
             }
-            if let error { Text(error).font(.caption).foregroundStyle(.red) }
+            if let error { Text(error).font(.caption).foregroundStyle(Color.dsStateDestructive) }
         }
     }
 }

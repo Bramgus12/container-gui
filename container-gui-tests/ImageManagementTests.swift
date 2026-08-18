@@ -96,6 +96,25 @@ final class ImageManagementTests: XCTestCase {
         XCTAssertEqual(listCallCount, 1)
     }
 
+    func testPullModelParsesProgressAndFallsBackToLatestLine() async {
+        let service = ImageServiceStub(
+            images: [makeImage(reference: "alpine:3.21")],
+            pullEvents: [
+                .standardError("unpacking layers 3/7\n"),
+                .terminated(exitCode: 0),
+            ]
+        )
+        let appModel = AppModel(setup: SetupModel(), imageService: service)
+        let pullModel = ImagePullModel()
+        pullModel.reference = "alpine:3.21"
+
+        await pullModel.pull(using: appModel)
+
+        XCTAssertEqual(pullModel.progressLabel, "unpacking layers 3/7")
+        XCTAssertEqual(pullModel.progressFraction ?? 0, 3.0 / 7.0, accuracy: 0.001)
+        XCTAssertTrue(pullModel.didFinish)
+    }
+
     func testPullNonzeroExitSurfacesProgressError() async {
         let service = ImageServiceStub(
             pullEvents: [

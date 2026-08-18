@@ -44,6 +44,23 @@ final class ContainerDetailModelTests: XCTestCase {
         XCTAssertEqual(stats.memoryUsageBytes, 4_096)
     }
 
+    func testStatsServiceDecodesEveryContainerWithOneCommand() async throws {
+        let cli = DetailCLIStub(output: """
+        [
+          { "id": "web", "memoryUsageBytes": 4096 },
+          { "id": "worker", "memoryUsageBytes": 8192 }
+        ]
+        """)
+        let service = CLIContainerDiagnosticsService(cli: cli)
+
+        let stats = try await service.allStats()
+
+        XCTAssertEqual(stats["web"]?.memoryUsageBytes, 4_096)
+        XCTAssertEqual(stats["worker"]?.memoryUsageBytes, 8_192)
+        let commands = await cli.commands
+        XCTAssertEqual(commands, [.stats(ids: [])])
+    }
+
     func testLogsAreBoundedAndPauseBuffersUntilResume() async throws {
         let service = DiagnosticsStub()
         let model = ContainerDetailModel(
@@ -52,7 +69,6 @@ final class ContainerDetailModelTests: XCTestCase {
             maximumLogLines: 3,
             maximumLogBytes: 1_024
         )
-        model.selectedTab = .logs
         await model.appear()
 
         service.yieldLog(.standardOutput("one\ntwo\nthree\nfour\n"))
@@ -74,7 +90,6 @@ final class ContainerDetailModelTests: XCTestCase {
     func testClearPreservesNumberingWithinAStream() async throws {
         let service = DiagnosticsStub()
         let model = ContainerDetailModel(containerID: "web", service: service)
-        model.selectedTab = .logs
         await model.appear()
 
         service.yieldLog(.standardOutput("one\ntwo\n"))
@@ -94,7 +109,6 @@ final class ContainerDetailModelTests: XCTestCase {
     func testRestartReplacesFetchedTailAndStartsNumberingAtOne() async throws {
         let service = DiagnosticsStub()
         let model = ContainerDetailModel(containerID: "web", service: service)
-        model.selectedTab = .logs
         await model.appear()
 
         service.yieldLog(.standardOutput("old tail\n"))
@@ -111,24 +125,21 @@ final class ContainerDetailModelTests: XCTestCase {
         model.disappear()
     }
 
-    func testStatsPollOnlyWhileStatsTabIsVisible() async throws {
+    func testStatsPollOnlyWhileActivityPaneIsVisible() async throws {
         let service = DiagnosticsStub()
         let model = ContainerDetailModel(
             containerID: "web",
             service: service,
             statsInterval: .milliseconds(20)
         )
-        model.selectedTab = .stats
-
         await model.appear()
         try await eventually { service.statsCallCount >= 2 }
 
-        model.selectedTab = .overview
-        let countAfterLeavingStats = service.statsCallCount
+        model.disappear()
+        let countAfterLeavingPane = service.statsCallCount
         try await Task.sleep(for: .milliseconds(70))
 
-        XCTAssertEqual(service.statsCallCount, countAfterLeavingStats)
-        model.disappear()
+        XCTAssertEqual(service.statsCallCount, countAfterLeavingPane)
     }
 
     func testNewerInspectionWinsWhenOlderRequestFinishesLast() async throws {

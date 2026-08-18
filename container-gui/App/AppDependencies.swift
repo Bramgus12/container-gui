@@ -304,6 +304,9 @@ private actor UITestContainerCLI: ContainerCLI {
             }
             images.removeAll { $0 == imageReference }
             output = ""
+        case .pruneImages:
+            images.removeAll()
+            output = ""
         case .listNetworks:
             output = networkListJSON
         case .inspectNetwork(let name):

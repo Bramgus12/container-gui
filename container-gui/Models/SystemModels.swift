@@ -136,13 +136,20 @@ nonisolated struct SystemDiskUsage: Equatable, Sendable {
                 type: Self.string(in: row, keys: ["type", "resource", "category"]),
                 totalCount: Self.integer(in: row, keys: ["totalCount", "total", "count"]),
                 activeCount: Self.integer(in: row, keys: ["activeCount", "active"]),
+                // `container system df --format json` emits `sizeInBytes`; the
+                // other spellings are kept for older and future CLI versions.
                 sizeBytes: Self.unsignedInteger(
                     in: row,
-                    keys: ["sizeBytes", "size", "totalSize"]
+                    keys: ["sizeInBytes", "sizeBytes", "size", "totalSize"]
                 ),
                 reclaimableBytes: Self.unsignedInteger(
                     in: row,
-                    keys: ["reclaimableBytes", "reclaimable", "reclaimableSize"]
+                    keys: [
+                        "reclaimableInBytes",
+                        "reclaimableBytes",
+                        "reclaimable",
+                        "reclaimableSize",
+                    ]
                 )
             )
         }
@@ -197,5 +204,19 @@ nonisolated struct SystemDiskUsage: Equatable, Sendable {
             return UInt64(string)
         }
         return nil
+    }
+}
+
+extension SystemDiskUsage {
+    var totalSizeBytes: UInt64 {
+        resources.compactMap(\.sizeBytes).reduce(0, &+)
+    }
+
+    var totalReclaimableBytes: UInt64 {
+        resources.compactMap(\.reclaimableBytes).reduce(0, &+)
+    }
+
+    func resource(named name: String) -> SystemDiskUsageDTO? {
+        resources.first { $0.type?.localizedCaseInsensitiveContains(name) == true }
     }
 }

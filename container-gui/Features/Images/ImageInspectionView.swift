@@ -11,12 +11,11 @@ struct ImageInspectionView: View {
         case .loaded(let inspection):
             ImageInspectionContent(inspection: inspection)
         case .failed(let message):
-            ContentUnavailableView {
-                Label("Inspection Failed", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(message)
-                    .textSelection(.enabled)
-            } actions: {
+            EmptyState(
+                "Inspection Failed",
+                systemImage: "exclamationmark.triangle",
+                message: message
+            ) {
                 Button("Try Again") {
                     Task { await model.inspectSelectedImage() }
                 }
@@ -106,25 +105,21 @@ private struct ImageVariantSection: View {
     @State private var isExpanded = true
 
     var body: some View {
-        GroupBox {
+        DSCard {
             DisclosureGroup(isExpanded: $isExpanded) {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: DSMetrics.spacing12) {
                     ImageVariantMetadata(variant: variant)
                     ImageLaunchDefaults(configuration: variant.configuration)
                     ImageFilesystemSection(rootFS: variant.rootFS, layers: variant.layers)
                     ImageHistorySection(history: variant.history)
                 }
-                .padding(.top, 10)
+                .padding(.top, DSMetrics.spacing8)
             } label: {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DSMetrics.spacing4) {
                     Text(platformDescription)
-                        .font(.headline)
+                        .font(.dsCardHeading)
                     if let digest = variant.digest {
-                        Text(digest)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
+                        MonoText(value: digest, dimmed: true, truncation: .middle, selectable: false)
                     }
                 }
             }
@@ -206,9 +201,7 @@ private struct ImageFilesystemSection: View {
                 DisclosureGroup("Layer digests", isExpanded: $showsLayers) {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(layers) { layer in
-                            Text(layer.digest)
-                                .font(.caption.monospaced())
-                                .textSelection(.enabled)
+                            MonoText(value: layer.digest, dimmed: true, truncation: .middle)
                         }
                     }
                     .padding(.top, 6)
@@ -251,9 +244,10 @@ private struct ImageHistoryRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(entry.createdBy ?? entry.comment ?? "Image metadata change")
-                .font(.callout.monospaced())
-                .textSelection(.enabled)
+            MonoText(
+                value: entry.createdBy ?? entry.comment ?? "Image metadata change",
+                truncation: .middle
+            )
             HStack(spacing: 8) {
                 if let createdAt = entry.createdAt {
                     Text(createdAt, format: .dateTime.year().month(.abbreviated).day().hour().minute())

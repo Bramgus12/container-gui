@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -61,17 +62,25 @@ private struct SetupView: View {
         VStack(spacing: 24) {
             Spacer(minLength: 32)
 
-            Image(systemName: symbolName)
-                .font(.system(size: 48, weight: .medium))
-                .foregroundStyle(symbolColor)
-                .accessibilityHidden(true)
+            ZStack(alignment: .bottomTrailing) {
+                Image(nsImage: NSApplication.shared.applicationIconImage)
+                    .resizable()
+                    .frame(width: 72, height: 72)
+                Image(systemName: symbolName)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(symbolColor)
+                    .background(Circle().fill(Color.dsSurface).frame(width: 24, height: 24))
+                    .offset(x: 6, y: 4)
+            }
+            .accessibilityHidden(true)
 
             VStack(spacing: 8) {
                 Text(title)
-                    .font(.largeTitle.bold())
+                    .font(.dsDisplay)
+                    .tracking(-0.56)
                 Text(message)
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
+                    .font(.dsBody)
+                    .foregroundStyle(Color.dsTextSecondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 560)
             }
@@ -84,6 +93,8 @@ private struct SetupView: View {
             Spacer(minLength: 32)
         }
         .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.dsCanvas)
         .fileImporter(
             isPresented: $isChoosingExecutable,
             allowedContentTypes: [.item],
@@ -111,12 +122,19 @@ private struct SetupView: View {
 
         case .missingCLI(let customURL):
             detailCard {
-                VStack(alignment: .leading, spacing: 10) {
-                    Label("Expected location: /usr/local/bin/container", systemImage: "terminal")
+                VStack(alignment: .leading, spacing: DSMetrics.spacing8) {
+                    SectionLabel(title: "Looked in")
+                    setupRow(
+                        "Documented path",
+                        value: PreflightService.documentedExecutableURL.path
+                    )
+                    setupRow(
+                        "Homebrew path",
+                        value: PreflightService.homebrewExecutableURL.path
+                    )
                     if let customURL {
-                        Text("The saved executable is no longer available at \(customURL.path).")
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                        SectionLabel(title: "Saved path is gone")
+                        setupRow("Executable", value: customURL.path)
                     }
                     if let installationInstructionsURL = Self.installationInstructionsURL {
                         Link(
@@ -130,42 +148,43 @@ private struct SetupView: View {
 
         case .unsupportedVersion(let detected, let supported, let url, _):
             detailCard {
-                VStack(alignment: .leading, spacing: 8) {
-                    LabeledContent("Detected version", value: detected)
-                    LabeledContent("Supported versions", value: supported.displayValue)
-                    LabeledContent("Executable", value: url.path)
+                VStack(alignment: .leading, spacing: DSMetrics.spacing8) {
+                    setupRow("Detected version", value: detected)
+                    setupRow("Supported versions", value: supported.displayValue)
+                    setupRow("Executable", value: url.path)
                 }
-                .textSelection(.enabled)
             }
 
         case .serviceStopped(let context):
             detailCard {
-                VStack(alignment: .leading, spacing: 8) {
-                    LabeledContent("CLI version", value: context.versions.cli?.version ?? "Unknown")
-                    LabeledContent("Executable", value: context.executableURL.path)
+                VStack(alignment: .leading, spacing: DSMetrics.spacing8) {
+                    setupRow("CLI version", value: context.versions.cli?.version ?? "Unknown")
+                    setupRow("Executable", value: context.executableURL.path)
+                    setupRow("Will run", value: "container system start")
                     if let serviceMessage = context.status.message, !serviceMessage.isEmpty {
                         Text(serviceMessage)
-                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                            .foregroundStyle(Color.dsTextSecondary)
+                            .textSelection(.enabled)
                     }
                 }
-                .textSelection(.enabled)
             }
 
         case .failure(let executableURL, let diagnostic):
             detailCard {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: DSMetrics.spacing8) {
                     Text(diagnostic.summary)
                     if let executableURL {
-                        LabeledContent("Executable", value: executableURL.path)
+                        setupRow("Executable", value: executableURL.path)
                     }
                     if let exitCode = diagnostic.exitCode {
-                        LabeledContent("Exit code", value: String(exitCode))
+                        setupRow("Exit code", value: String(exitCode))
                     }
                     if let standardError = diagnostic.standardError, !standardError.isEmpty {
                         DisclosureGroup("Standard error") {
                             ScrollView {
                                 Text(standardError)
-                                    .font(.system(.callout, design: .monospaced))
+                                    .font(DSFont.mono(size: 12.5, relativeTo: .callout))
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .textSelection(.enabled)
                             }
@@ -264,10 +283,9 @@ private struct SetupView: View {
     private func detailCard<Content: View>(
         @ViewBuilder content: () -> Content
     ) -> some View {
-        content()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
-            .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+        DSCard {
+            content().frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private var title: LocalizedStringResource {
@@ -313,11 +331,20 @@ private struct SetupView: View {
 
     private var symbolColor: Color {
         switch model.readiness {
-        case .checking: .accentColor
-        case .serviceStopped: .orange
-        case .ready: .green
-        case .missingCLI: .accentColor
-        case .unsupportedPlatform, .unsupportedVersion, .failure: .red
+        case .checking, .missingCLI: .dsBlue400
+        case .serviceStopped: .dsStateAttention
+        case .ready: .dsStateRunning
+        case .unsupportedPlatform, .unsupportedVersion, .failure: .dsStateDestructive
+        }
+    }
+
+    /// A setup detail row: our label, the CLI's value in mono.
+    private func setupRow(_ label: LocalizedStringResource, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label)
+                .foregroundStyle(Color.dsTextSecondary)
+            Spacer(minLength: DSMetrics.spacing12)
+            MonoText(value: value, truncation: .middle)
         }
     }
 
@@ -350,15 +377,35 @@ private struct MainNavigationView: View {
     @Bindable var model: AppModel
     let updates: UpdateModel
     let context: PreflightContext
+    @Environment(\.controlActiveState) private var controlActiveState
 
     var body: some View {
         NavigationSplitView {
-            List(AppDestination.allCases, selection: $model.destination) { destination in
-                Label(destination.title, systemImage: destination.systemImage)
+            VStack(spacing: 0) {
+                SidebarHeader(
+                    isRunning: model.systemModel?.status.isRunning ?? context.status.isRunning,
+                    version: model.systemModel?.versions.cli?.version
+                        ?? context.versions.cli?.version
+                        ?? "—"
+                )
+                List(AppDestination.allCases, selection: $model.destination) { destination in
+                    SidebarRow(
+                        icon: destination.systemImage,
+                        title: destination.title,
+                        count: model.inventoryCount(for: destination),
+                        showsAttention: destination == .system && model.systemNeedsAttention
+                    )
                     .tag(destination)
                     .accessibilityIdentifier("destination.\(destination.rawValue.lowercased())")
+                }
+                .listStyle(.sidebar)
+                SidebarActivityBlock(
+                    poller: model.statsPoller,
+                    diskUsage: model.systemModel?.diskUsage
+                ) {
+                    model.destination = .system
+                }
             }
-            .navigationTitle("Container GUI")
         } detail: {
             switch model.destination {
             case .containers:
@@ -367,13 +414,19 @@ private struct MainNavigationView: View {
                 ImageListView(model: model)
             case .volumes:
                 if let volumeModel = model.volumeModel {
-                    VolumesView(model: volumeModel)
+                    VolumesView(model: volumeModel, inventoryIndex: model.inventoryIndex)
+                        .onChange(of: volumeModel.volumes) { _, _ in
+                            model.refreshInventoryIndex()
+                        }
                 } else {
                     ProgressView("Loading volumes…")
                 }
             case .networks:
                 if let networkModel = model.networkModel {
-                    NetworksView(model: networkModel)
+                    NetworksView(model: networkModel, inventoryIndex: model.inventoryIndex)
+                        .onChange(of: networkModel.networks) { _, _ in
+                            model.refreshInventoryIndex()
+                        }
                 } else {
                     ProgressView("Loading networks…")
                 }
@@ -384,16 +437,137 @@ private struct MainNavigationView: View {
                     updates: updates
                 )
             case nil:
-                ContentUnavailableView(
-                    "Select a Section",
-                    systemImage: "sidebar.left"
-                )
+                EmptyState("Select a Section", systemImage: "sidebar.left")
             }
         }
         .task(id: context.executableURL) {
             await model.activate(context)
         }
+        .task {
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                await model.refreshSidebarData()
+            }
+        }
+        .onAppear { model.statsPoller?.setActive(controlActiveState != .inactive) }
+        .onChange(of: controlActiveState) { _, state in
+            model.statsPoller?.setActive(state != .inactive)
+        }
+        .onDisappear { model.statsPoller?.setActive(false) }
         .accessibilityIdentifier("main.navigation")
+    }
+}
+
+private struct SidebarHeader: View {
+    let isRunning: Bool
+    let version: String
+
+    var body: some View {
+        HStack(spacing: DSMetrics.spacing12) {
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+                .resizable()
+                .frame(width: 32, height: 32)
+            VStack(alignment: .leading, spacing: DSMetrics.spacing4) {
+                Text("Container GUI").font(.dsCardHeading)
+                StateDot(
+                    isRunning ? .running : .attention,
+                    label: isRunning ? "Service up · \(version)" : "Service stopped · \(version)",
+                    accessibilityLabel: isRunning ? "Service running, version \(version)" : "Service stopped, version \(version)"
+                )
+                .font(.caption)
+                .foregroundStyle(Color.dsTextSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, DSMetrics.spacing12)
+        .padding(.bottom, DSMetrics.spacing12)
+        // Clears the window controls, which now sit over the sidebar. No
+        // background of its own: the header sits on the sidebar's material.
+        .padding(.top, 30)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.dsHairline).frame(height: DSMetrics.hairline)
+        }
+    }
+}
+
+/// The sidebar's glance layer: what the containers are using right now, and how
+/// much disk the installation is holding. Live figures come first — disk only
+/// changes when you pull or prune, so it sits underneath as one line.
+private struct SidebarActivityBlock: View {
+    let poller: ContainerStatsPoller?
+    let diskUsage: SystemDiskUsage?
+    let review: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DSMetrics.spacing8) {
+            HStack {
+                SectionLabel(title: "Activity")
+                Spacer()
+                if let count = poller?.reportingContainerCount, count > 0 {
+                    Text("\(count) running")
+                        .font(.caption)
+                        .foregroundStyle(Color.dsTextSecondary)
+                }
+            }
+
+            metric(
+                "Memory",
+                value: poller.map { StackedUsageBar.format($0.totalMemoryBytes) },
+                fraction: poller?.memoryFraction,
+                tint: .dsBlue400
+            )
+            metric(
+                "CPU",
+                value: cpuDescription,
+                fraction: poller?.totalCPUCores.map { min(1, $0) },
+                tint: .dsBlue300
+            )
+
+            Divider()
+
+            HStack {
+                Text("Disk")
+                Spacer()
+                Text(diskUsage.map { StackedUsageBar.format($0.totalSizeBytes) } ?? "—")
+                    .font(.cliMonoTabular)
+                    .monospacedDigit()
+            }
+            .font(.caption)
+            .foregroundStyle(Color.dsTextSecondary)
+
+            Button("Review housekeeping", action: review)
+                .buttonStyle(.link)
+        }
+        .padding(DSMetrics.spacing12)
+        .background(Color.dsSurfaceRaised, in: RoundedRectangle(cornerRadius: DSMetrics.inlineRadius))
+        .padding(DSMetrics.spacing8)
+        .accessibilityIdentifier("sidebar.activity")
+    }
+
+    /// Nil until the poller has two samples to derive a rate from.
+    private var cpuDescription: String? {
+        guard let cores = poller?.totalCPUCores else { return nil }
+        return (cores * 100).formatted(.number.precision(.fractionLength(0))) + "%"
+    }
+
+    private func metric(
+        _ title: LocalizedStringResource,
+        value: String?,
+        fraction: Double?,
+        tint: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: DSMetrics.spacing4) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(value ?? "—")
+                    .font(.cliMonoTabular)
+                    .monospacedDigit()
+            }
+            .font(.caption)
+            .foregroundStyle(Color.dsTextSecondary)
+            UsageBar(value: fraction ?? 0, tint: tint)
+        }
     }
 }
 
@@ -403,7 +577,16 @@ private struct ContainerListView: View {
     @State private var runContainerModel: RunContainerModel?
 
     var body: some View {
-        table
+        VStack(spacing: 0) {
+            ContainerScreenHeader(
+                runningCount: model.containers.count { $0.state == .running },
+                totalCount: model.containers.count,
+                filter: $model.containerFilter
+            )
+            table
+            ContainerListFooter(lastRefresh: model.lastContainerRefresh)
+        }
+            .background(Color.dsCanvas)
             .navigationTitle("Containers")
             .searchable(
                 text: $model.searchText,
@@ -411,16 +594,6 @@ private struct ContainerListView: View {
                 prompt: "Search containers"
             )
             .toolbar {
-                ToolbarItem {
-                    Picker("State", selection: $model.containerFilter) {
-                        ForEach(ContainerFilter.allCases) { filter in
-                            Text(filter.title).tag(filter)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 240)
-                }
-
                 ToolbarItem {
                     Button {
                         runContainerModel = RunContainerModel(
@@ -531,77 +704,104 @@ private struct ContainerListView: View {
                 if let containerID = model.selectedContainerID {
                     ContainerDetailHost(appModel: model, containerID: containerID)
                         .id(containerID)
-                        .inspectorColumnWidth(min: 360, ideal: 440, max: 620)
+                        .inspectorColumnWidth(min: 420, ideal: 560, max: 820)
                 }
             }
     }
 
+    private static let columns: [DSTableColumn] = [
+        DSTableColumn("container", "Container"),
+        DSTableColumn("image", "Image"),
+        DSTableColumn("ports", "Ports", width: 150),
+        DSTableColumn("memory", "Memory", width: 150),
+        DSTableColumn("uptime", "Uptime", width: 110, alignment: .trailing),
+    ]
+
     private var table: some View {
-        Table(model.filteredContainers, selection: $model.selectedContainerID) {
-            TableColumn("ID / Name", value: \.id)
-            TableColumn("Image") { container in
-                Text(container.image ?? "—")
+        DSTable(
+            rows: model.filteredContainers,
+            columns: Self.columns,
+            selection: $model.selectedContainerID
+        ) { container in
+            // The state is the dot and the dimming, not a word — the word is
+            // carried by the accessibility label and by the mutation cell.
+            HStack(spacing: DSMetrics.spacing8) {
+                StateDot(
+                    container.state.designState,
+                    accessibilityLabel: container.state.localizedTitle
+                )
+                MonoText(value: container.id, truncation: .middle, selectable: false)
             }
-            TableColumn("State") { container in
-                if let mutation = model.mutationInProgress(for: container.id) {
-                    HStack(spacing: 7) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("\(mutation.displayName)…")
-                    }
-                } else {
-                    Label(container.state.displayName, systemImage: container.state.systemImage)
-                        .foregroundStyle(container.state.tint)
-                }
-            }
-            TableColumn("Architecture") { container in
-                Text(container.architecture ?? "—")
-            }
-            TableColumn("Address") { container in
-                Text(container.address ?? "—")
-            }
-            TableColumn("Created") { container in
-                if let createdAt = container.createdAt {
-                    Text(
-                        createdAt,
-                        format: .dateTime
-                            .year()
-                            .month(.abbreviated)
-                            .day()
-                            .hour()
-                            .minute()
-                    )
-                } else {
-                    Text("—")
-                }
-            }
-        }
-        .contextMenu(forSelectionType: String.self) { selection in
-            if let container = model.containers.first(where: { selection.contains($0.id) }) {
-                Button("Start") {
-                    Task { await model.perform(.start, on: container.id) }
-                }
-                .disabled(!model.canPerform(.start, on: container))
+            .opacity(container.state == .running ? 1 : 0.68)
+            .dsColumn(Self.columns[0])
 
-                Button("Stop") {
-                    Task { await model.perform(.stop, on: container.id) }
-                }
-                .disabled(!model.canPerform(.stop, on: container))
+            MonoText(value: container.image ?? "—", dimmed: true, truncation: .middle, selectable: false)
+                .opacity(container.state == .running ? 1 : 0.68)
+                .dsColumn(Self.columns[1])
 
-                Divider()
+            MonoText(value: container.portSummary, dimmed: true, truncation: .middle, selectable: false)
+                .dsColumn(Self.columns[2])
 
-                Button("Delete…", role: .destructive) {
-                    requestDeletion(of: container, force: false)
-                }
-                .disabled(!model.canPerform(.delete(force: false), on: container))
+            memoryCell(for: container)
+                .dsColumn(Self.columns[3])
 
-                Button("Force Delete…", role: .destructive) {
-                    requestDeletion(of: container, force: true)
-                }
-                .disabled(!model.canPerform(.delete(force: true), on: container))
-            }
+            MonoText(
+                value: RelativeUptimeFormatter().string(for: container),
+                dimmed: true,
+                tabular: true,
+                selectable: false
+            )
+            .dsColumn(Self.columns[4])
+            .contextMenu { rowMenu(for: container) }
         }
         .accessibilityIdentifier("containers.table")
+    }
+
+    @ViewBuilder
+    private func memoryCell(for container: ContainerSummary) -> some View {
+        if let mutation = model.mutationInProgress(for: container.id) {
+            HStack(spacing: DSMetrics.spacing8) {
+                ProgressView().controlSize(.small)
+                Text("\(mutation.displayName)…")
+                    .foregroundStyle(Color.dsStateAttention)
+            }
+        } else if container.state == .paused {
+            Text(container.state.localizedTitle)
+                .foregroundStyle(Color.dsStateAttention)
+        } else if let stats = model.statsPoller?.statsByContainerID[container.id],
+                  let usage = stats.memoryUsageBytes {
+            HStack(spacing: DSMetrics.spacing8) {
+                UsageBar(value: Self.memoryFraction(stats)).frame(width: 48)
+                MonoText(value: Self.formatBytes(usage), dimmed: true, tabular: true, selectable: false)
+            }
+        } else {
+            MonoText(value: "—", dimmed: true, selectable: false)
+        }
+    }
+
+    @ViewBuilder
+    private func rowMenu(for container: ContainerSummary) -> some View {
+        Button("Start") {
+            Task { await model.perform(.start, on: container.id) }
+        }
+        .disabled(!model.canPerform(.start, on: container))
+
+        Button("Stop") {
+            Task { await model.perform(.stop, on: container.id) }
+        }
+        .disabled(!model.canPerform(.stop, on: container))
+
+        Divider()
+
+        Button("Delete…", role: .destructive) {
+            requestDeletion(of: container, force: false)
+        }
+        .disabled(!model.canPerform(.delete(force: false), on: container))
+
+        Button("Force Delete…", role: .destructive) {
+            requestDeletion(of: container, force: true)
+        }
+        .disabled(!model.canPerform(.delete(force: true), on: container))
     }
 
     @ViewBuilder
@@ -613,12 +813,11 @@ private struct ContainerListView: View {
                 .controlSize(.large)
 
         case .failed(let message) where model.containers.isEmpty:
-            ContentUnavailableView {
-                Label("Containers Couldn’t Be Loaded", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(message)
-                    .textSelection(.enabled)
-            } actions: {
+            EmptyState(
+                "Containers Couldn’t Be Loaded",
+                systemImage: "exclamationmark.triangle",
+                message: message
+            ) {
                 Button("Try Again") {
                     Task { await model.refreshContainers() }
                 }
@@ -627,16 +826,16 @@ private struct ContainerListView: View {
 
         case .loaded where model.filteredContainers.isEmpty:
             if model.containers.isEmpty {
-                ContentUnavailableView(
+                EmptyState(
                     "No Containers",
                     systemImage: "shippingbox",
-                    description: Text("Containers you create will appear here.")
+                    description: "Containers you create will appear here."
                 )
             } else if model.searchText.isEmpty {
-                ContentUnavailableView(
+                EmptyState(
                     "No \(model.containerFilter.rawValue) Containers",
                     systemImage: "line.3.horizontal.decrease.circle",
-                    description: Text("Choose another state filter to see more containers.")
+                    description: "Choose another state filter to see more containers."
                 )
             } else {
                 ContentUnavailableView.search(text: model.searchText)
@@ -651,40 +850,28 @@ private struct ContainerListView: View {
     private var refreshErrorBanner: some View {
         if case .failed(let message) = model.containerListState,
            !model.containers.isEmpty {
-            HStack(spacing: 12) {
-                Label(message, systemImage: "exclamationmark.triangle")
-                    .lineLimit(2)
-                Spacer()
-                Button("Try Again") {
-                    Task { await model.refreshContainers() }
-                }
-            }
-            .padding(10)
-            .background(.bar)
+            InlineBanner(
+                message: "Refresh failed",
+                detail: message,
+                scope: .bar,
+                severity: .error,
+                actionTitle: "Try Again",
+                action: { Task { await model.refreshContainers() } }
+            )
         }
     }
 
     @ViewBuilder
     private var mutationErrorBanner: some View {
         if let failure = model.mutationFailure {
-            HStack(spacing: 12) {
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(failure.mutation.displayName) failed for \(failure.containerID)")
-                            .fontWeight(.semibold)
-                        Text(failure.message)
-                            .textSelection(.enabled)
-                    }
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle")
-                }
-                Spacer()
-                Button("Dismiss") {
-                    model.dismissMutationFailure()
-                }
-            }
-            .padding(10)
-            .background(.bar)
+            InlineBanner(
+                message: mutationFailureTitle(failure),
+                detail: failure.invocation ?? failure.message,
+                scope: .bar,
+                severity: .error,
+                copyValue: failure.invocation ?? failure.message,
+                onDismiss: model.dismissMutationFailure
+            )
             .accessibilityIdentifier("containers.mutationError")
         }
     }
@@ -720,41 +907,90 @@ private struct ContainerListView: View {
             mutation: .delete(force: force)
         )
     }
+
+    private func mutationFailureTitle(
+        _ failure: ContainerMutationFailure
+    ) -> LocalizedStringResource {
+        if let exitCode = failure.exitCode {
+            return "\(failure.mutation.displayName) failed for \(failure.containerID) (exit \(exitCode))"
+        }
+        return "\(failure.mutation.displayName) failed for \(failure.containerID)"
+    }
+
+    private static func memoryFraction(_ stats: ContainerStats) -> Double {
+        guard let usage = stats.memoryUsageBytes,
+              let limit = stats.memoryLimitBytes,
+              limit > 0 else { return 0 }
+        return Double(usage) / Double(limit)
+    }
+
+    private static func formatBytes(_ bytes: UInt64) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .binary)
+    }
+}
+
+private struct ContainerScreenHeader: View {
+    let runningCount: Int
+    let totalCount: Int
+    @Binding var filter: ContainerFilter
+
+    var body: some View {
+        HStack(spacing: DSMetrics.spacing16) {
+            VStack(alignment: .leading, spacing: DSMetrics.spacing4) {
+                Text("Containers").font(.dsScreenTitle)
+                Text("\(runningCount) of \(totalCount) running")
+                    .foregroundStyle(Color.dsTextSecondary)
+            }
+            Spacer()
+            Picker("State", selection: $filter) {
+                ForEach(ContainerFilter.allCases) { value in Text(value.title).tag(value) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+        }
+        .padding(DSMetrics.spacing16)
+        .frame(maxWidth: .infinity)
+        .background(Color.dsSurface)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.dsHairline).frame(height: DSMetrics.hairline)
+        }
+    }
+}
+
+private struct ContainerListFooter: View {
+    let lastRefresh: Date?
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            HStack(spacing: DSMetrics.spacing8) {
+                Text(lastRefresh.map { "refreshed \(Self.age(from: $0, now: context.date))" } ?? "not refreshed")
+                Text("·").foregroundStyle(Color.dsTextTertiary)
+                MonoText(value: "container ls --all", dimmed: true)
+                Spacer()
+                Text("⌘R refresh  ·  ⌘N run")
+            }
+            .font(.caption)
+            .foregroundStyle(Color.dsTextSecondary)
+            .padding(.horizontal, DSMetrics.spacing12)
+            .frame(minHeight: 32)
+            .background(Color.dsSurfaceRaised)
+            .overlay(alignment: .top) {
+                Rectangle().fill(Color.dsHairline).frame(height: DSMetrics.hairline)
+            }
+        }
+    }
+
+    private static func age(from date: Date, now: Date) -> String {
+        let seconds = max(0, Int(now.timeIntervalSince(date)))
+        if seconds < 60 { return "\(seconds)s ago" }
+        return "\(seconds / 60)m ago"
+    }
 }
 
 private struct PendingContainerDeletion: Equatable {
     let containerID: String
     let mutation: ContainerMutation
-}
-
-extension ContainerState {
-    var displayName: String {
-        switch self {
-        case .created: "Created"
-        case .running: "Running"
-        case .stopped: "Stopped"
-        case .paused: "Paused"
-        case .unknown(let value): value.capitalized
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .running: "play.circle.fill"
-        case .paused: "pause.circle.fill"
-        case .created: "circle.dotted"
-        case .stopped: "stop.circle.fill"
-        case .unknown: "questionmark.circle"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .running: .green
-        case .paused: .orange
-        case .created, .stopped, .unknown: .secondary
-        }
-    }
 }
 
 #Preview("Missing CLI") {

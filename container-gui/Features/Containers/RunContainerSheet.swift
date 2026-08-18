@@ -14,9 +14,105 @@ struct RunContainerSheet: View {
         runRequestID != nil || model.isRunning || isCancelling
     }
 
+    @State private var page: RunSection = .container
+
     var body: some View {
         VStack(spacing: 0) {
-            Form {
+            HStack(spacing: 0) {
+                RunSectionRail(model: model, selection: $page)
+                Rectangle().fill(Color.dsHairline).frame(width: 1)
+                Form {
+                    currentPage
+                    progressSection
+                    errorSection
+                }
+                .formStyle(.grouped)
+                .frame(maxWidth: .infinity)
+                .disabled(operationIsActive)
+            }
+
+            CommandStrip(command: model.commandPreview, accessibilityID: "run.preview")
+
+            footer
+        }
+        .frame(minWidth: 760, minHeight: 560)
+        .interactiveDismissDisabled(operationIsActive)
+        .task {
+            await networkModel?.loadIfNeeded()
+            await volumeModel?.loadIfNeeded()
+        }
+        .task(id: runRequestID) {
+            guard let requestID = runRequestID else { return }
+            let outcome = await model.run(using: appModel)
+
+            guard runRequestID == requestID else {
+                isCancelling = false
+                return
+            }
+
+            runRequestID = nil
+            isCancelling = false
+            if outcome == .succeeded {
+                dismiss()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var currentPage: some View {
+        switch page {
+        case .container: containerSection
+        case .resources: resourcesSection
+        case .networks: networksSection
+        case .storage: ContainerMountsSection(model: model, volumeModel: volumeModel)
+        case .ports: portsSection
+        case .environment: environmentSection
+        case .command: commandSection
+        }
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        HStack {
+            Button(role: .cancel) {
+                if operationIsActive {
+                    isCancelling = true
+                    runRequestID = nil
+                } else {
+                    dismiss()
+                }
+            } label: {
+                Text(isCancelling ? "Cancelling…" : operationIsActive ? "Cancel Run" : "Cancel")
+            }
+            .keyboardShortcut(.cancelAction)
+            .disabled(isCancelling)
+            .accessibilityIdentifier("run.cancel")
+
+            Spacer()
+
+            Button("Back") { page = page.previous ?? page }
+                .disabled(page.previous == nil || operationIsActive)
+                .accessibilityIdentifier("run.back")
+
+            Button("Next") { page = page.next ?? page }
+                .disabled(page.next == nil || operationIsActive)
+                .accessibilityIdentifier("run.next")
+
+            // Run stays available from any page: only the first page is
+            // required, so there is no reason to walk the rest to start.
+            Button("Run") {
+                runRequestID = UUID()
+            }
+            .keyboardShortcut(.defaultAction)
+            .buttonStyle(.borderedProminent)
+            .disabled(operationIsActive || !model.canRun)
+            .accessibilityIdentifier("run.submit")
+        }
+        .padding()
+    }
+
+    @ViewBuilder
+    private var containerSection: some View {
                 Section("Container") {
                     validatedTextField(
                         "Image",
@@ -35,6 +131,10 @@ struct RunContainerSheet: View {
                     Toggle("Remove when stopped", isOn: $model.removeWhenStopped)
                 }
 
+    }
+
+    @ViewBuilder
+    private var resourcesSection: some View {
                 Section("Resources") {
                     validatedTextField(
                         "CPU limit",
@@ -50,6 +150,10 @@ struct RunContainerSheet: View {
                     )
                 }
 
+    }
+
+    @ViewBuilder
+    private var networksSection: some View {
                 Section("Networks") {
                     if let networkModel {
                         switch networkModel.listState {
@@ -58,7 +162,7 @@ struct RunContainerSheet: View {
                             ProgressView("Loading networks…")
                         case .failed(let message) where networkModel.networks.isEmpty:
                             Label(message, systemImage: "exclamationmark.triangle")
-                                .foregroundStyle(.red)
+                                .foregroundStyle(Color.dsStateDestructive)
                                 .textSelection(.enabled)
                             Button("Try Again") {
                                 Task { await networkModel.refresh() }
@@ -94,18 +198,23 @@ struct RunContainerSheet: View {
                     }
                 }
 
-                ContainerMountsSection(model: model, volumeModel: volumeModel)
+    }
 
+    @ViewBuilder
+    private var portsSection: some View {
                 Section("Published Ports") {
                     ForEach($model.ports) { $port in
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 TextField("Host address (optional)", text: $port.hostAddress)
+                                    .dsMonoField()
                                 TextField("Host port", text: $port.hostPort)
+                                    .dsMonoField()
                                     .frame(width: 100)
                                 Image(systemName: "arrow.right")
                                     .foregroundStyle(.secondary)
                                 TextField("Container port", text: $port.containerPort)
+                                    .dsMonoField()
                                     .frame(width: 120)
                                 Picker("Protocol", selection: $port.portProtocol) {
                                     Text("TCP").tag(PortProtocol.tcp)
@@ -126,13 +235,19 @@ struct RunContainerSheet: View {
                     }
                 }
 
+    }
+
+    @ViewBuilder
+    private var environmentSection: some View {
                 Section("Environment") {
                     ForEach($model.environment) { $variable in
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 TextField("Key", text: $variable.key)
+                                    .dsMonoField()
                                     .frame(width: 180)
                                 TextField("Value", text: $variable.value)
+                                    .dsMonoField()
                                 Button("Remove", systemImage: "minus.circle") {
                                     model.removeEnvironmentVariable(id: variable.id)
                                 }
@@ -146,6 +261,10 @@ struct RunContainerSheet: View {
                     }
                 }
 
+    }
+
+    @ViewBuilder
+    private var commandSection: some View {
                 Section("Command") {
                     validatedTextField(
                         "Executable",
@@ -156,6 +275,7 @@ struct RunContainerSheet: View {
                     ForEach($model.arguments) { $argument in
                         HStack {
                             TextField("Argument", text: $argument.value)
+                                .dsMonoField()
                             Button("Remove", systemImage: "minus.circle") {
                                 model.removeArgument(id: argument.id)
                             }
@@ -167,14 +287,10 @@ struct RunContainerSheet: View {
                     }
                 }
 
-                Section("Command Preview") {
-                    Text(model.commandPreview)
-                        .font(.system(.callout, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityIdentifier("run.preview")
-                }
+    }
 
+    @ViewBuilder
+    private var progressSection: some View {
                 if model.isRunning || !model.progress.isEmpty {
                     Section("Progress") {
                         if model.isRunning {
@@ -183,7 +299,7 @@ struct RunContainerSheet: View {
                         if !model.progress.isEmpty {
                             ScrollView {
                                 Text(model.progress)
-                                    .font(.system(.callout, design: .monospaced))
+                                    .font(DSFont.mono(size: 12.5, relativeTo: .callout))
                                     .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -192,6 +308,10 @@ struct RunContainerSheet: View {
                     }
                 }
 
+    }
+
+    @ViewBuilder
+    private var errorSection: some View {
                 if let errorMessage = model.errorMessage {
                     Section {
                         Label {
@@ -200,63 +320,10 @@ struct RunContainerSheet: View {
                         } icon: {
                             Image(systemName: "exclamationmark.triangle")
                         }
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.dsStateDestructive)
                     }
                     .accessibilityIdentifier("run.error")
                 }
-            }
-            .formStyle(.grouped)
-            .disabled(operationIsActive)
-
-            Divider()
-
-            HStack {
-                Button(role: .cancel) {
-                    if operationIsActive {
-                        isCancelling = true
-                        runRequestID = nil
-                    } else {
-                        dismiss()
-                    }
-                } label: {
-                    Text(isCancelling ? "Cancelling…" : operationIsActive ? "Cancel Run" : "Cancel")
-                }
-                .keyboardShortcut(.cancelAction)
-                .disabled(isCancelling)
-                .accessibilityIdentifier("run.cancel")
-
-                Spacer()
-
-                Button("Run") {
-                    runRequestID = UUID()
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(operationIsActive || !model.canRun)
-                .accessibilityIdentifier("run.submit")
-            }
-            .padding()
-        }
-        .frame(minWidth: 720, minHeight: 680)
-        .interactiveDismissDisabled(operationIsActive)
-        .task {
-            await networkModel?.loadIfNeeded()
-            await volumeModel?.loadIfNeeded()
-        }
-        .task(id: runRequestID) {
-            guard let requestID = runRequestID else { return }
-            let outcome = await model.run(using: appModel)
-
-            guard runRequestID == requestID else {
-                isCancelling = false
-                return
-            }
-
-            runRequestID = nil
-            isCancelling = false
-            if outcome == .succeeded {
-                dismiss()
-            }
-        }
     }
 
     @ViewBuilder
@@ -269,6 +336,7 @@ struct RunContainerSheet: View {
         VStack(alignment: .leading, spacing: 6) {
             LabeledContent(title) {
                 TextField(prompt, text: text)
+                    .dsMonoField()
                     .multilineTextAlignment(.leading)
                     .accessibilityIdentifier(
                         "run." + title
@@ -285,8 +353,125 @@ struct RunContainerSheet: View {
         if let message {
             Text(message)
                 .font(.caption)
-                .foregroundStyle(.red)
+                .foregroundStyle(Color.dsStateDestructive)
         }
+    }
+}
+
+/// The seven form sections, in the order the rail lists them.
+enum RunSection: String, CaseIterable, Identifiable, Hashable {
+    case container
+    case resources
+    case networks
+    case storage
+    case ports
+    case environment
+    case command
+
+    var id: Self { self }
+
+    var next: RunSection? {
+        let all = RunSection.allCases
+        guard let index = all.firstIndex(of: self), index + 1 < all.count else { return nil }
+        return all[index + 1]
+    }
+
+    var previous: RunSection? {
+        let all = RunSection.allCases
+        guard let index = all.firstIndex(of: self), index > 0 else { return nil }
+        return all[index - 1]
+    }
+
+    /// Only the first page must be filled in for a container to run; the rest
+    /// are optional refinements, and the rail marks them as such.
+    var isRequired: Bool { self == .container }
+
+    var title: LocalizedStringResource {
+        switch self {
+        case .container: "Container"
+        case .resources: "Resources"
+        case .networks: "Networks"
+        case .storage: "Storage"
+        case .ports: "Ports"
+        case .environment: "Environment"
+        case .command: "Command"
+        }
+    }
+}
+
+private struct RunSectionRail: View {
+    let model: RunContainerModel
+    @Binding var selection: RunSection
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DSMetrics.spacing4) {
+            SectionLabel(title: "Run container")
+                .padding(.bottom, DSMetrics.spacing8)
+            ForEach(RunSection.allCases) { section in
+                RailRow(
+                    title: section.title,
+                    count: count(for: section),
+                    isRequired: section.isRequired,
+                    isSelected: selection == section
+                ) {
+                    selection = section
+                }
+            }
+            Spacer()
+        }
+        .padding(DSMetrics.spacing12)
+        .frame(width: 150)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .background(Color.dsSurfaceRaised)
+        .accessibilityIdentifier("run.rail")
+    }
+
+    private func count(for section: RunSection) -> Int? {
+        switch section {
+        case .container, .resources: nil
+        case .networks: model.networks.count
+        case .storage: model.mounts.count
+        case .ports: model.ports.count
+        case .environment: model.environment.count
+        case .command: model.arguments.count + (model.command.isEmpty ? 0 : 1)
+        }
+    }
+}
+
+private struct RailRow: View {
+    let title: LocalizedStringResource
+    let count: Int?
+    let isRequired: Bool
+    let isSelected: Bool
+    let select: () -> Void
+
+    var body: some View {
+        Button(action: select) {
+            HStack(spacing: DSMetrics.spacing4) {
+                Text(title)
+                    .fontWeight(isSelected ? .semibold : .regular)
+                if isRequired {
+                    Text(verbatim: "*")
+                        .foregroundStyle(Color.dsStateAttention)
+                        .accessibilityLabel("Required")
+                }
+                Spacer()
+                if let count, count > 0 {
+                    Text(count, format: .number)
+                        .font(.cliMonoTabular)
+                        .foregroundStyle(Color.dsTextSecondary)
+                }
+            }
+            .padding(.vertical, DSMetrics.spacing8)
+            .padding(.horizontal, DSMetrics.spacing8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+            isSelected ? Color.dsBlue100 : .clear,
+            in: RoundedRectangle(cornerRadius: DSMetrics.controlRadius)
+        )
     }
 }
 
@@ -300,7 +485,7 @@ private struct ContainerMountsSection: View {
                case .failed(let message) = volumeModel.listState,
                volumeModel.volumes.isEmpty {
                 Label(message, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color.dsStateDestructive)
                     .textSelection(.enabled)
             }
 
@@ -358,10 +543,12 @@ private struct ContainerMountDraftRow: View {
                     .frame(minWidth: 180)
                 } else {
                     TextField("Host folder", text: $mount.source)
+                        .dsMonoField()
                     Button("Choose…") { chooseHostFolder() }
                 }
 
                 TextField("Container path", text: $mount.target)
+                    .dsMonoField()
                     .frame(minWidth: 160)
                 Toggle("Read-only", isOn: $mount.isReadOnly)
                     .toggleStyle(.checkbox)
@@ -371,7 +558,7 @@ private struct ContainerMountDraftRow: View {
             if let error {
                 Text(error)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color.dsStateDestructive)
             }
         }
     }
@@ -407,9 +594,11 @@ private struct NetworkAttachmentDraftRow: View {
                 .accessibilityIdentifier("run.network.\(attachment.id).selection")
 
                 TextField("MAC address (optional)", text: $attachment.macAddress)
+                    .dsMonoField()
                     .frame(minWidth: 180)
                     .accessibilityIdentifier("run.network.\(attachment.id).mac")
                 TextField("MTU (optional)", text: $attachment.mtu)
+                    .dsMonoField()
                     .frame(width: 110)
                     .accessibilityIdentifier("run.network.\(attachment.id).mtu")
                 Button("Remove", systemImage: "minus.circle", action: onRemove)
@@ -418,7 +607,7 @@ private struct NetworkAttachmentDraftRow: View {
             if let error {
                 Text(error)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color.dsStateDestructive)
             }
         }
     }

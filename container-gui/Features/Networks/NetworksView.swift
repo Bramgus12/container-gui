@@ -2,36 +2,81 @@ import AppKit
 import SwiftUI
 
 struct NetworksView: View {
+    private static let columns: [DSTableColumn] = [
+        DSTableColumn("name", "Name"),
+        DSTableColumn("mode", "Mode", width: 90),
+        DSTableColumn("subnet", "IPv4 subnet", width: 150),
+        DSTableColumn("attached", "Attached", width: 120),
+        DSTableColumn("plugin", "Plugin", width: 110),
+    ]
+
     @Bindable var model: NetworkModel
+    let inventoryIndex: InventoryIndex
     @State private var createModel: NetworkCreateModel?
     @State private var pendingDeletion: NetworkSummary?
     @State private var isConfirmingPrune = false
 
     var body: some View {
-        Table(model.filteredNetworks, selection: $model.selectedNetworkID) {
-            TableColumn("Name", value: \.name)
-            TableColumn("Mode") { Text($0.mode ?? "—") }
-            TableColumn("IPv4 Subnet") { Text($0.ipv4Subnet ?? "—") }
-            TableColumn("IPv6 Subnet") { Text($0.ipv6Subnet ?? "—") }
-            TableColumn("Plugin") { Text($0.plugin ?? "—") }
-            TableColumn("Created") { network in
-                if let creationDate = network.creationDate {
-                    Text(
-                        creationDate,
-                        format: .dateTime.year().month(.abbreviated).day().hour().minute()
-                    )
-                } else {
-                    Text("—")
+        VStack(spacing: 0) {
+            HStack {
+                Text("Networks").font(.dsScreenTitle)
+                Text("\(model.networks.count)").foregroundStyle(Color.dsTextSecondary)
+                Spacer()
+            }
+            .padding(DSMetrics.spacing16)
+            .background(Color.dsSurface)
+            DSTable(
+                rows: model.filteredNetworks,
+                columns: Self.columns,
+                selection: $model.selectedNetworkID
+            ) { network in
+                HStack(spacing: DSMetrics.spacing8) {
+                    MonoText(value: network.name, truncation: .middle, selectable: false)
+                    if network.isBuiltIn { TagChip(title: "Built-in") }
                 }
+                .dsColumn(Self.columns[0])
+
+                MonoText(value: network.mode ?? "—", dimmed: true, selectable: false)
+                    .dsColumn(Self.columns[1])
+
+                MonoText(value: network.ipv4Subnet ?? "—", dimmed: true, selectable: false)
+                    .dsColumn(Self.columns[2])
+
+                Group {
+                    let count = inventoryIndex.attachedContainerCount(for: network)
+                    if count == 0 {
+                        TagChip(title: "Unused")
+                    } else {
+                        Text("\(count) container(s)")
+                            .foregroundStyle(Color.dsTextSecondary)
+                    }
+                }
+                .dsColumn(Self.columns[3])
+
+                MonoText(value: network.plugin ?? "—", dimmed: true, truncation: .middle, selectable: false)
+                    .dsColumn(Self.columns[4])
+                    .contextMenu {
+                        Button("Inspect") { model.selectedNetworkID = network.id }
+                        Button("Delete…", role: .destructive) { pendingDeletion = network }
+                            .disabled(network.isBuiltIn || model.isBusy)
+                    }
             }
-        }
-        .contextMenu(forSelectionType: String.self) { selection in
-            if let network = model.networks.first(where: { selection.contains($0.id) }) {
-                Button("Inspect") { model.selectedNetworkID = network.id }
-                Button("Delete…", role: .destructive) { pendingDeletion = network }
-                    .disabled(network.isBuiltIn || model.isBusy)
+            HStack {
+                let unused = model.networks.filter {
+                    !$0.isBuiltIn && inventoryIndex.attachedContainerCount(for: $0) == 0
+                }
+                Text("\(unused.count) unused user networks")
+                Spacer()
+                Button("Prune unused…") { isConfirmingPrune = true }.disabled(unused.isEmpty)
             }
+            .font(.caption)
+            .foregroundStyle(Color.dsTextSecondary)
+            .padding(.horizontal, DSMetrics.spacing12)
+            .frame(minHeight: 38)
+            .background(Color.dsSurfaceRaised)
+            .overlay(alignment: .top) { Rectangle().fill(Color.dsHairline).frame(height: 1) }
         }
+        .background(Color.dsCanvas)
         .accessibilityIdentifier("networks.table")
         .navigationTitle("Networks")
         .searchable(text: $model.searchText, placement: .toolbar, prompt: "Search networks")
@@ -148,19 +193,19 @@ private struct NetworkListOverlay: View {
              .loading where model.networks.isEmpty:
             ProgressView("Loading networks…").controlSize(.large)
         case .failed(let message) where model.networks.isEmpty:
-            ContentUnavailableView {
-                Label("Networks Couldn’t Be Loaded", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(message).textSelection(.enabled)
-            } actions: {
+            EmptyState(
+                "Networks Couldn’t Be Loaded",
+                systemImage: "exclamationmark.triangle",
+                message: message
+            ) {
                 Button("Try Again") { Task { await model.refresh() } }
             }
         case .loaded where model.filteredNetworks.isEmpty:
             if model.networks.isEmpty {
-                ContentUnavailableView(
+                EmptyState(
                     "No Networks",
                     systemImage: "network",
-                    description: Text("Create a network to attach containers to it.")
+                    description: "Create a network to attach containers to it."
                 )
             } else {
                 ContentUnavailableView.search(text: model.searchText)
@@ -177,26 +222,25 @@ private struct NetworkErrorBanners: View {
     var body: some View {
         VStack(spacing: 0) {
             if let mutationFailure = model.mutationFailure {
-                HStack {
-                    Label(mutationFailure, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
-                        .textSelection(.enabled)
-                    Spacer()
-                    Button("Dismiss") { model.dismissMutationFailure() }
-                }
-                .padding(10)
-                .background(.regularMaterial)
+                InlineBanner(
+                    message: "Network action failed",
+                    detail: mutationFailure,
+                    scope: .bar,
+                    severity: .error,
+                    copyValue: mutationFailure,
+                    onDismiss: model.dismissMutationFailure
+                )
                 .accessibilityIdentifier("networks.mutationError")
             }
             if case .failed(let message) = model.listState, !model.networks.isEmpty {
-                HStack {
-                    Label(message, systemImage: "arrow.clockwise.circle")
-                        .textSelection(.enabled)
-                    Spacer()
-                    Button("Retry") { Task { await model.refresh() } }
-                }
-                .padding(10)
-                .background(.regularMaterial)
+                InlineBanner(
+                    message: "Refresh failed",
+                    detail: message,
+                    scope: .bar,
+                    severity: .error,
+                    actionTitle: "Retry",
+                    action: { Task { await model.refresh() } }
+                )
                 .accessibilityIdentifier("networks.refreshError")
             }
         }
@@ -211,16 +255,16 @@ private struct NetworkInspector: View {
             VStack(alignment: .leading, spacing: 16) {
                 switch model.inspectionState {
                 case .idle:
-                    ContentUnavailableView("Select a Network", systemImage: "network")
+                    EmptyState("Select a Network", systemImage: "network")
                 case .loading:
                     ProgressView("Inspecting network…")
                         .frame(maxWidth: .infinity)
                 case .failed(let message):
-                    ContentUnavailableView {
-                        Label("Network Couldn’t Be Inspected", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(message).textSelection(.enabled)
-                    } actions: {
+                    EmptyState(
+                        "Network Couldn’t Be Inspected",
+                        systemImage: "exclamationmark.triangle",
+                        message: message
+                    ) {
                         Button("Try Again") { Task { await model.inspectSelection() } }
                     }
                 case .loaded(let inspection):
@@ -242,10 +286,10 @@ private struct NetworkInspector: View {
                             )
                         }
                     } else {
-                        ContentUnavailableView(
+                        EmptyState(
                             "Selection Changed",
                             systemImage: "arrow.clockwise",
-                            description: Text("Waiting for the selected network’s inspection.")
+                            description: "Waiting for the selected network’s inspection."
                         )
                     }
                 }
@@ -394,26 +438,24 @@ private struct CreateNetworkSheet: View {
                         onRemove: draft.removePluginOption
                     )
                 }
-                Section("Command Preview") {
-                    Text(draft.commandPreview)
-                        .font(.system(.callout, design: .monospaced))
-                        .textSelection(.enabled)
-                        .accessibilityIdentifier("networks.create.preview")
-                }
                 if isSubmitting {
                     Section { ProgressView("Creating network…") }
                 }
                 if let mutationFailure = model.mutationFailure {
                     Section {
-                        Label(mutationFailure, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.red)
-                            .textSelection(.enabled)
+                        InlineBanner(
+                            message: "Create failed",
+                            detail: mutationFailure,
+                            scope: .card,
+                            severity: .error,
+                            copyValue: mutationFailure
+                        )
                     }
                 }
             }
             .formStyle(.grouped)
             .disabled(isSubmitting)
-            Divider()
+            CommandStrip(command: draft.commandPreview, accessibilityID: "networks.create.preview")
             HStack {
                 Button("Cancel", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
@@ -449,10 +491,11 @@ private struct ValidatedNetworkField: View {
         VStack(alignment: .leading, spacing: 6) {
             LabeledContent(title) {
                 TextField(prompt, text: $text)
+                    .dsMonoField()
                     .accessibilityIdentifier(accessibilityIdentifier)
             }
             if let error {
-                Text(error).font(.caption).foregroundStyle(.red)
+                Text(error).font(.caption).foregroundStyle(Color.dsStateDestructive)
             }
         }
     }
@@ -471,14 +514,16 @@ private struct NetworkKeyValueDraftSection: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         TextField("Key", text: $row.key).frame(width: 220)
+                            .dsMonoField()
                         TextField("Value", text: $row.value)
+                            .dsMonoField()
                         Button("Remove", systemImage: "minus.circle") {
                             onRemove(row.id)
                         }
                         .labelStyle(.iconOnly)
                     }
                     if let message = error(row) {
-                        Text(message).font(.caption).foregroundStyle(.red)
+                        Text(message).font(.caption).foregroundStyle(Color.dsStateDestructive)
                     }
                 }
             }

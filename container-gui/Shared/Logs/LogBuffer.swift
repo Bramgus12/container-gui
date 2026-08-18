@@ -1,10 +1,72 @@
 import Foundation
 
+nonisolated enum LogSeverity: Int, CaseIterable, Equatable, Sendable {
+    case plain
+    case warning
+    case error
+
+    static func classify(_ text: String) -> LogSeverity {
+        let value = text.lowercased()
+        if value.contains("error") || value.contains("fatal") || value.contains("failed") {
+            return .error
+        }
+        if value.contains("warn") {
+            return .warning
+        }
+        return .plain
+    }
+}
+
+nonisolated enum LogFilter: String, CaseIterable, Identifiable, Sendable {
+    case all
+    case warning
+    case error
+
+    var id: Self { self }
+
+    func includes(_ severity: LogSeverity) -> Bool {
+        switch self {
+        case .all: true
+        case .warning: severity == .warning
+        case .error: severity == .error
+        }
+    }
+}
+
+nonisolated struct LogCounts: Equatable, Sendable {
+    let all: Int
+    let warnings: Int
+    let errors: Int
+}
+
 nonisolated struct LogSnapshot: Equatable, Sendable {
     let text: String
     let firstLogicalLineNumber: Int
+    let logicalLineNumbers: [Int]
+    let severities: [LogSeverity]
+
+    init(
+        text: String,
+        firstLogicalLineNumber: Int,
+        logicalLineNumbers: [Int]? = nil,
+        severities: [LogSeverity]? = nil
+    ) {
+        self.text = text
+        self.firstLogicalLineNumber = firstLogicalLineNumber
+        let lines = Self.sourceLines(in: text)
+        self.logicalLineNumbers = logicalLineNumbers
+            ?? Array(firstLogicalLineNumber..<(firstLogicalLineNumber + lines.count))
+        self.severities = severities ?? lines.map(LogSeverity.classify)
+    }
 
     static let empty = LogSnapshot(text: "", firstLogicalLineNumber: 1)
+
+    private static func sourceLines(in text: String) -> [String] {
+        guard !text.isEmpty else { return [] }
+        var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        if text.hasSuffix("\n") { lines.removeLast() }
+        return lines
+    }
 }
 
 /// A bounded collection of logical source lines. A line is created only when
@@ -15,6 +77,8 @@ nonisolated struct LogBuffer: Sendable {
         let number: Int
         var text: String
         var isTerminated: Bool
+
+        var severity: LogSeverity { LogSeverity.classify(text) }
 
         var byteCount: Int {
             text.utf8.count + (isTerminated ? 1 : 0)
@@ -33,19 +97,38 @@ nonisolated struct LogBuffer: Sendable {
         self.maximumBytes = max(1, maximumBytes)
     }
 
-    var snapshot: LogSnapshot {
+    var snapshot: LogSnapshot { snapshot(filter: .all) }
+
+    var counts: LogCounts {
         let visibleLines = lines[firstLineIndex...]
+        return LogCounts(
+            all: visibleLines.count,
+            warnings: visibleLines.count { $0.severity == .warning },
+            errors: visibleLines.count { $0.severity == .error }
+        )
+    }
+
+    func snapshot(filter: LogFilter, matching query: String = "") -> LogSnapshot {
+        let visibleLines = lines[firstLineIndex...]
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         var text = ""
         text.reserveCapacity(storedByteCount)
-        for line in visibleLines {
+        var numbers: [Int] = []
+        var severities: [LogSeverity] = []
+        for line in visibleLines where filter.includes(line.severity)
+            && (query.isEmpty || line.text.localizedCaseInsensitiveContains(query)) {
             text.append(line.text)
             if line.isTerminated {
                 text.append("\n")
             }
+            numbers.append(line.number)
+            severities.append(line.severity)
         }
         return LogSnapshot(
             text: text,
-            firstLogicalLineNumber: visibleLines.first?.number ?? nextLogicalLineNumber
+            firstLogicalLineNumber: numbers.first ?? nextLogicalLineNumber,
+            logicalLineNumbers: numbers,
+            severities: severities
         )
     }
 

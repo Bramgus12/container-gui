@@ -48,7 +48,7 @@ private struct ContainerIdentitySection: View {
     var body: some View {
         InspectionSection("General", systemImage: "shippingbox") {
             InspectionValueRow("ID / Name", value: details.id)
-            InspectionValueRow("State", value: details.summary.state.displayName)
+            InspectionValueRow("State", value: details.summary.state.localizedTitleString)
             InspectionValueRow("Image", value: details.summary.image)
             InspectionValueRow("Image digest", value: details.imageDigest)
             InspectionValueRow("Platform", value: inspectionPlatform(details.platform))

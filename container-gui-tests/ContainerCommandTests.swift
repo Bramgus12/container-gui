@@ -73,6 +73,8 @@ final class ContainerCommandTests: XCTestCase {
             ContainerCommand.deleteImage(reference: reference).arguments,
             ["image", "delete", reference.rawValue]
         )
+        XCTAssertEqual(ContainerCommand.pruneImages(all: true).arguments, ["image", "prune", "--all"])
+        XCTAssertEqual(ContainerCommand.pruneImages(all: false).arguments, ["image", "prune"])
     }
 
     func testRunPreservesEveryValueAsOneArgument() throws {

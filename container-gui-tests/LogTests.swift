@@ -81,6 +81,21 @@ final class LogBufferTests: XCTestCase {
             firstLogicalLineNumber: 1
         ))
     }
+
+    func testSeverityFilteringKeepsOriginalLogicalLineNumbersAndCounts() {
+        var buffer = LogBuffer()
+        buffer.append("ready\nWARN retrying\nplain\nERROR failed\n")
+
+        XCTAssertEqual(buffer.counts, LogCounts(all: 4, warnings: 1, errors: 1))
+        let warning = buffer.snapshot(filter: .warning)
+        XCTAssertEqual(warning.text, "WARN retrying\n")
+        XCTAssertEqual(warning.logicalLineNumbers, [2])
+        XCTAssertEqual(warning.severities, [.warning])
+
+        let error = buffer.snapshot(filter: .error, matching: "failed")
+        XCTAssertEqual(error.text, "ERROR failed\n")
+        XCTAssertEqual(LogLineMap(snapshot: error).lineNumber(atCharacterIndex: 0), 4)
+    }
 }
 
 @MainActor

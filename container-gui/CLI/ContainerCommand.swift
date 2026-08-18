@@ -21,6 +21,7 @@ nonisolated enum ContainerCommand: Equatable, Sendable {
     case inspectImage(reference: ImageReference)
     case pullImage(reference: ImageReference)
     case deleteImage(reference: ImageReference)
+    case pruneImages(all: Bool)
 
     case listNetworks
     case inspectNetwork(name: NetworkName)
@@ -85,6 +86,8 @@ nonisolated enum ContainerCommand: Equatable, Sendable {
             ["image", "pull", "--progress", "plain", reference.rawValue]
         case .deleteImage(let reference):
             ["image", "delete", reference.rawValue]
+        case .pruneImages(let all):
+            ["image", "prune"] + (all ? ["--all"] : [])
 
         case .listNetworks:
             ["network", "list", "--format", "json"]

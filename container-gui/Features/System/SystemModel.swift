@@ -14,6 +14,10 @@ nonisolated protocol SystemManaging: Sendable {
     func stopService() async throws
 }
 
+nonisolated protocol SystemReclaiming: Sendable {
+    func reclaimUnusedResources() async throws
+}
+
 nonisolated struct OperationFailureRecord: Equatable, Sendable {
     let date: Date
     let operation: String
@@ -55,7 +59,7 @@ final class OperationFailureLog {
     }
 }
 
-actor CLISystemService: SystemManaging {
+actor CLISystemService: SystemManaging, SystemReclaiming {
     static let maximumLogLines = 2_000
     static let maximumLogBytes = 256 * 1_024
 
@@ -121,6 +125,11 @@ actor CLISystemService: SystemManaging {
         _ = try await cli.run(.systemStop)
     }
 
+    func reclaimUnusedResources() async throws {
+        _ = try await cli.run(.pruneImages(all: true))
+        _ = try await cli.run(.pruneVolumes)
+    }
+
     nonisolated static func boundedSanitizedLogs(_ value: String) -> String {
         let sanitized = DiagnosticSanitizer.sanitize(value)
         let lines = sanitized.split(
@@ -149,6 +158,13 @@ enum SystemLoadingState: Equatable, Sendable {
     case failed(String)
 }
 
+extension SystemLoadingState {
+    var failedMessage: String? {
+        if case .failed(let message) = self { return message }
+        return nil
+    }
+}
+
 enum SystemServiceOperation: String, Equatable, Sendable {
     case start = "Starting service"
     case stop = "Stopping service"
@@ -173,6 +189,7 @@ final class SystemModel {
     private(set) var serviceOperation: SystemServiceOperation?
     private(set) var actionError: String?
     private(set) var didCopyDiagnostics = false
+    private(set) var isReclaiming = false
 
     private let service: any SystemManaging
     private let failureLog: OperationFailureLog
@@ -269,6 +286,24 @@ final class SystemModel {
         } catch {
             guard !isCancellation(error) else { return }
             failureLog.record(operation: operation.rawValue, error: error)
+            actionError = DiagnosticSanitizer.sanitize(error.localizedDescription)
+        }
+    }
+
+    func reclaimUnusedResources() async {
+        guard !isReclaiming, let reclaimer = service as? any SystemReclaiming else { return }
+        isReclaiming = true
+        actionError = nil
+        defer { isReclaiming = false }
+        do {
+            try await reclaimer.reclaimUnusedResources()
+            await refresh()
+        } catch is CancellationError {
+            return
+        } catch CLIError.cancelled {
+            return
+        } catch {
+            failureLog.record(operation: "Reclaim unused resources", error: error)
             actionError = DiagnosticSanitizer.sanitize(error.localizedDescription)
         }
     }

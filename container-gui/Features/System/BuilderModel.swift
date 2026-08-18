@@ -8,6 +8,13 @@ enum BuilderLoadingState: Equatable, Sendable {
     case failed(String)
 }
 
+extension BuilderLoadingState {
+    var failedMessage: String? {
+        if case .failed(let message) = self { return message }
+        return nil
+    }
+}
+
 enum BuilderOperation: Equatable, Sendable {
     case start
     case stop
