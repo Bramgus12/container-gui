@@ -153,6 +153,32 @@ final class DesignSystemDataTests: XCTestCase {
         XCTFail("Condition was never met.")
     }
 
+    func testTableColumnSortingOrdersRowsAndFlipsOnReverse() throws {
+        let columns: [DSTableColumn<ContainerSummary>] = [
+            DSTableColumn("id", "Container") {
+                $0.id.localizedStandardCompare($1.id) == .orderedAscending
+            },
+            DSTableColumn("ports", "Ports"),
+        ]
+        let rows = [
+            try makeContainer(id: "web-10", image: "a", state: "running"),
+            try makeContainer(id: "web-2", image: "a", state: "running"),
+            try makeContainer(id: "api", image: "a", state: "running"),
+        ]
+
+        let ascending = try XCTUnwrap(columns[0].ascending)
+        // Standard comparison must order web-2 before web-10, not lexically.
+        XCTAssertEqual(rows.sorted(by: ascending).map(\.id), ["api", "web-2", "web-10"])
+        XCTAssertEqual(
+            rows.sorted { ascending($1, $0) }.map(\.id),
+            ["web-10", "web-2", "api"]
+        )
+
+        // A column without a comparator is not sortable, and must stay that way
+        // rather than silently falling back to some other order.
+        XCTAssertNil(columns[1].ascending)
+    }
+
     @MainActor
     func testBundledGeistMonoCanBeRegistered() {
         XCTAssertTrue(DSFont.registerBundledFontsIfNeeded())

@@ -2,9 +2,13 @@ import AppKit
 import SwiftUI
 
 struct NetworksView: View {
-    private static let columns: [DSTableColumn] = [
-        DSTableColumn("name", "Name"),
-        DSTableColumn("mode", "Mode", width: 90),
+    private static let columns: [DSTableColumn<NetworkSummary>] = [
+        DSTableColumn("name", "Name") {
+            $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        },
+        DSTableColumn("mode", "Mode", width: 90) {
+            ($0.mode ?? "").localizedStandardCompare($1.mode ?? "") == .orderedAscending
+        },
         DSTableColumn("subnet", "IPv4 subnet", width: 150),
         DSTableColumn("attached", "Attached", width: 120),
         DSTableColumn("plugin", "Plugin", width: 110),

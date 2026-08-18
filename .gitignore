@@ -58,6 +58,9 @@ playground.xcworkspace
 
 
 ### Swift
+# Coverage artefacts dropped by test runs
+*.profraw
+
 # Xcode user settings
 xcuserdata/
 

@@ -138,12 +138,17 @@ struct ImageListView: View {
             }
     }
 
-    private static let columns: [DSTableColumn] = [
-        DSTableColumn("reference", "Reference"),
+    private static let columns: [DSTableColumn<ImageSummary>] = [
+        DSTableColumn("reference", "Reference") {
+            $0.reference.localizedStandardCompare($1.reference) == .orderedAscending
+        },
         DSTableColumn("digest", "Digest"),
         DSTableColumn("platform", "Platform", width: 120),
         DSTableColumn("usedBy", "Used by", width: 120),
-        DSTableColumn("size", "Size", width: 150, alignment: .trailing),
+        DSTableColumn("size", "Size", width: 150, alignment: .trailing) {
+            // Largest first: the reason to sort by size is to find what to prune.
+            ($0.size ?? 0) > ($1.size ?? 0)
+        },
     ]
 
     private var table: some View {

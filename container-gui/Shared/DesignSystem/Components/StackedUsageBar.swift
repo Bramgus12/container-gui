@@ -3,6 +3,10 @@ import SwiftUI
 /// One proportional bar split into named segments, plus the legend that names
 /// them. Used by the sidebar disk block and the System disk card so both read
 /// the same total the same way.
+///
+/// Segments are drawn from the ramp's *mark* range (Blue300–700) rather than
+/// its tint-surface range: the pale end of the ramp is dark navy in the dark
+/// appearance, which on a dark background is all but invisible.
 struct StackedUsageBar: View {
     struct Segment: Identifiable, Equatable {
         let id: String
@@ -138,13 +142,13 @@ extension SystemDiskUsage {
                 id: "volumes",
                 title: "Volumes",
                 bytes: volumeSize - volumeReclaimable,
-                color: .dsBlue200
+                color: .dsBlue500
             ),
             .init(
                 id: "other",
                 title: "Other",
                 bytes: other - otherReclaimable,
-                color: .dsBlue100
+                color: .dsBlue700
             ),
             .init(
                 id: "reclaimable",

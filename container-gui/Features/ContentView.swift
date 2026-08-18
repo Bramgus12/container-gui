@@ -709,12 +709,20 @@ private struct ContainerListView: View {
             }
     }
 
-    private static let columns: [DSTableColumn] = [
-        DSTableColumn("container", "Container"),
-        DSTableColumn("image", "Image"),
+    private static let columns: [DSTableColumn<ContainerSummary>] = [
+        DSTableColumn("container", "Container") {
+            $0.id.localizedStandardCompare($1.id) == .orderedAscending
+        },
+        DSTableColumn("image", "Image") {
+            ($0.image ?? "").localizedStandardCompare($1.image ?? "") == .orderedAscending
+        },
         DSTableColumn("ports", "Ports", width: 150),
         DSTableColumn("memory", "Memory", width: 150),
-        DSTableColumn("uptime", "Uptime", width: 110, alignment: .trailing),
+        DSTableColumn("uptime", "Uptime", width: 110, alignment: .trailing) {
+            // Most recently started first, and containers that never started last.
+            ($0.startedAt ?? $0.createdAt ?? .distantPast)
+                > ($1.startedAt ?? $1.createdAt ?? .distantPast)
+        },
     ]
 
     private var table: some View {

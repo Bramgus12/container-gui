@@ -2,11 +2,15 @@ import AppKit
 import SwiftUI
 
 struct VolumesView: View {
-    private static let columns: [DSTableColumn] = [
-        DSTableColumn("name", "Name"),
+    private static let columns: [DSTableColumn<VolumeSummary>] = [
+        DSTableColumn("name", "Name") {
+            $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        },
         DSTableColumn("attached", "Attached to"),
         DSTableColumn("format", "Format", width: 100),
-        DSTableColumn("size", "Size", width: 150, alignment: .trailing),
+        DSTableColumn("size", "Size", width: 150, alignment: .trailing) {
+            ($0.sizeInBytes ?? 0) > ($1.sizeInBytes ?? 0)
+        },
     ]
 
     @Bindable var model: VolumeModel
