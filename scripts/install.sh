@@ -53,7 +53,7 @@ Install Container GUI from its GitHub releases.
 Usage: install.sh [options]
 
 Options:
-  --version <tag>   Install a specific release, for example --version v1.1.0.
+  --version <tag>   Install a specific release, for example --version v1.2.0.
                     Defaults to the latest release.
   --dir <path>      Install into <path> instead of /Applications.
   --user            Install into ~/Applications. Never needs an administrator
@@ -87,13 +87,13 @@ parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
         --version)
-            [[ $# -ge 2 ]] || fail "--version requires a release tag, for example --version v1.1.0."
+            [[ $# -ge 2 ]] || fail "--version requires a release tag, for example --version v1.2.0."
             version_tag="$2"
             shift 2
             ;;
         --version=*)
             version_tag="${1#*=}"
-            [[ -n "$version_tag" ]] || fail "--version requires a release tag, for example --version v1.1.0."
+            [[ -n "$version_tag" ]] || fail "--version requires a release tag, for example --version v1.2.0."
             shift
             ;;
         --dir)

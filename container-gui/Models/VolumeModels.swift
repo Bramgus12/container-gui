@@ -29,7 +29,9 @@ nonisolated struct VolumeKeyValue: Hashable, Sendable {
         guard !key.unicodeScalars.contains(where: {
             $0 == "=" || CharacterSet.whitespacesAndNewlines.contains($0)
                 || CharacterSet.controlCharacters.contains($0)
-        }), !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+        }), !value.unicodeScalars.contains(where: {
+            CharacterSet.controlCharacters.contains($0)
+        })
         else {
             throw CommandValidationError.invalid(field: "Volume option", value: key)
         }

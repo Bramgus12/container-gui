@@ -360,7 +360,14 @@ private actor UITestContainerCLI: ContainerCLI {
         case .builderDelete:
             builderState = nil
             output = ""
-        case .systemStart, .systemStop, .pullImage, .build, .run, .logs, .stats:
+        case .logs:
+            output = """
+            first UI test log line
+
+            A deliberately long UI test log line that should wrap inside the inspector without creating a horizontal scrollbar or an extra logical line number.
+            final UI test log line
+            """
+        case .systemStart, .systemStop, .pullImage, .build, .run, .stats:
             output = ""
         }
         return CommandResult(

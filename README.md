@@ -89,7 +89,7 @@ curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/script
 
 Then review `install.sh` and run `bash install.sh`.
 
-Useful options: `--version v1.1.0` pins a release, `--user` installs into
+Useful options: `--version v1.2.0` pins a release, `--user` installs into
 `~/Applications` and never asks for an administrator password, `--dir <path>`
 chooses another location, and `--uninstall` removes the app while keeping its
 settings. Re-running the command upgrades an existing installation in place.
@@ -250,7 +250,7 @@ formats have fixture and smoke-test coverage.
 | Resource | Description |
 | --- | --- |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Setup, service, upgrade, pull, and deletion help |
-| [Release notes](docs/RELEASE_NOTES.md) | Container GUI 1.0 feature and compatibility summary |
+| [Release notes](docs/RELEASE_NOTES.md) | Feature, compatibility, and upgrade notes for each release |
 | [Release checklist](docs/RELEASE_CHECKLIST.md) | Testing, accessibility, signing, and notarization gates |
 | [Architecture decision](docs/decisions/0001-cli-wrapper-and-distribution.md) | Why the app wraps the CLI and ships outside the Mac App Store |
 

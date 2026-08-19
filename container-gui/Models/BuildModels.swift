@@ -11,7 +11,9 @@ nonisolated struct BuildKeyValue: Hashable, Sendable {
         ) != nil else {
             throw CommandValidationError.invalid(field: "Build key", value: key)
         }
-        guard !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
+        guard !value.unicodeScalars.contains(where: {
+            CharacterSet.controlCharacters.contains($0)
+        }) else {
             throw CommandValidationError.invalid(field: "Build value", value: value)
         }
         self.key = key
@@ -27,7 +29,9 @@ nonisolated struct LocalPath: Equatable, Sendable {
     init(validating value: String, field: String) throws {
         guard !value.isEmpty else { throw CommandValidationError.empty(field: field) }
         guard value.first == "/",
-              !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+              !value.unicodeScalars.contains(where: {
+                  CharacterSet.controlCharacters.contains($0)
+              })
         else {
             throw CommandValidationError.invalid(field: field, value: value)
         }
