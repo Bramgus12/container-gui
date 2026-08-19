@@ -110,12 +110,12 @@ final class ImageBuildModel: Identifiable {
         )
     }
 
-    var advancedSetCount: Int {
-        [noCache, pull, exportsOutput].count(where: { $0 })
-            + [dockerfile, target, platform, operatingSystem, architecture, cpuLimit, memoryLimit, outputDestination]
-                .count { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            + buildArguments.count
-            + labels.count
+    /// Badge for the build sheet's Build Options page: the toggles that are on
+    /// plus the optional fields that carry a value.
+    var optionSetCount: Int {
+        [noCache, pull].count(where: { $0 })
+            + [target, platform, operatingSystem, architecture, cpuLimit, memoryLimit]
+                .count { !trimmed($0).isEmpty }
     }
 
     func addBuildArgument() { buildArguments.append(BuildKeyValueDraft()) }

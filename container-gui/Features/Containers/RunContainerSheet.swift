@@ -19,7 +19,12 @@ struct RunContainerSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                RunSectionRail(model: model, selection: $page)
+                SheetSectionRail(
+                    title: "Run container",
+                    selection: $page,
+                    count: railCount(for:),
+                    accessibilityID: "run.rail"
+                )
                 Rectangle().fill(Color.dsHairline).frame(width: 1)
                 Form {
                     currentPage
@@ -55,6 +60,17 @@ struct RunContainerSheet: View {
             if outcome == .succeeded {
                 dismiss()
             }
+        }
+    }
+
+    private func railCount(for section: RunSection) -> Int? {
+        switch section {
+        case .container, .resources: nil
+        case .networks: model.networks.count
+        case .storage: model.mounts.count
+        case .ports: model.ports.count
+        case .environment: model.environment.count
+        case .command: model.arguments.count + (model.command.isEmpty ? 0 : 1)
         }
     }
 
@@ -335,14 +351,20 @@ struct RunContainerSheet: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             LabeledContent(title) {
-                TextField(prompt, text: text)
-                    .dsMonoField()
-                    .multilineTextAlignment(.leading)
-                    .accessibilityIdentifier(
-                        "run." + title
-                            .lowercased()
-                            .replacingOccurrences(of: " ", with: "-")
-                    )
+                // The hint belongs in the placeholder. Passing it as the
+                // field's title instead renders it as a second visible label
+                // beside the row's own label.
+                TextField(text: text, prompt: Text(prompt)) {
+                    Text(title)
+                }
+                .labelsHidden()
+                .dsMonoField()
+                .multilineTextAlignment(.leading)
+                .accessibilityIdentifier(
+                    "run." + title
+                        .lowercased()
+                        .replacingOccurrences(of: " ", with: "-")
+                )
             }
             validationText(error)
         }
@@ -359,7 +381,7 @@ struct RunContainerSheet: View {
 }
 
 /// The seven form sections, in the order the rail lists them.
-enum RunSection: String, CaseIterable, Identifiable, Hashable {
+enum RunSection: String, SheetSection {
     case container
     case resources
     case networks
@@ -367,20 +389,6 @@ enum RunSection: String, CaseIterable, Identifiable, Hashable {
     case ports
     case environment
     case command
-
-    var id: Self { self }
-
-    var next: RunSection? {
-        let all = RunSection.allCases
-        guard let index = all.firstIndex(of: self), index + 1 < all.count else { return nil }
-        return all[index + 1]
-    }
-
-    var previous: RunSection? {
-        let all = RunSection.allCases
-        guard let index = all.firstIndex(of: self), index > 0 else { return nil }
-        return all[index - 1]
-    }
 
     /// Only the first page must be filled in for a container to run; the rest
     /// are optional refinements, and the rail marks them as such.
@@ -396,82 +404,6 @@ enum RunSection: String, CaseIterable, Identifiable, Hashable {
         case .environment: "Environment"
         case .command: "Command"
         }
-    }
-}
-
-private struct RunSectionRail: View {
-    let model: RunContainerModel
-    @Binding var selection: RunSection
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DSMetrics.spacing4) {
-            SectionLabel(title: "Run container")
-                .padding(.bottom, DSMetrics.spacing8)
-            ForEach(RunSection.allCases) { section in
-                RailRow(
-                    title: section.title,
-                    count: count(for: section),
-                    isRequired: section.isRequired,
-                    isSelected: selection == section
-                ) {
-                    selection = section
-                }
-            }
-            Spacer()
-        }
-        .padding(DSMetrics.spacing12)
-        .frame(width: 150)
-        .frame(maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.dsSurfaceRaised)
-        .accessibilityIdentifier("run.rail")
-    }
-
-    private func count(for section: RunSection) -> Int? {
-        switch section {
-        case .container, .resources: nil
-        case .networks: model.networks.count
-        case .storage: model.mounts.count
-        case .ports: model.ports.count
-        case .environment: model.environment.count
-        case .command: model.arguments.count + (model.command.isEmpty ? 0 : 1)
-        }
-    }
-}
-
-private struct RailRow: View {
-    let title: LocalizedStringResource
-    let count: Int?
-    let isRequired: Bool
-    let isSelected: Bool
-    let select: () -> Void
-
-    var body: some View {
-        Button(action: select) {
-            HStack(spacing: DSMetrics.spacing4) {
-                Text(title)
-                    .fontWeight(isSelected ? .semibold : .regular)
-                if isRequired {
-                    Text(verbatim: "*")
-                        .foregroundStyle(Color.dsStateAttention)
-                        .accessibilityLabel("Required")
-                }
-                Spacer()
-                if let count, count > 0 {
-                    Text(count, format: .number)
-                        .font(.cliMonoTabular)
-                        .foregroundStyle(Color.dsTextSecondary)
-                }
-            }
-            .padding(.vertical, DSMetrics.spacing8)
-            .padding(.horizontal, DSMetrics.spacing8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .background(
-            isSelected ? Color.dsBlue100 : .clear,
-            in: RoundedRectangle(cornerRadius: DSMetrics.controlRadius)
-        )
     }
 }
 

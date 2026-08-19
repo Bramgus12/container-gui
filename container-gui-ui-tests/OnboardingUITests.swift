@@ -179,7 +179,13 @@ final class OnboardingUITests: XCTestCase {
         let buildSheet = app.sheets.firstMatch
         XCTAssertTrue(buildSheet.textFields["images.build.tag"].waitForExistence(timeout: 3))
         XCTAssertTrue(buildSheet.textFields["images.build.context"].exists)
-        XCTAssertTrue(buildSheet.disclosureTriangles.firstMatch.exists)
+        // The build sheet pages its form from a section rail, exactly like the
+        // run sheet, instead of splitting into two columns with an "Advanced"
+        // disclosure holding everything else.
+        buildSheet.buttons["Build Options"].click()
+        XCTAssertTrue(buildSheet.textFields["images.build.platform"].waitForExistence(timeout: 3))
+        buildSheet.buttons["Metadata"].click()
+        XCTAssertTrue(buildSheet.buttons["Add Build Argument"].waitForExistence(timeout: 3))
         buildSheet.buttons["Cancel"].click()
         XCTAssertTrue(buildSheet.waitForNonExistence(timeout: 3))
 
