@@ -12,34 +12,27 @@ struct ImageBuildSheet: View {
     @State private var showsLog = false
 
     var body: some View {
-        VStack(spacing: 0) {
+        SheetScaffold(
+            command: model.commandPreview,
+            commandAccessibilityID: "images.build.preview"
+        ) {
             if showsLog {
                 BuildLogPane(model: model)
             } else {
-                HStack(spacing: 0) {
-                    SheetSectionRail(
-                        title: "Build image",
-                        selection: $page,
-                        count: railCount(for:),
-                        accessibilityID: "images.build.rail"
-                    )
-                    Rectangle().fill(Color.dsHairline).frame(width: 1)
-                    Form {
-                        currentPage
-                    }
-                    .formStyle(.grouped)
-                    .frame(maxWidth: .infinity)
+                SheetSectionPane(
+                    title: "Build image",
+                    selection: $page,
+                    count: railCount(for:),
+                    accessibilityID: "images.build.rail"
+                ) {
+                    currentPage
                 }
             }
-
-            CommandStrip(command: model.commandPreview, accessibilityID: "images.build.preview")
-
+        } footer: {
             footer
         }
-        .frame(minWidth: 760, minHeight: 560)
         .interactiveDismissDisabled(model.isBuilding)
         .onDisappear { operation?.cancel() }
-        .accessibilityIdentifier("images.build.sheet")
     }
 
     private func railCount(for section: BuildSection) -> Int? {
@@ -78,44 +71,34 @@ struct ImageBuildSheet: View {
 
     @ViewBuilder
     private var footer: some View {
-        HStack {
-            Button(role: .cancel) {
-                if model.isBuilding {
-                    operation?.cancel()
-                } else {
-                    dismiss()
-                }
-            } label: {
-                Text(model.isBuilding ? "Cancel Build" : "Cancel")
-            }
-            .keyboardShortcut(.cancelAction)
-            .accessibilityIdentifier("images.build.cancel")
-
-            Spacer()
-
-            if showsLog {
-                Button("Edit Build") { showsLog = false }
-                    .disabled(model.isBuilding)
-                    .accessibilityIdentifier("images.build.edit")
+        SheetCancelButton(
+            title: model.isBuilding ? "Cancel Build" : "Cancel",
+            accessibilityID: "images.build.cancel"
+        ) {
+            if model.isBuilding {
+                operation?.cancel()
             } else {
-                Button("Back") { page = page.previous ?? page }
-                    .disabled(page.previous == nil)
-                    .accessibilityIdentifier("images.build.back")
-
-                Button("Next") { page = page.next ?? page }
-                    .disabled(page.next == nil)
-                    .accessibilityIdentifier("images.build.next")
+                dismiss()
             }
-
-            // Build stays available from any page: only the first page is
-            // required, so there is no reason to walk the rest to start.
-            Button("Build") { startBuild() }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-                .disabled(!model.canBuild)
-                .accessibilityIdentifier("images.build.submit")
         }
-        .padding()
+
+        Spacer()
+
+        if showsLog {
+            Button("Edit Build") { showsLog = false }
+                .disabled(model.isBuilding)
+                .accessibilityIdentifier("images.build.edit")
+        } else {
+            SheetPagingButtons(selection: $page, accessibilityIDPrefix: "images.build")
+        }
+
+        // Build stays available from any page: only the first page is
+        // required, so there is no reason to walk the rest to start.
+        Button("Build") { startBuild() }
+            .keyboardShortcut(.defaultAction)
+            .buttonStyle(.borderedProminent)
+            .disabled(!model.canBuild)
+            .accessibilityIdentifier("images.build.submit")
     }
 
     private func startBuild() {

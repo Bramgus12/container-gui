@@ -519,34 +519,38 @@ private struct SystemDiagnosticsSheet: View {
     @Binding var isPresented: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Diagnostics")
-                    .font(.title2.bold())
-                Spacer()
-                Button(model.didCopyDiagnostics ? "Copied" : "Copy") {
-                    model.copyDiagnostics()
-                }
-                .keyboardShortcut("c", modifiers: [.command, .shift])
-                Button("Done") {
-                    isPresented = false
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding()
+        // A read-only pane, so the footer carries the copy action and Done in
+        // place of the paging and submit buttons.
+        SheetScaffold {
+            VStack(spacing: 0) {
+                SheetHeader(title: "Diagnostics")
 
-            Divider()
-
-            ScrollView {
-                Text(model.diagnosticsText)
-                    .font(DSFont.mono(size: 12.5, relativeTo: .callout))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
+                ScrollView {
+                    Text(model.diagnosticsText)
+                        .font(DSFont.mono(size: 12.5, relativeTo: .callout))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(DSMetrics.spacing16)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.dsCanvas)
             }
+        } footer: {
+            Button(model.didCopyDiagnostics ? "Copied" : "Copy") {
+                model.copyDiagnostics()
+            }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .accessibilityIdentifier("system.diagnostics.copy")
+
+            Spacer()
+
+            Button("Done") {
+                isPresented = false
+            }
+            .keyboardShortcut(.defaultAction)
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("system.diagnostics.done")
         }
-        .frame(minWidth: 680, minHeight: 480)
-        .accessibilityIdentifier("system.diagnosticsSheet")
     }
 }
 

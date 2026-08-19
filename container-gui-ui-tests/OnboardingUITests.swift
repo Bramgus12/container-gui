@@ -115,11 +115,15 @@ final class OnboardingUITests: XCTestCase {
         app.buttons["networks.create"].click()
         let sheet = app.sheets.firstMatch
         XCTAssertTrue(sheet.waitForExistence(timeout: 3))
-        XCTAssertTrue(sheet.staticTexts["Plugin Options"].exists)
-        XCTAssertFalse(sheet.staticTexts["Plugin Variant"].exists)
         let name = sheet.textFields["networks.create.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 3))
         name.click()
         name.typeText("created-network")
+        // Plugin customization lives on its own page in the create sheet's
+        // section rail, and Create stays available from every page.
+        sheet.buttons["Plugin"].click()
+        XCTAssertTrue(sheet.staticTexts["Plugin Options"].waitForExistence(timeout: 3))
+        XCTAssertFalse(sheet.staticTexts["Plugin Variant"].exists)
         sheet.buttons["networks.create.submit"].click()
         XCTAssertTrue(app.staticTexts["created-network"].waitForExistence(timeout: 3))
 
@@ -137,6 +141,8 @@ final class OnboardingUITests: XCTestCase {
         app.buttons["networks.create"].click()
 
         let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 3))
+        sheet.buttons["Plugin"].click()
         XCTAssertTrue(sheet.staticTexts["Plugin Variant"].waitForExistence(timeout: 3))
         XCTAssertFalse(sheet.staticTexts["Plugin Options"].exists)
     }
@@ -310,7 +316,10 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(configurationButton.waitForExistence(timeout: 3))
         configurationButton.click()
 
-        XCTAssertTrue(app.staticTexts["Container configuration"].waitForExistence(timeout: 3))
+        // The sheet pages Overview and Configuration from a section rail, like
+        // the run and build sheets.
+        let configurationSheet = app.sheets.firstMatch
+        XCTAssertTrue(configurationSheet.waitForExistence(timeout: 3))
         let configurationTab = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label == %@", "Configuration"))
             .firstMatch

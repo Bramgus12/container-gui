@@ -136,7 +136,10 @@ nonisolated struct LogBuffer: Sendable {
         guard !chunk.isEmpty else { return }
 
         var remainder = chunk[...]
-        while let newline = remainder.firstIndex(of: "\n") {
+        // TextKit renders every Unicode newline as a visual line break. Parse the
+        // same set here so the logical line model and ruler cannot drift apart.
+        // Swift treats CRLF as one Character, avoiding a phantom blank line.
+        while let newline = remainder.firstIndex(where: \.isNewline) {
             appendText(remainder[..<newline])
             ensureOpenLine()
             lines[lines.count - 1].isTerminated = true

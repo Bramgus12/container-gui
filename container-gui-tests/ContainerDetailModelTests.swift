@@ -162,6 +162,38 @@ final class ContainerDetailModelTests: XCTestCase {
         model.disappear()
     }
 
+    func testLogSnapshotReconcilerKeepsOnlyCompleteInitialTail() {
+        var reconciler = ContainerLogSnapshotReconciler(tail: 2)
+
+        XCTAssertEqual(
+            reconciler.consume("one\ntwo\nthree\n"),
+            "two\nthree"
+        )
+    }
+
+    func testLogSnapshotReconcilerEmitsOnlyAppendedBytes() {
+        var reconciler = ContainerLogSnapshotReconciler(tail: 500)
+
+        XCTAssertEqual(reconciler.consume("one partial\n"), "one partial")
+        XCTAssertEqual(
+            reconciler.consume("one partial line\ntwo\n"),
+            " line\ntwo"
+        )
+        XCTAssertNil(reconciler.consume("one partial line\ntwo\n"))
+    }
+
+    func testLogSnapshotReconcilerDoesNotTurnReadChunksIntoLines() {
+        var reconciler = ContainerLogSnapshotReconciler(tail: 500)
+
+        let firstRead = "DHE-RSA-AES256-GCM-SHA384:"
+        let completeSnapshot = firstRead + "!DHE-RSA-AES128-SHA\n"
+        XCTAssertEqual(reconciler.consume(firstRead + "\n"), firstRead)
+        XCTAssertEqual(
+            reconciler.consume(completeSnapshot),
+            "!DHE-RSA-AES128-SHA"
+        )
+    }
+
     private func eventually(
         timeout: Duration = .seconds(1),
         condition: @escaping @MainActor () -> Bool

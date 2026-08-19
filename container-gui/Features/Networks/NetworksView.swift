@@ -255,14 +255,14 @@ private struct NetworkInspector: View {
     let model: NetworkModel
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                switch model.inspectionState {
+        InspectionPane {
+            switch model.inspectionState {
                 case .idle:
                     EmptyState("Select a Network", systemImage: "network")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .loading:
                     ProgressView("Inspecting network…")
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .failed(let message):
                     EmptyState(
                         "Network Couldn’t Be Inspected",
@@ -271,6 +271,7 @@ private struct NetworkInspector: View {
                     ) {
                         Button("Try Again") { Task { await model.inspectSelection() } }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .loaded(let inspection):
                     if inspection.summary.id == model.selectedNetworkID
                         || inspection.summary.name == model.selectedNetwork?.name {
@@ -296,9 +297,7 @@ private struct NetworkInspector: View {
                             description: "Waiting for the selected network’s inspection."
                         )
                     }
-                }
             }
-            .padding()
         }
     }
 }
@@ -370,117 +369,190 @@ private struct NetworkAddressingSection: View {
     }
 }
 
+/// The four form pages, in the order the rail lists them.
+enum NetworkCreateSection: String, SheetSection {
+    case network
+    case addressing
+    case labels
+    case plugin
+
+    /// Only the name must be filled in; the rest are optional refinements, and
+    /// the rail marks them as such.
+    var isRequired: Bool { self == .network }
+
+    var title: LocalizedStringResource {
+        switch self {
+        case .network: "Network"
+        case .addressing: "Addressing"
+        case .labels: "Labels"
+        case .plugin: "Plugin"
+        }
+    }
+}
+
 private struct CreateNetworkSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var draft: NetworkCreateModel
     let model: NetworkModel
     @State private var isSubmitting = false
+    @State private var page: NetworkCreateSection = .network
 
     var body: some View {
-        VStack(spacing: 0) {
-            Form {
-                Section("Network") {
-                    ValidatedNetworkField(
-                        title: "Name",
-                        text: $draft.name,
-                        prompt: "my-network",
-                        error: draft.nameError,
-                        accessibilityIdentifier: "networks.create.name"
-                    )
-                    Picker("Network access", selection: $draft.mode) {
-                        Text("NAT").tag(NetworkMode.nat)
-                        Text("Internal / host-only").tag(NetworkMode.internal)
-                    }
-                }
-                Section("Addressing") {
-                    ValidatedNetworkField(
-                        title: "IPv4 subnet",
-                        text: $draft.ipv4Subnet,
-                        prompt: "Optional, for example 192.168.64.0/24",
-                        error: draft.ipv4Error,
-                        accessibilityIdentifier: "networks.create.ipv4"
-                    )
-                    ValidatedNetworkField(
-                        title: "IPv6 subnet",
-                        text: $draft.ipv6Subnet,
-                        prompt: "Optional, for example fd00::/64",
-                        error: draft.ipv6Error,
-                        accessibilityIdentifier: "networks.create.ipv6"
-                    )
-                }
-                NetworkKeyValueDraftSection(
-                    title: "Labels",
-                    rows: $draft.labels,
-                    error: draft.labelError,
-                    onAdd: draft.addLabel,
-                    onRemove: draft.removeLabel
-                )
-                Section("Plugin") {
-                    ValidatedNetworkField(
-                        title: "Plugin",
-                        text: $draft.plugin,
-                        prompt: NetworkCreateConfiguration.defaultPlugin,
-                        error: draft.pluginError,
-                        accessibilityIdentifier: "networks.create.plugin"
-                    )
-                    if draft.capabilities.pluginCustomization == .legacyVariant {
-                        ValidatedNetworkField(
-                            title: "Plugin Variant",
-                            text: $draft.pluginVariant,
-                            prompt: "Optional",
-                            error: draft.pluginVariantError,
-                            accessibilityIdentifier: "networks.create.pluginVariant"
-                        )
-                    }
-                }
-                if draft.capabilities.pluginCustomization == .options {
-                    NetworkKeyValueDraftSection(
-                        title: "Plugin Options",
-                        rows: $draft.pluginOptions,
-                        error: draft.optionError,
-                        onAdd: draft.addPluginOption,
-                        onRemove: draft.removePluginOption
-                    )
-                }
-                if isSubmitting {
-                    Section { ProgressView("Creating network…") }
-                }
-                if let mutationFailure = model.mutationFailure {
-                    Section {
-                        InlineBanner(
-                            message: "Create failed",
-                            detail: mutationFailure,
-                            scope: .card,
-                            severity: .error,
-                            copyValue: mutationFailure
-                        )
-                    }
-                }
+        SheetScaffold(
+            command: draft.commandPreview,
+            commandAccessibilityID: "networks.create.preview"
+        ) {
+            SheetSectionPane(
+                title: "Create network",
+                selection: $page,
+                count: railCount(for:),
+                accessibilityID: "networks.create.rail"
+            ) {
+                currentPage
+                progressSection
+                errorSection
             }
-            .formStyle(.grouped)
             .disabled(isSubmitting)
-            CommandStrip(command: draft.commandPreview, accessibilityID: "networks.create.preview")
-            HStack {
-                Button("Cancel", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Spacer()
-                Button("Create") {
-                    guard let configuration = draft.configuration else { return }
-                    isSubmitting = true
-                    Task {
-                        let succeeded = await model.create(configuration)
-                        isSubmitting = false
-                        if succeeded { dismiss() }
-                    }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(draft.configuration == nil || isSubmitting)
-                .accessibilityIdentifier("networks.create.submit")
-            }
-            .padding()
+        } footer: {
+            footer
         }
-        .frame(minWidth: 620, minHeight: 680)
         .interactiveDismissDisabled(isSubmitting)
+    }
+
+    private func railCount(for section: NetworkCreateSection) -> Int? {
+        switch section {
+        case .network, .addressing: nil
+        case .labels: draft.labels.count
+        case .plugin: draft.pluginOptions.count
+        }
+    }
+
+    @ViewBuilder
+    private var currentPage: some View {
+        switch page {
+        case .network:
+            Section("Network") {
+                ValidatedNetworkField(
+                    title: "Name",
+                    text: $draft.name,
+                    prompt: "my-network",
+                    error: draft.nameError,
+                    accessibilityIdentifier: "networks.create.name"
+                )
+                Picker("Network access", selection: $draft.mode) {
+                    Text("NAT").tag(NetworkMode.nat)
+                    Text("Internal / host-only").tag(NetworkMode.internal)
+                }
+            }
+        case .addressing:
+            Section("Addressing") {
+                ValidatedNetworkField(
+                    title: "IPv4 subnet",
+                    text: $draft.ipv4Subnet,
+                    prompt: "Optional, for example 192.168.64.0/24",
+                    error: draft.ipv4Error,
+                    accessibilityIdentifier: "networks.create.ipv4"
+                )
+                ValidatedNetworkField(
+                    title: "IPv6 subnet",
+                    text: $draft.ipv6Subnet,
+                    prompt: "Optional, for example fd00::/64",
+                    error: draft.ipv6Error,
+                    accessibilityIdentifier: "networks.create.ipv6"
+                )
+            }
+        case .labels:
+            NetworkKeyValueDraftSection(
+                title: "Labels",
+                rows: $draft.labels,
+                error: draft.labelError,
+                onAdd: draft.addLabel,
+                onRemove: draft.removeLabel
+            )
+        case .plugin:
+            Section("Plugin") {
+                ValidatedNetworkField(
+                    title: "Plugin",
+                    text: $draft.plugin,
+                    prompt: NetworkCreateConfiguration.defaultPlugin,
+                    error: draft.pluginError,
+                    accessibilityIdentifier: "networks.create.plugin"
+                )
+                if draft.capabilities.pluginCustomization == .legacyVariant {
+                    ValidatedNetworkField(
+                        title: "Plugin Variant",
+                        text: $draft.pluginVariant,
+                        prompt: "Optional",
+                        error: draft.pluginVariantError,
+                        accessibilityIdentifier: "networks.create.pluginVariant"
+                    )
+                }
+            }
+            if draft.capabilities.pluginCustomization == .options {
+                NetworkKeyValueDraftSection(
+                    title: "Plugin Options",
+                    rows: $draft.pluginOptions,
+                    error: draft.optionError,
+                    onAdd: draft.addPluginOption,
+                    onRemove: draft.removePluginOption
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var progressSection: some View {
+        if isSubmitting {
+            Section { ProgressView("Creating network…") }
+        }
+    }
+
+    @ViewBuilder
+    private var errorSection: some View {
+        if let mutationFailure = model.mutationFailure {
+            Section {
+                InlineBanner(
+                    message: "Create failed",
+                    detail: mutationFailure,
+                    scope: .card,
+                    severity: .error,
+                    copyValue: mutationFailure
+                )
+            }
+            .accessibilityIdentifier("networks.create.error")
+        }
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        SheetCancelButton(accessibilityID: "networks.create.cancel") { dismiss() }
+            .disabled(isSubmitting)
+
+        Spacer()
+
+        SheetPagingButtons(
+            selection: $page,
+            isDisabled: isSubmitting,
+            accessibilityIDPrefix: "networks.create"
+        )
+
+        // Create stays available from any page: only the first page is
+        // required, so there is no reason to walk the rest to submit.
+        Button("Create") { submit() }
+            .keyboardShortcut(.defaultAction)
+            .buttonStyle(.borderedProminent)
+            .disabled(draft.configuration == nil || isSubmitting)
+            .accessibilityIdentifier("networks.create.submit")
+    }
+
+    private func submit() {
+        guard let configuration = draft.configuration else { return }
+        isSubmitting = true
+        Task {
+            let succeeded = await model.create(configuration)
+            isSubmitting = false
+            if succeeded { dismiss() }
+        }
     }
 }
 

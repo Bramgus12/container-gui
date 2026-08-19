@@ -4,23 +4,27 @@ struct ImageInspectionView: View {
     let model: AppModel
 
     var body: some View {
-        switch model.imageInspectionState {
-        case .idle, .loading:
-            ProgressView("Inspecting image…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .loaded(let inspection):
-            ImageInspectionContent(inspection: inspection)
-        case .failed(let message):
-            EmptyState(
-                "Inspection Failed",
-                systemImage: "exclamationmark.triangle",
-                message: message
-            ) {
-                Button("Try Again") {
-                    Task { await model.inspectSelectedImage() }
+        Group {
+            switch model.imageInspectionState {
+            case .idle, .loading:
+                ProgressView("Inspecting image…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .loaded(let inspection):
+                ImageInspectionContent(inspection: inspection)
+            case .failed(let message):
+                EmptyState(
+                    "Inspection Failed",
+                    systemImage: "exclamationmark.triangle",
+                    message: message
+                ) {
+                    Button("Try Again") {
+                        Task { await model.inspectSelectedImage() }
+                    }
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.dsCanvas)
     }
 }
 
@@ -28,29 +32,26 @@ private struct ImageInspectionContent: View {
     let inspection: ImageInspection
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                ImageInspectionHeader(
-                    reference: inspection.reference,
-                    rawJSON: inspection.rawJSON
-                )
-                ImageDescriptorSection(
-                    descriptor: inspection.descriptor,
-                    createdAt: inspection.createdAt
-                )
+        InspectionPane {
+            ImageInspectionHeader(
+                reference: inspection.reference,
+                rawJSON: inspection.rawJSON
+            )
+            ImageDescriptorSection(
+                descriptor: inspection.descriptor,
+                createdAt: inspection.createdAt
+            )
 
-                if inspection.variants.isEmpty {
-                    InspectionSection("Variants", systemImage: "square.stack.3d.up") {
-                        Text("No platform variants were reported")
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    ForEach(inspection.variants) { variant in
-                        ImageVariantSection(variant: variant)
-                    }
+            if inspection.variants.isEmpty {
+                InspectionSection("Variants", systemImage: "square.stack.3d.up") {
+                    Text("No platform variants were reported")
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                ForEach(inspection.variants) { variant in
+                    ImageVariantSection(variant: variant)
                 }
             }
-            .padding()
         }
         .accessibilityIdentifier("images.inspection")
     }

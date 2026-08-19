@@ -187,44 +187,48 @@ struct UpdateResultSheet: View {
     let result: UpdateCheckState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label(title, systemImage: symbolName)
-                .font(.title3.bold())
-                .foregroundStyle(symbolColor)
+        // A message sheet: no command, and only as much room as the notes need,
+        // but the same header and footer as every other modal.
+        SheetScaffold(minWidth: 560, minHeight: 320) {
+            VStack(alignment: .leading, spacing: 0) {
+                SheetHeader(title: title, systemImage: symbolName, tint: symbolColor)
 
-            Text(message)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: DSMetrics.spacing16) {
+                    Text(message)
+                        .foregroundStyle(Color.dsTextSecondary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
 
-            if let release = result.release {
-                if !release.notes.isEmpty {
-                    ScrollView {
-                        Text(release.notes)
-                            .font(.callout)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                    if let release = result.release {
+                        if !release.notes.isEmpty {
+                            ScrollView {
+                                Text(release.notes)
+                                    .font(.callout)
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .frame(maxHeight: 200)
+                        }
+                        UpdateActions(model: model, release: release)
                     }
-                    .frame(maxHeight: 200)
                 }
-                UpdateActions(model: model, release: release)
+                .padding(DSMetrics.spacing16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
+            .background(Color.dsCanvas)
+        } footer: {
+            Spacer()
 
-            HStack {
-                Spacer()
-                Button("Done") {
-                    model.dismissManualResult()
-                }
-                .keyboardShortcut(.defaultAction)
-                .accessibilityIdentifier("update.result.done")
+            Button("Done") {
+                model.dismissManualResult()
             }
+            .keyboardShortcut(.defaultAction)
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("update.result.done")
         }
-        .padding(24)
-        .frame(minWidth: 460, maxWidth: 560)
-        .accessibilityIdentifier("update.result.sheet")
     }
 
-    private var title: String {
+    private var title: LocalizedStringResource {
         switch result {
         case .available: "Update Available"
         case .upToDate: "You’re Up to Date"

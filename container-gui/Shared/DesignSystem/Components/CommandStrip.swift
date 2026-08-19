@@ -6,6 +6,7 @@ struct CommandStrip: View {
     var showsCopyButton = true
     /// Named by the screen that owns it, so each strip is addressable.
     var accessibilityID = "command.strip"
+    var minHeight: CGFloat = 36
 
     var body: some View {
         HStack(spacing: DSMetrics.spacing12) {
@@ -20,7 +21,7 @@ struct CommandStrip: View {
             }
         }
         .padding(.horizontal, DSMetrics.spacing12)
-        .frame(minHeight: 36)
+        .frame(minHeight: minHeight)
         .background(Color.dsSurfaceRaised)
         .overlay(alignment: .top) {
             Rectangle().fill(Color.dsHairline).frame(height: DSMetrics.hairline)

@@ -49,12 +49,22 @@ private struct ContainerActivityView: View {
 
             ContainerLogsSection(model: model)
 
-            CommandStrip(command: "container logs -f \(model.containerID)")
+            CommandStrip(
+                command: "container logs -f \(model.containerID)",
+                minHeight: 32
+            )
         }
         // Fills the inspector and keeps its native background, the way the image
         // inspector does. Painting a canvas here left the material showing below
         // the content wherever the pane was taller than the stack.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.dsCanvas.ignoresSafeArea())
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(Color.dsHairline)
+                .frame(width: DSMetrics.hairline)
+                .ignoresSafeArea()
+        }
         .navigationTitle(model.containerID)
         .task { await model.appear() }
         .onDisappear { model.disappear() }
@@ -100,7 +110,7 @@ private struct ContainerActivityHeader: View {
                 .accessibilityIdentifier("container.detail.config")
         }
         .padding(DSMetrics.spacing12)
-        .background(Color.dsSurface)
+        .background(Color.dsCanvas)
     }
 }
 
@@ -273,60 +283,70 @@ private struct ContainerLogControls: View {
     }
 }
 
-private enum ContainerConfigTab: String, CaseIterable, Identifiable {
+/// The two pages of the configuration sheet, in the order the rail lists them.
+/// They replace the segmented picker so the sheet is paged like the others.
+enum ContainerConfigSection: String, SheetSection {
     case overview
     case configuration
 
-    var id: Self { self }
+    var title: LocalizedStringResource {
+        switch self {
+        case .overview: "Overview"
+        case .configuration: "Configuration"
+        }
+    }
 }
 
 @MainActor
 private struct ContainerConfigSheet: View {
     @Bindable var model: ContainerDetailModel
     @Environment(\.dismiss) private var dismiss
-    @State private var tab = ContainerConfigTab.overview
+    @State private var page = ContainerConfigSection.overview
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Container configuration").font(.dsScreenTitle)
-                Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+        // Nothing here runs a command, so the footer carries only Done.
+        SheetScaffold {
+            SheetRailPane(
+                title: "Container",
+                selection: $page,
+                accessibilityID: "container.config.rail"
+            ) {
+                pane
+                    .background(Color.dsCanvas)
             }
-            .padding(DSMetrics.spacing16)
+        } footer: {
+            Spacer()
 
-            Picker("Section", selection: $tab) {
-                Text("Overview").tag(ContainerConfigTab.overview)
-                Text("Configuration").tag(ContainerConfigTab.configuration)
+            SheetPagingButtons(selection: $page, accessibilityIDPrefix: "container.config")
+
+            Button("Done") { dismiss() }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("container.config.done")
+        }
+    }
+
+    @ViewBuilder
+    private var pane: some View {
+        switch model.inspectionState {
+        case .loading:
+            ProgressView("Inspecting container…").frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let message):
+            EmptyState(
+                "Inspection Failed",
+                systemImage: "exclamationmark.triangle",
+                message: message
+            ) {
+                Button("Try Again") { Task { await model.reloadInspection() } }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(.horizontal, DSMetrics.spacing16)
-            .padding(.bottom, DSMetrics.spacing12)
-
-            Rectangle().fill(Color.dsHairline).frame(height: DSMetrics.hairline)
-
-            switch model.inspectionState {
-            case .loading:
-                ProgressView("Inspecting container…").frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .failed(let message):
-                EmptyState(
-                    "Inspection Failed",
-                    systemImage: "exclamationmark.triangle",
-                    message: message
-                ) {
-                    Button("Try Again") { Task { await model.reloadInspection() } }
-                }
-            case .loaded(let inspection):
-                if tab == .overview {
-                    ContainerOverviewView(details: inspection.details)
-                } else {
-                    ContainerConfigurationView(inspection: inspection)
-                }
+        case .loaded(let inspection):
+            switch page {
+            case .overview:
+                ContainerOverviewView(details: inspection.details)
+            case .configuration:
+                ContainerConfigurationView(inspection: inspection)
             }
         }
-        .frame(minWidth: 560, minHeight: 540)
-        .background(Color.dsCanvas)
     }
 }
 
@@ -378,4 +398,3 @@ private struct OverviewCard: View {
 private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }
-

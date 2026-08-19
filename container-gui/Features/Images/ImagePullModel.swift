@@ -26,6 +26,16 @@ final class ImagePullModel: Identifiable {
         referenceError == nil && !isPulling && !didFinish
     }
 
+    var commandPreview: String {
+        guard let reference = try? ImageReference(validating: trimmedReference) else {
+            return "container image pull"
+        }
+        return ProcessContainerCLI.displayInvocation(
+            executable: "container",
+            arguments: ContainerCommand.pullImage(reference: reference).arguments
+        )
+    }
+
     func pull(using appModel: AppModel) async {
         guard canPull else { return }
         isPulling = true

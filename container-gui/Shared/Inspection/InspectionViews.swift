@@ -1,6 +1,29 @@
 import AppKit
 import SwiftUI
 
+/// The common scrolling surface used by resource inspectors. Keeping the
+/// background outside the scroll view ensures short and transient states still
+/// paint the inspector from top to bottom.
+struct InspectionPane<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: DSMetrics.spacing16) {
+                content
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DSMetrics.spacing16)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.dsCanvas)
+    }
+}
+
 struct InspectionSection<Content: View>: View {
     let title: LocalizedStringKey
     let systemImage: String
@@ -24,6 +47,7 @@ struct InspectionSection<Content: View>: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity)
     }
 }
 

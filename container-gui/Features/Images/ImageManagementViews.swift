@@ -377,17 +377,32 @@ private struct ImageDeletionSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Label(
-                plan.dependentContainers.isEmpty
-                    ? "Delete Image"
-                    : "Delete Containers and Image",
-                systemImage: "exclamationmark.triangle.fill"
-            )
-            .font(.title2.bold())
-            .foregroundStyle(Color.dsStateDestructive)
+        // A confirmation carries no command and only as much height as its
+        // warnings need, but keeps the shared header and footer.
+        SheetScaffold(
+            minWidth: 560,
+            minHeight: plan.dependentContainers.isEmpty ? 300 : 460
+        ) {
+            VStack(alignment: .leading, spacing: 0) {
+                SheetHeader(
+                    title: title,
+                    systemImage: "exclamationmark.triangle.fill",
+                    tint: .dsStateDestructive
+                )
+                details
+            }
+            .background(Color.dsCanvas)
+        } footer: {
+            footer
+        }
+        .interactiveDismissDisabled(isDeleting)
+    }
 
+    @ViewBuilder
+    private var details: some View {
+        VStack(alignment: .leading, spacing: DSMetrics.spacing16) {
             Text(message)
+                .textSelection(.enabled)
 
             if !plan.dependentContainers.isEmpty {
                 List(plan.dependentContainers) { container in
@@ -431,59 +446,58 @@ private struct ImageDeletionSheet: View {
                 )
                 .foregroundStyle(Color.dsStateAttention)
             }
+        }
+        .padding(DSMetrics.spacing16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
 
-            Spacer()
+    @ViewBuilder
+    private var footer: some View {
+        SheetCancelButton(accessibilityID: "images.deletion.cancel") { dismiss() }
+            .disabled(isDeleting)
 
-            HStack {
-                Button("Cancel", role: .cancel) {
-                    dismiss()
-                }
-                .keyboardShortcut(.cancelAction)
-                .disabled(isDeleting)
+        if !plan.dependentContainers.isEmpty || !plan.unresolvedContainers.isEmpty {
+            Button("View Containers") {
+                model.destination = .containers
+                model.selectedContainerID = plan.dependentContainers.first?.id
+                    ?? plan.unresolvedContainers.first?.id
+                dismiss()
+            }
+            .disabled(isDeleting)
+            .accessibilityIdentifier("images.deletion.viewContainers")
+        }
 
-                if !plan.dependentContainers.isEmpty || !plan.unresolvedContainers.isEmpty {
-                    Button("View Containers") {
-                        model.destination = .containers
-                        model.selectedContainerID = plan.dependentContainers.first?.id
-                            ?? plan.unresolvedContainers.first?.id
-                        dismiss()
-                    }
-                    .disabled(isDeleting)
-                }
+        Spacer()
 
-                Spacer()
-
-                Button(role: .destructive) {
-                    deletionStarted = true
-                    Task {
-                        await model.deleteImage(using: plan)
-                        dismiss()
-                    }
-                } label: {
-                    if isDeleting {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Text(
-                            plan.dependentContainers.isEmpty
-                                ? "Delete Image"
-                                : "Delete Containers and Image"
-                        )
-                    }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(
-                    isDeleting
-                        || !plan.blockedContainers.isEmpty
-                        || !plan.unresolvedContainers.isEmpty
-                        || !plan.hasStableIdentity
-                )
-                .accessibilityIdentifier("images.deletion.confirm")
+        Button(role: .destructive) {
+            deletionStarted = true
+            Task {
+                await model.deleteImage(using: plan)
+                dismiss()
+            }
+        } label: {
+            if isDeleting {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Text(title)
             }
         }
-        .padding(24)
-        .frame(minWidth: 560, minHeight: plan.dependentContainers.isEmpty ? 260 : 420)
-        .interactiveDismissDisabled(isDeleting)
+        .keyboardShortcut(.defaultAction)
+        .buttonStyle(.borderedProminent)
+        .disabled(
+            isDeleting
+                || !plan.blockedContainers.isEmpty
+                || !plan.unresolvedContainers.isEmpty
+                || !plan.hasStableIdentity
+        )
+        .accessibilityIdentifier("images.deletion.confirm")
+    }
+
+    private var title: LocalizedStringResource {
+        plan.dependentContainers.isEmpty
+            ? "Delete Image"
+            : "Delete Containers and Image"
     }
 
     private var message: String {
@@ -508,41 +522,61 @@ private struct ImageDeletionSheet: View {
     }
 }
 
+/// The pull sheet's only form page. It still goes through the rail so the sheet
+/// carries the same title, form pane, and command strip as the other modals.
+enum ImagePullSection: String, SheetSection {
+    case image
+
+    var isRequired: Bool { true }
+
+    var title: LocalizedStringResource { "Image" }
+}
+
 private struct ImagePullSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: ImagePullModel
     let onStart: () -> Void
+    @State private var page: ImagePullSection = .image
 
     var body: some View {
-        VStack(spacing: 0) {
-            Form {
+        SheetScaffold(
+            command: model.commandPreview,
+            commandAccessibilityID: "images.pull.preview"
+        ) {
+            SheetSectionPane(
+                title: "Pull image",
+                selection: $page,
+                accessibilityID: "images.pull.rail"
+            ) {
                 Section("Image") {
-                    TextField("Reference, for example alpine:3.21", text: $model.reference)
-                        .dsMonoField()
-                    if let error = model.referenceError {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(Color.dsStateDestructive)
+                    VStack(alignment: .leading, spacing: 6) {
+                        LabeledContent("Reference") {
+                            TextField(text: $model.reference, prompt: Text("alpine:3.21")) {
+                                Text("Reference")
+                            }
+                            .labelsHidden()
+                            .dsMonoField()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("images.pull.reference")
+                        }
+                        if let error = model.referenceError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(Color.dsStateDestructive)
+                        }
                     }
                 }
-
             }
-            .formStyle(.grouped)
+        } footer: {
+            SheetCancelButton(accessibilityID: "images.pull.cancel") { dismiss() }
 
-            Divider()
+            Spacer()
 
-            HStack {
-                Button("Cancel", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Spacer()
-                Button("Pull", action: onStart)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!model.canPull)
-                    .accessibilityIdentifier("images.pull.submit")
-            }
-            .padding()
+            Button("Pull", action: onStart)
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .disabled(!model.canPull)
+                .accessibilityIdentifier("images.pull.submit")
         }
-        .frame(minWidth: 520, minHeight: 220)
-        .accessibilityIdentifier("images.pull.sheet")
     }
 }

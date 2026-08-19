@@ -203,6 +203,8 @@ final class LogScrollView: NSObject {
     private var isTiling = false
     private var isSettingFrame = false
     private var isUpdatingContent = false
+    private var geometryReconciliationScheduled = false
+    private var lastUsableViewportWidth: CGFloat = 0
     private var scrollObserver: NSObjectProtocol?
     private var frameObserver: NSObjectProtocol?
     var onTailingChange: ((Bool) -> Void)?
@@ -367,6 +369,7 @@ final class LogScrollView: NSObject {
         } else {
             clampViewportToDocument()
         }
+        scheduleGeometryReconciliation()
     }
 
     func invalidateDocumentDisplay() {
@@ -399,10 +402,13 @@ final class LogScrollView: NSObject {
             height: CGFloat.greatestFiniteMagnitude
         )
         logTextView.textContainerInset = NSSize(width: 8, height: 8)
-        logTextView.textContainer?.widthTracksTextView = true
+        // The representable owns wrapping geometry. Automatic width tracking can
+        // observe the text view during an interim SwiftUI/AppKit layout pass and
+        // permanently collapse the container while live text is being appended.
+        logTextView.textContainer?.widthTracksTextView = false
         logTextView.textContainer?.heightTracksTextView = false
         logTextView.textContainer?.containerSize = NSSize(
-            width: contentSize.width,
+            width: max(0, frameRectWidthForInitialContainer),
             height: CGFloat.greatestFiniteMagnitude
         )
         logTextView.textContainer?.lineFragmentPadding = 0
@@ -439,9 +445,13 @@ final class LogScrollView: NSObject {
         scrollView.needsLayout = true
     }
 
+    private var frameRectWidthForInitialContainer: CGFloat {
+        logTextView.frame.width - (logTextView.textContainerInset.width * 2)
+    }
+
     private var paragraphStyle: NSParagraphStyle {
         let style = NSMutableParagraphStyle()
-        style.lineBreakMode = .byCharWrapping
+        style.lineBreakMode = .byWordWrapping
         style.firstLineHeadIndent = lineNumberRuler.ruleThickness
         style.headIndent = lineNumberRuler.ruleThickness
         return style
@@ -550,12 +560,13 @@ final class LogScrollView: NSObject {
     private func layoutDocumentView() -> Bool {
         resetHorizontalOrigin()
         let viewportSize = contentView.bounds.size
-        guard viewportSize.width > 0, viewportSize.height > 0,
+        guard viewportSize.width >= 80, viewportSize.height > 0,
               let layoutManager = logTextView.layoutManager,
               let textContainer = logTextView.textContainer
         else { return false }
 
         let width = viewportSize.width
+        lastUsableViewportWidth = width
         let containerWidth = max(0, width - (logTextView.textContainerInset.width * 2))
         logTextView.setFrameSize(NSSize(
             width: width,
@@ -590,6 +601,23 @@ final class LogScrollView: NSObject {
         logTextView.needsDisplay = true
         resetHorizontalOrigin()
         return true
+    }
+
+    /// SwiftUI can update representable content while the inspector is between
+    /// layout passes. Reconcile once on the next run-loop turn so an interim
+    /// narrow clip-view width cannot remain as the document's wrapping width.
+    private func scheduleGeometryReconciliation() {
+        guard !geometryReconciliationScheduled else { return }
+        geometryReconciliationScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.geometryReconciliationScheduled = false
+            guard self.contentView.bounds.width >= 80 else { return }
+            let widthChanged = abs(self.contentView.bounds.width - self.lastUsableViewportWidth) > 0.5
+            if widthChanged || self.logTextView.frame.width < 80 {
+                self.tile()
+            }
+        }
     }
 
     private func resetHorizontalOrigin() {
@@ -761,7 +789,7 @@ final class LogLineNumberRuler: NSRulerView {
             let textOrigin = textView.textContainerOrigin
             let pointInTextView = NSPoint(
                 x: 0,
-                y: usedRect.minY + textOrigin.y
+                y: usedRect.midY - (size.height / 2) + textOrigin.y
             )
             let point = self.convert(pointInTextView, from: textView)
             string.draw(

@@ -17,30 +17,24 @@ struct RunContainerSheet: View {
     @State private var page: RunSection = .container
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                SheetSectionRail(
-                    title: "Run container",
-                    selection: $page,
-                    count: railCount(for:),
-                    accessibilityID: "run.rail"
-                )
-                Rectangle().fill(Color.dsHairline).frame(width: 1)
-                Form {
-                    currentPage
-                    progressSection
-                    errorSection
-                }
-                .formStyle(.grouped)
-                .frame(maxWidth: .infinity)
-                .disabled(operationIsActive)
+        SheetScaffold(
+            command: model.commandPreview,
+            commandAccessibilityID: "run.preview"
+        ) {
+            SheetSectionPane(
+                title: "Run container",
+                selection: $page,
+                count: railCount(for:),
+                accessibilityID: "run.rail"
+            ) {
+                currentPage
+                progressSection
+                errorSection
             }
-
-            CommandStrip(command: model.commandPreview, accessibilityID: "run.preview")
-
+            .disabled(operationIsActive)
+        } footer: {
             footer
         }
-        .frame(minWidth: 760, minHeight: 560)
         .interactiveDismissDisabled(operationIsActive)
         .task {
             await networkModel?.loadIfNeeded()
@@ -89,42 +83,36 @@ struct RunContainerSheet: View {
 
     @ViewBuilder
     private var footer: some View {
-        HStack {
-            Button(role: .cancel) {
-                if operationIsActive {
-                    isCancelling = true
-                    runRequestID = nil
-                } else {
-                    dismiss()
-                }
-            } label: {
-                Text(isCancelling ? "Cancelling…" : operationIsActive ? "Cancel Run" : "Cancel")
+        SheetCancelButton(
+            title: isCancelling ? "Cancelling…" : operationIsActive ? "Cancel Run" : "Cancel",
+            accessibilityID: "run.cancel"
+        ) {
+            if operationIsActive {
+                isCancelling = true
+                runRequestID = nil
+            } else {
+                dismiss()
             }
-            .keyboardShortcut(.cancelAction)
-            .disabled(isCancelling)
-            .accessibilityIdentifier("run.cancel")
-
-            Spacer()
-
-            Button("Back") { page = page.previous ?? page }
-                .disabled(page.previous == nil || operationIsActive)
-                .accessibilityIdentifier("run.back")
-
-            Button("Next") { page = page.next ?? page }
-                .disabled(page.next == nil || operationIsActive)
-                .accessibilityIdentifier("run.next")
-
-            // Run stays available from any page: only the first page is
-            // required, so there is no reason to walk the rest to start.
-            Button("Run") {
-                runRequestID = UUID()
-            }
-            .keyboardShortcut(.defaultAction)
-            .buttonStyle(.borderedProminent)
-            .disabled(operationIsActive || !model.canRun)
-            .accessibilityIdentifier("run.submit")
         }
-        .padding()
+        .disabled(isCancelling)
+
+        Spacer()
+
+        SheetPagingButtons(
+            selection: $page,
+            isDisabled: operationIsActive,
+            accessibilityIDPrefix: "run"
+        )
+
+        // Run stays available from any page: only the first page is
+        // required, so there is no reason to walk the rest to start.
+        Button("Run") {
+            runRequestID = UUID()
+        }
+        .keyboardShortcut(.defaultAction)
+        .buttonStyle(.borderedProminent)
+        .disabled(operationIsActive || !model.canRun)
+        .accessibilityIdentifier("run.submit")
     }
 
     @ViewBuilder

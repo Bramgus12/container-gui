@@ -13,4 +13,9 @@ enum DSMetrics {
     static let tableRowHeight: CGFloat = 28
     static let gutter: CGFloat = 12
     static let hairline: CGFloat = 1
+
+    /// Every configuration sheet opens at the same minimum size, so moving
+    /// between modals never resizes the window.
+    static let sheetWidth: CGFloat = 760
+    static let sheetHeight: CGFloat = 560
 }

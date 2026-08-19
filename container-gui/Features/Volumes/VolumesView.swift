@@ -265,13 +265,14 @@ private struct VolumeInspector: View {
     let model: VolumeModel
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                switch model.inspectionState {
+        InspectionPane {
+            switch model.inspectionState {
                 case .idle:
                     EmptyState("Select a Volume", systemImage: "externaldrive")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .loading:
-                    ProgressView("Inspecting volume…").frame(maxWidth: .infinity)
+                    ProgressView("Inspecting volume…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .failed(let message):
                     EmptyState(
                         "Volume Couldn’t Be Inspected",
@@ -280,6 +281,7 @@ private struct VolumeInspector: View {
                     ) {
                         Button("Try Again") { Task { await model.inspectSelection() } }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .loaded(let inspection):
                     VolumeInspectorHeader(inspection: inspection)
                     VolumeOverviewSection(summary: inspection.summary)
@@ -289,9 +291,7 @@ private struct VolumeInspector: View {
                     InspectionSection("Driver Options", systemImage: "slider.horizontal.3") {
                         InspectionKeyValueList(inspection.summary.options, emptyText: "No options")
                     }
-                }
             }
-            .padding()
         }
     }
 }
@@ -343,81 +343,153 @@ private struct VolumeOverviewSection: View {
     }
 }
 
+/// The three form pages, in the order the rail lists them.
+enum VolumeCreateSection: String, SheetSection {
+    case volume
+    case labels
+    case options
+
+    /// Only the name must be filled in; the rest are optional refinements, and
+    /// the rail marks them as such.
+    var isRequired: Bool { self == .volume }
+
+    var title: LocalizedStringResource {
+        switch self {
+        case .volume: "Volume"
+        case .labels: "Labels"
+        case .options: "Driver Options"
+        }
+    }
+}
+
 private struct CreateVolumeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var draft: VolumeCreateModel
     let model: VolumeModel
     @State private var isSubmitting = false
+    @State private var page: VolumeCreateSection = .volume
 
     var body: some View {
-        VStack(spacing: 0) {
-            Form {
-                Section("Volume") {
-                    VolumeValidatedField(
-                        title: "Name",
-                        text: $draft.name,
-                        prompt: "my-volume",
-                        error: draft.nameError,
-                        accessibilityIdentifier: "volumes.create.name"
-                    )
-                    VolumeValidatedField(
-                        title: "Size",
-                        text: $draft.size,
-                        prompt: "Optional, for example 10G",
-                        error: draft.sizeError,
-                        accessibilityIdentifier: "volumes.create.size"
-                    )
-                }
-                VolumeKeyValueSection(
-                    title: "Labels",
-                    rows: $draft.labels,
-                    error: draft.labelError,
-                    onAdd: draft.addLabel,
-                    onRemove: draft.removeLabel
-                )
-                VolumeKeyValueSection(
-                    title: "Driver Options",
-                    rows: $draft.options,
-                    error: draft.optionError,
-                    onAdd: draft.addOption,
-                    onRemove: draft.removeOption
-                )
-                if isSubmitting { Section { ProgressView("Creating volume…") } }
-                if let failure = model.mutationFailure {
-                    Section {
-                        InlineBanner(
-                            message: "Create failed",
-                            detail: failure,
-                            scope: .card,
-                            severity: .error,
-                            copyValue: failure
-                        )
-                    }
-                }
+        SheetScaffold(
+            command: draft.commandPreview,
+            commandAccessibilityID: "volumes.create.preview"
+        ) {
+            SheetSectionPane(
+                title: "Create volume",
+                selection: $page,
+                count: railCount(for:),
+                accessibilityID: "volumes.create.rail"
+            ) {
+                currentPage
+                progressSection
+                errorSection
             }
-            .formStyle(.grouped)
             .disabled(isSubmitting)
-            CommandStrip(command: draft.commandPreview, accessibilityID: "volumes.create.preview")
-            HStack {
-                Button("Cancel", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Spacer()
-                Button("Create") {
-                    guard let configuration = draft.configuration else { return }
-                    isSubmitting = true
-                    Task {
-                        if await model.create(configuration) { dismiss() }
-                        isSubmitting = false
-                    }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(draft.configuration == nil || isSubmitting)
-                .accessibilityIdentifier("volumes.create.submit")
-            }
-            .padding()
+        } footer: {
+            footer
         }
-        .frame(minWidth: 660, minHeight: 600)
         .interactiveDismissDisabled(isSubmitting)
+    }
+
+    private func railCount(for section: VolumeCreateSection) -> Int? {
+        switch section {
+        case .volume: nil
+        case .labels: draft.labels.count
+        case .options: draft.options.count
+        }
+    }
+
+    @ViewBuilder
+    private var currentPage: some View {
+        switch page {
+        case .volume:
+            Section("Volume") {
+                VolumeValidatedField(
+                    title: "Name",
+                    text: $draft.name,
+                    prompt: "my-volume",
+                    error: draft.nameError,
+                    accessibilityIdentifier: "volumes.create.name"
+                )
+                VolumeValidatedField(
+                    title: "Size",
+                    text: $draft.size,
+                    prompt: "Optional, for example 10G",
+                    error: draft.sizeError,
+                    accessibilityIdentifier: "volumes.create.size"
+                )
+            }
+        case .labels:
+            VolumeKeyValueSection(
+                title: "Labels",
+                rows: $draft.labels,
+                error: draft.labelError,
+                onAdd: draft.addLabel,
+                onRemove: draft.removeLabel
+            )
+        case .options:
+            VolumeKeyValueSection(
+                title: "Driver Options",
+                rows: $draft.options,
+                error: draft.optionError,
+                onAdd: draft.addOption,
+                onRemove: draft.removeOption
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var progressSection: some View {
+        if isSubmitting {
+            Section { ProgressView("Creating volume…") }
+        }
+    }
+
+    @ViewBuilder
+    private var errorSection: some View {
+        if let failure = model.mutationFailure {
+            Section {
+                InlineBanner(
+                    message: "Create failed",
+                    detail: failure,
+                    scope: .card,
+                    severity: .error,
+                    copyValue: failure
+                )
+            }
+            .accessibilityIdentifier("volumes.create.error")
+        }
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        SheetCancelButton(accessibilityID: "volumes.create.cancel") { dismiss() }
+            .disabled(isSubmitting)
+
+        Spacer()
+
+        SheetPagingButtons(
+            selection: $page,
+            isDisabled: isSubmitting,
+            accessibilityIDPrefix: "volumes.create"
+        )
+
+        // Create stays available from any page: only the first page is
+        // required, so there is no reason to walk the rest to submit.
+        Button("Create") { submit() }
+            .keyboardShortcut(.defaultAction)
+            .buttonStyle(.borderedProminent)
+            .disabled(draft.configuration == nil || isSubmitting)
+            .accessibilityIdentifier("volumes.create.submit")
+    }
+
+    private func submit() {
+        guard let configuration = draft.configuration else { return }
+        isSubmitting = true
+        Task {
+            if await model.create(configuration) { dismiss() }
+            isSubmitting = false
+        }
     }
 }
 

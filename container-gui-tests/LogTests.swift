@@ -3,6 +3,18 @@ import XCTest
 @testable import Container_GUI
 
 final class LogBufferTests: XCTestCase {
+    func testEveryTextKitNewlineCreatesTheSameLogicalLineBoundary() {
+        var buffer = LogBuffer()
+
+        buffer.append("lf\ncr\rcrlf\r\nnext-line\u{0085}separator\u{2028}paragraph\u{2029}last")
+
+        XCTAssertEqual(
+            buffer.snapshot.text,
+            "lf\ncr\ncrlf\nnext-line\nseparator\nparagraph\nlast"
+        )
+        XCTAssertEqual(buffer.snapshot.logicalLineNumbers, Array(1...7))
+    }
+
     func testChunkSplitLinesKeepOneLogicalNumber() {
         var buffer = LogBuffer()
 
@@ -113,7 +125,7 @@ final class LogViewerTests: XCTestCase {
         XCTAssertTrue(scrollView.hasVerticalScroller)
         XCTAssertFalse(scrollView.logTextView.isHorizontallyResizable)
         XCTAssertTrue(scrollView.logTextView.isVerticallyResizable)
-        XCTAssertTrue(scrollView.logTextView.textContainer?.widthTracksTextView == true)
+        XCTAssertTrue(scrollView.logTextView.textContainer?.widthTracksTextView == false)
         XCTAssertTrue(scrollView.logTextView.isSelectable)
         XCTAssertFalse(scrollView.logTextView.isEditable)
         XCTAssertTrue(scrollView.hasVerticalRuler)
@@ -273,6 +285,63 @@ final class LogViewerTests: XCTestCase {
 
         scrollView.contentView.scroll(to: NSPoint(x: 250, y: 0))
         XCTAssertEqual(scrollView.contentView.bounds.origin.x, 0)
+    }
+
+    func testIncrementalLiveChunksKeepLogicalLinesAndUsableWidth() throws {
+        let scrollView = LogScrollView(frame: NSRect(
+            x: 0,
+            y: 0,
+            width: 360,
+            height: 120
+        ))
+        var buffer = LogBuffer(maximumLines: 500, maximumBytes: 1_024 * 1_024)
+        let source = (1...200)
+            .map { "request \($0) completed successfully" }
+            .joined(separator: "\n")
+
+        var chunk = ""
+        for character in source {
+            chunk.append(character)
+            if chunk.count == 3 {
+                buffer.append(chunk)
+                scrollView.update(snapshot: buffer.snapshot, jumpToLatestRequest: 0)
+                chunk.removeAll(keepingCapacity: true)
+            }
+        }
+        if !chunk.isEmpty {
+            buffer.append(chunk)
+            scrollView.update(snapshot: buffer.snapshot, jumpToLatestRequest: 0)
+        }
+        scrollView.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(buffer.counts.all, 200)
+        XCTAssertEqual(LogLineMap(snapshot: buffer.snapshot).logicalLineNumbers.count, 200)
+        XCTAssertGreaterThan(scrollView.logTextView.frame.width, 300)
+        XCTAssertEqual(
+            scrollView.logTextView.frame.width,
+            scrollView.contentView.bounds.width,
+            accuracy: 1
+        )
+        let textContainer = try XCTUnwrap(scrollView.logTextView.textContainer)
+        XCTAssertGreaterThan(textContainer.containerSize.width, 300)
+
+        let layoutManager = try XCTUnwrap(scrollView.logTextView.layoutManager)
+        var widestFragment: CGFloat = 0
+        layoutManager.enumerateLineFragments(
+            forGlyphRange: NSRange(location: 0, length: layoutManager.numberOfGlyphs)
+        ) { _, usedRect, _, _, _ in
+            widestFragment = max(widestFragment, usedRect.width)
+        }
+        XCTAssertGreaterThan(widestFragment, 150)
+
+        let paragraphStyle = try XCTUnwrap(
+            scrollView.logTextView.textStorage?.attribute(
+                .paragraphStyle,
+                at: 0,
+                effectiveRange: nil
+            ) as? NSParagraphStyle
+        )
+        XCTAssertEqual(paragraphStyle.lineBreakMode, .byWordWrapping)
     }
 
     func testTextForegroundTracksTheEffectiveLightAndDarkAppearance() throws {

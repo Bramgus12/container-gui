@@ -66,8 +66,42 @@ actor CLIContainerDiagnosticsService: ContainerDiagnosing, ContainerStatsListing
     ) -> AsyncThrowingStream<ProcessEvent, Error> {
         do {
             let identifier = try ContainerIdentifier(validating: containerID)
-            let logTail = try LogTail(lines: tail)
-            return cli.stream(.logs(id: identifier, follow: follow, tail: logTail))
+            let cli = self.cli
+            return AsyncThrowingStream { continuation in
+                let task = Task {
+                    do {
+                        var reconciler = ContainerLogSnapshotReconciler(tail: tail)
+
+                        while !Task.isCancelled {
+                            // Apple container's --follow implementation converts every
+                            // partial file-system read into a printed line. Reading a
+                            // complete snapshot preserves the real newline boundaries.
+                            let result = try await cli.run(
+                                .logs(id: identifier, follow: false, tail: nil)
+                            )
+                            if let appended = reconciler.consume(result.standardOutput),
+                               !appended.isEmpty {
+                                continuation.yield(.standardOutput(appended))
+                            }
+
+                            guard follow else { break }
+                            try await Task.sleep(for: .milliseconds(500))
+                        }
+
+                        if !Task.isCancelled {
+                            continuation.yield(.terminated(exitCode: 0))
+                            continuation.finish()
+                        }
+                    } catch is CancellationError {
+                        continuation.finish(throwing: CLIError.cancelled)
+                    } catch {
+                        continuation.finish(throwing: error)
+                    }
+                }
+                continuation.onTermination = { _ in
+                    task.cancel()
+                }
+            }
         } catch {
             return AsyncThrowingStream { continuation in
                 continuation.finish(throwing: error)
@@ -122,6 +156,70 @@ actor CLIContainerDiagnosticsService: ContainerDiagnosing, ContainerStatsListing
                 description: "Container stats could not be decoded as JSON: \(error.localizedDescription)"
             )
         }
+    }
+}
+
+/// Turns complete log-file snapshots into an append-only stream while retaining
+/// the requested number of initial lines. Complete snapshots are required because
+/// `container logs --follow` currently treats partial reads as complete lines.
+nonisolated struct ContainerLogSnapshotReconciler: Sendable {
+    private let tail: Int
+    private var previous = ""
+    private var isInitialSnapshot = true
+
+    init(tail: Int) {
+        self.tail = max(0, tail)
+    }
+
+    mutating func consume(_ snapshot: String) -> String? {
+        let snapshot = Self.removingCLIPrintTerminator(from: snapshot)
+        defer {
+            previous = snapshot
+            isInitialSnapshot = false
+        }
+
+        if isInitialSnapshot {
+            return Self.suffix(of: snapshot, lineLimit: tail)
+        }
+        guard snapshot != previous else { return nil }
+        if snapshot.hasPrefix(previous) {
+            return String(snapshot.dropFirst(previous.count))
+        }
+
+        // The log file can be replaced or truncated when a container restarts.
+        // Start a fresh session rather than trying to splice unrelated bytes.
+        return Self.suffix(of: snapshot, lineLimit: tail)
+    }
+
+    private static func removingCLIPrintTerminator(from text: String) -> String {
+        guard text.last == "\n" else { return text }
+        var result = String(text.dropLast())
+        if result.last == "\r" {
+            result.removeLast()
+        }
+        return result
+    }
+
+    private static func suffix(of text: String, lineLimit: Int) -> String {
+        guard lineLimit > 0, !text.isEmpty else { return "" }
+
+        var newlineCount = 0
+        var boundary = text.startIndex
+        var index = text.endIndex
+        while index > text.startIndex {
+            index = text.index(before: index)
+            if text[index] == "\n" {
+                if index == text.index(before: text.endIndex), newlineCount == 0 {
+                    continue
+                }
+                newlineCount += 1
+                if newlineCount == lineLimit {
+                    boundary = text.index(after: index)
+                    return String(text[boundary...])
+                }
+            }
+        }
+        return text
     }
 }
 
