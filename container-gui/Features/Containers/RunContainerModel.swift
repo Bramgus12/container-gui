@@ -45,6 +45,12 @@ struct CommandArgumentDraft: Identifiable, Equatable {
     }
 }
 
+struct DNSEntryDraft: Identifiable, Equatable {
+    let id: UUID
+    var value: String
+    init(id: UUID = UUID(), value: String = "") { self.id = id; self.value = value }
+}
+
 struct NetworkAttachmentDraft: Identifiable, Equatable {
     let id: UUID
     var networkName: String
@@ -111,6 +117,11 @@ final class RunContainerModel: Identifiable {
     var mounts: [ContainerMountDraft] = []
     var ports: [PortMappingDraft] = []
     var environment: [EnvironmentVariableDraft] = []
+    var configuresDNS = true
+    var dnsNameservers: [DNSEntryDraft] = []
+    var dnsDomain = ""
+    var dnsSearchDomains: [DNSEntryDraft] = []
+    var dnsOptions: [DNSEntryDraft] = []
     var command = ""
     var arguments: [CommandArgumentDraft] = []
 
@@ -171,6 +182,20 @@ final class RunContainerModel: Identifiable {
             _ = try EnvironmentVariable(key: trimmed(draft.key), value: draft.value)
         }
     }
+
+    var dnsDomainError: String? {
+        let value = trimmed(dnsDomain); guard !value.isEmpty else { return nil }
+        return validationMessage { _ = try DNSDomainName(validating: value) }
+    }
+
+    func dnsNameserverError(for draft: DNSEntryDraft) -> String? {
+        let value = trimmed(draft.value)
+        if dnsNameservers.filter({ trimmed($0.value) == value }).count > 1, !value.isEmpty { return "Each DNS nameserver can be used only once." }
+        return validationMessage { _ = try DNSNameserver(validating: value) }
+    }
+
+    func dnsSearchError(for draft: DNSEntryDraft) -> String? { validationMessage { _ = try DNSDomainName(validating: trimmed(draft.value)) } }
+    func dnsOptionError(for draft: DNSEntryDraft) -> String? { validationMessage { _ = try DNSOption(validating: trimmed(draft.value)) } }
 
     func networkError(for draft: NetworkAttachmentDraft) -> String? {
         if networks.filter({ $0.networkName == draft.networkName }).count > 1,
@@ -269,6 +294,13 @@ final class RunContainerModel: Identifiable {
         environment.removeAll { $0.id == id }
     }
 
+    func addDNSNameserver() { dnsNameservers.append(DNSEntryDraft()) }
+    func removeDNSNameserver(id: UUID) { dnsNameservers.removeAll { $0.id == id } }
+    func addDNSSearchDomain() { dnsSearchDomains.append(DNSEntryDraft()) }
+    func removeDNSSearchDomain(id: UUID) { dnsSearchDomains.removeAll { $0.id == id } }
+    func addDNSOption() { dnsOptions.append(DNSEntryDraft()) }
+    func removeDNSOption(id: UUID) { dnsOptions.removeAll { $0.id == id } }
+
     func addArgument() {
         arguments.append(CommandArgumentDraft())
     }
@@ -325,6 +357,11 @@ final class RunContainerModel: Identifiable {
             environment: try environment.map {
                 try EnvironmentVariable(key: trimmed($0.key), value: $0.value)
             },
+            disablesDNS: !configuresDNS,
+            dnsNameservers: configuresDNS ? try dnsNameservers.filter { !trimmed($0.value).isEmpty }.map { try DNSNameserver(validating: trimmed($0.value)) } : [],
+            dnsDomain: configuresDNS && !trimmed(dnsDomain).isEmpty ? try DNSDomainName(validating: trimmed(dnsDomain)) : nil,
+            dnsSearchDomains: configuresDNS ? try dnsSearchDomains.filter { !trimmed($0.value).isEmpty }.map { try DNSDomainName(validating: trimmed($0.value)) } : [],
+            dnsOptions: configuresDNS ? try dnsOptions.filter { !trimmed($0.value).isEmpty }.map { try DNSOption(validating: trimmed($0.value)) } : [],
             command: trimmed(command).isEmpty
                 ? []
                 : [trimmed(command)] + arguments.map(\.value)

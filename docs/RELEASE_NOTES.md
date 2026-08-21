@@ -11,6 +11,9 @@ update checks, and a redesigned interface with richer live container details.
 
 ## Changes
 
+- Adds DNS readiness and local-domain management to System, including resolver
+  inspection, system-resolution probes, copyable administrator commands, and
+  per-container DNS options in the Run Container sheet.
 - Adds volume listing, search, inspection, creation, deletion, confirmed
   pruning, and named-volume mounts for new containers across Apple Container
   0.12 and 1.x.
@@ -49,7 +52,7 @@ curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/script
 ## Known limitations
 
 The app does not yet manage registry authentication, build secrets or SSH
-forwarding, interactive terminals, import/export, DNS or kernel settings,
+forwarding, interactive terminals, import/export, or kernel settings,
 image/container pruning, or remote hosts.
 
 The distributed DMG is ad-hoc signed and is not notarized. The installer

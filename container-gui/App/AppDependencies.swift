@@ -281,6 +281,10 @@ private actor UITestContainerCLI: ContainerCLI {
             output = #"{"status":"ready","healthy":true,"version":"1.0.0"}"#
         case .systemDiskUsage:
             output = #"[{"type":"images","totalCount":1,"activeCount":1,"sizeBytes":1024,"reclaimableBytes":0}]"#
+        case .systemDNSList:
+            output = #"["cont"]"#
+        case .systemProperties:
+            output = #"{"dns":{"domain":"cont"}}"#
         case .systemLogs:
             output = (1...40)
                 .map { "UI test service log line \($0)." }

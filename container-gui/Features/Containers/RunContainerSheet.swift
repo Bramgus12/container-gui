@@ -61,6 +61,7 @@ struct RunContainerSheet: View {
         switch section {
         case .container, .resources: nil
         case .networks: model.networks.count
+        case .dns: model.dnsNameservers.count + model.dnsSearchDomains.count + model.dnsOptions.count + (model.dnsDomain.isEmpty ? 0 : 1) + (model.configuresDNS ? 0 : 1)
         case .storage: model.mounts.count
         case .ports: model.ports.count
         case .environment: model.environment.count
@@ -74,6 +75,7 @@ struct RunContainerSheet: View {
         case .container: containerSection
         case .resources: resourcesSection
         case .networks: networksSection
+        case .dns: ContainerDNSSection(model: model)
         case .storage: ContainerMountsSection(model: model, volumeModel: volumeModel)
         case .ports: portsSection
         case .environment: environmentSection
@@ -373,6 +375,7 @@ enum RunSection: String, SheetSection {
     case container
     case resources
     case networks
+    case dns
     case storage
     case ports
     case environment
@@ -387,11 +390,83 @@ enum RunSection: String, SheetSection {
         case .container: "Container"
         case .resources: "Resources"
         case .networks: "Networks"
+        case .dns: "DNS"
         case .storage: "Storage"
         case .ports: "Ports"
         case .environment: "Environment"
         case .command: "Command"
         }
+    }
+}
+
+private struct ContainerDNSSection: View {
+    @Bindable var model: RunContainerModel
+
+    var body: some View {
+        Section("DNS") {
+            Toggle("Configure DNS in the container", isOn: $model.configuresDNS)
+            Text("Turn this off to pass --no-dns and disable DNS configuration entirely.")
+                .font(.caption).foregroundStyle(Color.dsTextSecondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Nameservers")
+                ForEach($model.dnsNameservers) { $entry in
+                    DNSEntryRow(entry: $entry, error: model.dnsNameserverError(for: entry)) { model.removeDNSNameserver(id: entry.id) }
+                }
+                Button("Add IP…", systemImage: "plus") { model.addDNSNameserver() }
+                Text("Replaces the service resolver entirely when one or more IPs are supplied.").font(.caption).foregroundStyle(Color.dsTextSecondary)
+            }
+            .disabled(!model.configuresDNS)
+
+            VStack(alignment: .leading, spacing: 6) {
+                LabeledContent("DNS domain") {
+                    TextField("Optional", text: $model.dnsDomain).labelsHidden().dsMonoField().accessibilityIdentifier("run.dns-domain")
+                }
+                DNSValidationText(message: model.dnsDomainError)
+            }
+            .disabled(!model.configuresDNS)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Search domains")
+                ForEach($model.dnsSearchDomains) { $entry in
+                    DNSEntryRow(entry: $entry, error: model.dnsSearchError(for: entry)) { model.removeDNSSearchDomain(id: entry.id) }
+                }
+                Button("Add domain…", systemImage: "plus") { model.addDNSSearchDomain() }
+            }
+            .disabled(!model.configuresDNS)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Resolver options")
+                ForEach($model.dnsOptions) { $entry in
+                    DNSEntryRow(entry: $entry, error: model.dnsOptionError(for: entry)) { model.removeDNSOption(id: entry.id) }
+                }
+                Button("Add option…", systemImage: "plus") { model.addDNSOption() }
+                Text("Common values include timeout:2, attempts:3, and edns0.").font(.caption).foregroundStyle(Color.dsTextSecondary)
+            }
+            .disabled(!model.configuresDNS)
+        }
+    }
+}
+
+private struct DNSEntryRow: View {
+    @Binding var entry: DNSEntryDraft
+    let error: String?
+    let onRemove: () -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                TextField("Value", text: $entry.value).dsMonoField()
+                Button("Remove", systemImage: "minus.circle", action: onRemove).labelStyle(.iconOnly)
+            }
+            DNSValidationText(message: error)
+        }
+    }
+}
+
+private struct DNSValidationText: View {
+    let message: String?
+    var body: some View {
+        if let message { Text(message).font(.caption).foregroundStyle(Color.dsStateDestructive) }
     }
 }
 

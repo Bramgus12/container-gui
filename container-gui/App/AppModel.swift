@@ -282,6 +282,7 @@ final class AppModel {
     private(set) var containers: [ContainerSummary] = [] {
         didSet {
             updateFilteredContainers()
+            dnsModel?.updateRegisteredNames(from: containers)
             rebuildInventoryIndex()
         }
     }
@@ -308,6 +309,7 @@ final class AppModel {
     private(set) var volumeModel: VolumeModel?
     private(set) var builderModel: BuilderModel?
     private(set) var systemModel: SystemModel?
+    private(set) var dnsModel: DNSModel?
     private(set) var statsPoller: ContainerStatsPoller?
 
     private let cliFactory: any ContainerCLIMaking
@@ -340,6 +342,7 @@ final class AppModel {
         networkCapabilities: NetworkCapabilities? = nil,
         volumeService: (any VolumeManaging)? = nil,
         builderService: (any BuilderManaging)? = nil,
+        dnsService: (any DNSManaging)? = nil,
         failureLog: OperationFailureLog? = nil
     ) {
         self.setup = setup
@@ -365,6 +368,9 @@ final class AppModel {
         }
         if let builderService {
             builderModel = BuilderModel(service: builderService, failureLog: self.failureLog)
+        }
+        if let dnsService {
+            dnsModel = DNSModel(service: dnsService, resolverReader: SystemResolverDirectoryReader(), hostResolver: SystemHostResolver(), failureLog: self.failureLog)
         }
         if let statsProvider = containerDiagnoser as? any ContainerStatsListing {
             statsPoller = ContainerStatsPoller(provider: statsProvider)
@@ -452,6 +458,7 @@ final class AppModel {
                 service: CLISystemService(cli: cli),
                 failureLog: failureLog
             )
+            dnsModel = DNSModel(service: CLIDNSService(cli: cli), resolverReader: SystemResolverDirectoryReader(), hostResolver: SystemHostResolver(), failureLog: failureLog)
             containers = []
             selectedContainerID = nil
             containerListState = .idle

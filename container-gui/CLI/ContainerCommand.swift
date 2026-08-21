@@ -6,6 +6,8 @@ nonisolated enum ContainerCommand: Equatable, Sendable {
     case systemStatus
     case systemVersion
     case systemDiskUsage
+    case systemDNSList
+    case systemProperties
     case systemLogs(follow: Bool, last: SystemLogPeriod?)
 
     case listContainers(includeStopped: Bool)
@@ -53,6 +55,10 @@ nonisolated enum ContainerCommand: Equatable, Sendable {
             ["system", "version", "--format", "json"]
         case .systemDiskUsage:
             ["system", "df", "--format", "json"]
+        case .systemDNSList:
+            ["system", "dns", "list", "--format", "json"]
+        case .systemProperties:
+            ["system", "property", "list", "--format", "json"]
         case .systemLogs(let follow, let last):
             ["system", "logs"]
                 + (follow ? ["--follow"] : [])

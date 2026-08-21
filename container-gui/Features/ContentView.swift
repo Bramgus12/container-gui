@@ -434,6 +434,7 @@ private struct MainNavigationView: View {
                 SystemView(
                     model: model.makeSystemModel(context: context),
                     builder: model.builderModel,
+                    dns: model.dnsModel,
                     updates: updates
                 )
             case nil:

@@ -216,6 +216,11 @@ nonisolated struct RunConfiguration: Equatable, Sendable {
     let mounts: [ContainerMount]
     let ports: [PortMapping]
     let environment: [EnvironmentVariable]
+    let disablesDNS: Bool
+    let dnsNameservers: [DNSNameserver]
+    let dnsDomain: DNSDomainName?
+    let dnsSearchDomains: [DNSDomainName]
+    let dnsOptions: [DNSOption]
     let command: [String]
 
     init(
@@ -229,6 +234,11 @@ nonisolated struct RunConfiguration: Equatable, Sendable {
         mounts: [ContainerMount] = [],
         ports: [PortMapping] = [],
         environment: [EnvironmentVariable] = [],
+        disablesDNS: Bool = false,
+        dnsNameservers: [DNSNameserver] = [],
+        dnsDomain: DNSDomainName? = nil,
+        dnsSearchDomains: [DNSDomainName] = [],
+        dnsOptions: [DNSOption] = [],
         command: [String] = []
     ) throws {
         self.image = try ImageReference(validating: image)
@@ -267,6 +277,18 @@ nonisolated struct RunConfiguration: Equatable, Sendable {
         self.mounts = mounts
         self.ports = ports
         self.environment = environment
+        var nameservers = Set<String>()
+        guard dnsNameservers.allSatisfy({ nameservers.insert($0.value).inserted }) else {
+            throw CommandValidationError.invalid(field: "DNS", value: "Duplicate nameserver")
+        }
+        guard !disablesDNS || (dnsNameservers.isEmpty && dnsDomain == nil && dnsSearchDomains.isEmpty && dnsOptions.isEmpty) else {
+            throw CommandValidationError.invalid(field: "DNS", value: "Values cannot be combined with --no-dns")
+        }
+        self.disablesDNS = disablesDNS
+        self.dnsNameservers = dnsNameservers
+        self.dnsDomain = dnsDomain
+        self.dnsSearchDomains = dnsSearchDomains
+        self.dnsOptions = dnsOptions
         self.command = command
     }
 
@@ -298,6 +320,14 @@ nonisolated struct RunConfiguration: Equatable, Sendable {
         }
         for variable in environment {
             result += ["--env", variable.argument]
+        }
+        if disablesDNS {
+            result.append("--no-dns")
+        } else {
+            for nameserver in dnsNameservers { result += ["--dns", nameserver.value] }
+            if let dnsDomain { result += ["--dns-domain", dnsDomain.rawValue] }
+            for search in dnsSearchDomains { result += ["--dns-search", search.rawValue] }
+            for option in dnsOptions { result += ["--dns-option", option.value] }
         }
         result.append(image.rawValue)
         result += command
