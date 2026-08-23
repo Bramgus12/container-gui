@@ -78,10 +78,8 @@ curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/script
 
 The installer downloads the latest release disk image, checks its SHA-256
 against the checksum GitHub publishes for the release asset, verifies the app's
-code signature, installs it into `/Applications`, and clears the
-`com.apple.quarantine` attribute. Releases are notarized, so that attribute
-would not block a launch; clearing it just skips the first-run prompt for a copy
-the installer already verified.
+code signature, and installs it into `/Applications`. Because releases are
+notarized, macOS accepts the app on first launch with no approval step.
 
 To read the script before running it:
 

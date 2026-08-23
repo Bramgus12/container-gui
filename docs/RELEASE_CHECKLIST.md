@@ -77,9 +77,9 @@ curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/script
 
 - Confirm the printed SHA-256 matches the checksum in the release notes and that
   the installer reports the expected release tag.
-- Confirm the app opens with no Gatekeeper dialog and that
-  `xattr -r -l "/Applications/Container GUI.app"` reports no
-  `com.apple.quarantine` attribute.
+- Confirm the app opens with no Gatekeeper dialog, and that
+  `spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"`
+  reports `accepted` with `source=Notarized Developer ID`.
 - Re-run the command over the existing install and confirm it upgrades in place.
 - Confirm `--version <previous tag>`, `--user`, and `--uninstall` each behave,
   and that `--uninstall` leaves settings at
