@@ -7,6 +7,17 @@ enum DNSLoadingState: Equatable, Sendable {
     case failed(String)
 }
 
+/// The privileged domain change in flight, so the sheet and the list can show
+/// which domain macOS is authenticating and keep a second request out.
+enum DNSMutation: Equatable, Sendable {
+    case create(String)
+    case delete(String)
+
+    var domain: String {
+        switch self { case .create(let domain), .delete(let domain): domain }
+    }
+}
+
 @MainActor
 @Observable
 final class DNSModel {
@@ -19,6 +30,7 @@ final class DNSModel {
     private(set) var registeredNames: [RegisteredName] = []
     private(set) var didCopyCommand = false
     private(set) var actionError: String?
+    private(set) var activeMutation: DNSMutation?
 
     private let service: any DNSManaging
     private let resolverReader: any ResolverDirectoryReading
@@ -79,14 +91,67 @@ final class DNSModel {
         if case .failed(let message) = probe { actionError = DiagnosticSanitizer.sanitize(message) }
     }
 
+    /// Adds the domain to `/etc/resolver` after macOS has authenticated the
+    /// user, and reports whether the domain is now present.
+    @discardableResult
+    func createDomain(_ configuration: DNSCreateConfiguration) async -> Bool {
+        await mutate(.create(configuration.domain.rawValue), operation: "Create DNS domain") {
+            try await self.service.createDomain(configuration)
+        }
+    }
+
+    /// Removes the domain from `/etc/resolver` after macOS has authenticated the
+    /// user, and reports whether the domain is gone.
+    @discardableResult
+    func deleteDomain(_ configuration: DNSDeleteConfiguration) async -> Bool {
+        await mutate(.delete(configuration.domain.rawValue), operation: "Delete DNS domain") {
+            try await self.service.deleteDomain(configuration)
+        }
+    }
+
     func copyCreateCommand(_ configuration: DNSCreateConfiguration) { copy(configuration.sudoCommand) }
     func copyDeleteCommand(_ configuration: DNSDeleteConfiguration) { copy(configuration.sudoCommand) }
     func copyConfigSnippet(domain: String? = nil) { copy("[dns]\ndomain = \"\(domain ?? serviceDomain ?? "cont")\"") }
     func revealConfigFile() { NSWorkspace.shared.activateFileViewerSelecting([resolverReader.configFileURL()]) }
     func dismissActionError() { actionError = nil }
 
+    /// Runs one privileged change at a time and reloads afterwards, so the list
+    /// reflects what `/etc/resolver` holds rather than what was asked for. A
+    /// dismissed password dialog leaves no error behind: nothing changed, and
+    /// the user already knows why.
+    private func mutate(
+        _ mutation: DNSMutation,
+        operation: String,
+        work: @escaping () async throws -> Void
+    ) async -> Bool {
+        guard activeMutation == nil else { return false }
+        activeMutation = mutation
+        actionError = nil
+        defer { activeMutation = nil }
+
+        do {
+            try await work()
+        } catch {
+            if Self.isCancellation(error) { return false }
+            failureLog.record(operation: operation, error: error)
+            actionError = DiagnosticSanitizer.sanitize(error.localizedDescription)
+            return false
+        }
+
+        await refresh()
+        let exists = domains.contains { $0.name == mutation.domain }
+        switch mutation {
+        case .create: return exists
+        case .delete: return !exists
+        }
+    }
+
     private func copy(_ value: String) { copier.copy(value); didCopyCommand = true }
-    private static func isCancellation(_ error: Error) -> Bool { error is CancellationError || error as? CLIError == .cancelled }
+    private static func isCancellation(_ error: Error) -> Bool {
+        error is CancellationError
+            || error as? CLIError == .cancelled
+            || error as? PrivilegedCommandError == .cancelled
+    }
     private static func capture<Value: Sendable>(_ operation: @escaping @Sendable () async throws -> Value) async -> Result<Value, Error> {
         do { return .success(try await operation()) } catch { return .failure(error) }
     }

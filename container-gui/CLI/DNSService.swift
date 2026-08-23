@@ -3,11 +3,29 @@ import Foundation
 nonisolated protocol DNSManaging: Sendable {
     func listDomains() async throws -> [String]
     func loadServiceDomain() async throws -> String?
+    /// Writes the `/etc/resolver` entry. macOS authenticates the user first.
+    func createDomain(_ configuration: DNSCreateConfiguration) async throws
+    /// Removes the `/etc/resolver` entry. macOS authenticates the user first.
+    func deleteDomain(_ configuration: DNSDeleteConfiguration) async throws
 }
 
 actor CLIDNSService: DNSManaging {
     private let cli: any ContainerCLI
-    init(cli: any ContainerCLI) { self.cli = cli }
+    /// The privileged commands bypass `cli` because they run through the macOS
+    /// authentication dialog rather than as the logged-in user, so they need the
+    /// executable's own path.
+    private let executableURL: URL
+    private let privilegedRunner: any PrivilegedCommandRunning
+
+    init(
+        cli: any ContainerCLI,
+        executableURL: URL,
+        privilegedRunner: any PrivilegedCommandRunning = OSAScriptPrivilegedCommandRunner()
+    ) {
+        self.cli = cli
+        self.executableURL = executableURL
+        self.privilegedRunner = privilegedRunner
+    }
 
     func listDomains() async throws -> [String] {
         try await decode([String].self, command: .systemDNSList)
@@ -16,6 +34,32 @@ actor CLIDNSService: DNSManaging {
     func loadServiceDomain() async throws -> String? {
         let properties = try await decode(SystemPropertiesDTO.self, command: .systemProperties)
         return properties.dns?.domain
+    }
+
+    func createDomain(_ configuration: DNSCreateConfiguration) async throws {
+        try await runPrivileged(
+            arguments: configuration.arguments,
+            prompt: "Container GUI needs administrator access to add the local DNS domain “\(configuration.domain.rawValue)” to /etc/resolver."
+        )
+    }
+
+    func deleteDomain(_ configuration: DNSDeleteConfiguration) async throws {
+        try await runPrivileged(
+            arguments: configuration.arguments,
+            prompt: "Container GUI needs administrator access to remove the local DNS domain “\(configuration.domain.rawValue)” from /etc/resolver."
+        )
+    }
+
+    private func runPrivileged(arguments: [String], prompt: String) async throws {
+        do {
+            _ = try await privilegedRunner.run(
+                PrivilegedCommand(executableURL: executableURL, arguments: arguments, prompt: prompt)
+            )
+        } catch let error as PrivilegedCommandError {
+            throw sanitizedPrivilegedError(error)
+        } catch {
+            throw sanitizedDNSError(error)
+        }
     }
 
     private func decode<Value: Decodable>(_ type: Value.Type, command: ContainerCommand) async throws -> Value {
@@ -33,6 +77,19 @@ actor CLIDNSService: DNSManaging {
 nonisolated private struct SystemPropertiesDTO: Decodable {
     struct DNS: Decodable { let domain: String? }
     let dns: DNS?
+}
+
+nonisolated private func sanitizedPrivilegedError(_ error: PrivilegedCommandError) -> PrivilegedCommandError {
+    switch error {
+    case .cancelled: .cancelled
+    case .launchFailed(let message): .launchFailed(message: DiagnosticSanitizer.sanitize(message))
+    case .failed(let invocation, let exitCode, let message):
+        .failed(
+            invocation: DiagnosticSanitizer.sanitize(invocation),
+            exitCode: exitCode,
+            message: DiagnosticSanitizer.sanitize(message)
+        )
+    }
 }
 
 nonisolated private func sanitizedDNSError(_ error: Error) -> Error {

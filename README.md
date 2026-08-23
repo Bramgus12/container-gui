@@ -38,6 +38,7 @@ directly, never through a shell.
 | 📂 | **Container storage** | Mount named volumes or host folders into new containers, with optional read-only access. |
 | 🌐 | **Networks** | List, search, inspect, create, delete, and prune networks, with Apple Container 0.12 and 1.x compatibility. |
 | 🔗 | **Container networking** | Attach a new container to multiple networks with optional MAC addresses and MTUs. |
+| 🧭 | **Local DNS** | Review resolver readiness, then add or remove local domains in `/etc/resolver` — the app asks macOS to authenticate you and runs the administrator command for you. |
 | ❤️ | **System health** | Check CLI, server, and image-builder status; control their lifecycles; and review disk usage and recent logs. |
 | ⬆️ | **Update checks** | See when a newer Container GUI release exists, read its notes, and copy the upgrade command. |
 | 🩺 | **Diagnostics** | Copy a sanitized support report with common secrets and credentials redacted. |
@@ -173,7 +174,14 @@ Container management includes destructive and long-running operations, so the
 app treats safety as a product feature:
 
 - **No shell invocation.** The resolved executable is launched directly with
-  validated, discrete arguments.
+  validated, discrete arguments. The two commands that need root — creating and
+  deleting a local DNS domain — are the one exception: they go through the macOS
+  authentication dialog, which runs them in a shell, so every word of the command
+  is single-quoted and every value it carries is validated first.
+- **Administrator access only on request.** The app installs no privileged
+  helper and holds no elevated rights. Each `/etc/resolver` change raises its own
+  macOS password prompt, naming the domain it is about to change, and the copied
+  `sudo` command stays available for anyone who would rather run it in Terminal.
 - **Confirmation before destructive actions.** Delete, force delete, image
   delete, network delete/prune, and service stop explain their impact before
   proceeding.
@@ -254,7 +262,7 @@ workflows. It does not yet manage:
 - build secrets or SSH forwarding;
 - interactive terminals;
 - import and export;
-- DNS or kernel settings;
+- the service DNS domain in `config.toml`, or kernel settings;
 - image or container prune operations; or
 - remote container hosts.
 

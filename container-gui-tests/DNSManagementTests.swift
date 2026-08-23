@@ -55,7 +55,7 @@ final class DNSManagementTests: XCTestCase {
     }
 
     func testCLIServiceDecodesShippingJSON() async throws {
-        let service = CLIDNSService(cli: DNSCLIStub())
+        let service = CLIDNSService(cli: DNSCLIStub(), executableURL: URL(fileURLWithPath: "/usr/local/bin/container"), privilegedRunner: PrivilegedRunnerStub())
         let domains = try await service.listDomains()
         XCTAssertEqual(domains, ["cont"])
         let serviceDomain = try await service.loadServiceDomain()
@@ -76,6 +76,138 @@ final class DNSManagementTests: XCTestCase {
     }
 
     @MainActor
+    func testAddLocalDomainKeepsItsOwnFailureAndClearsItOnSuccess() async {
+        let failure = PrivilegedCommandError.failed(invocation: "sudo container", exitCode: 1, message: "cannot create domain (try sudo?)")
+        let dns = DNSModel(service: DNSServiceStub(mutationError: failure, domains: []), resolverReader: ResolverReaderStub(files: []), hostResolver: HostResolverStub(), failureLog: OperationFailureLog())
+        let model = AddLocalDomainModel(dns: dns)
+        XCTAssertNil(model.addError)
+
+        model.domain = "test"
+        let added = await model.add()
+        XCTAssertFalse(added)
+        XCTAssertEqual(model.addError, "cannot create domain (try sudo?)")
+
+        let succeeding = AddLocalDomainModel(dns: DNSModel(service: DNSServiceStub(domains: []), resolverReader: ResolverReaderStub(files: []), hostResolver: HostResolverStub(), failureLog: OperationFailureLog()))
+        succeeding.domain = "test"
+        let secondAdd = await succeeding.add()
+        XCTAssertTrue(secondAdd)
+        XCTAssertNil(succeeding.addError)
+    }
+
+    @MainActor
+    func testCreateDomainAddsItAndClearsTheMutation() async throws {
+        let service = DNSServiceStub(domains: [])
+        let model = DNSModel(service: service, resolverReader: ResolverReaderStub(files: []), hostResolver: HostResolverStub(), failureLog: OperationFailureLog())
+        let configuration = try DNSCreateConfiguration(domain: DNSDomainName(validating: "test"), localhostRedirect: nil)
+
+        let created = await model.createDomain(configuration)
+        XCTAssertTrue(created)
+        XCTAssertNil(model.activeMutation)
+        XCTAssertNil(model.actionError)
+        XCTAssertEqual(model.domains.map(\.name), ["test"])
+        let recorded = await service.createdConfigurations
+        XCTAssertEqual(recorded, [configuration])
+    }
+
+    @MainActor
+    func testDeleteDomainRemovesItFromTheList() async throws {
+        let service = DNSServiceStub(domains: ["cont"])
+        let model = DNSModel(service: service, resolverReader: ResolverReaderStub(files: []), hostResolver: HostResolverStub(), failureLog: OperationFailureLog())
+        await model.refresh()
+
+        let deleted = await model.deleteDomain(DNSDeleteConfiguration(domain: try DNSDomainName(validating: "cont")))
+        XCTAssertTrue(deleted)
+        XCTAssertTrue(model.domains.isEmpty)
+        XCTAssertEqual(model.readiness, .notConfigured)
+    }
+
+    @MainActor
+    func testDismissedPasswordDialogLeavesNoFailureBehind() async throws {
+        let log = OperationFailureLog()
+        let service = DNSServiceStub(mutationError: PrivilegedCommandError.cancelled, domains: [])
+        let model = DNSModel(service: service, resolverReader: ResolverReaderStub(files: []), hostResolver: HostResolverStub(), failureLog: log)
+
+        let created = await model.createDomain(DNSCreateConfiguration(domain: try DNSDomainName(validating: "test"), localhostRedirect: nil))
+        XCTAssertFalse(created)
+        XCTAssertNil(model.actionError)
+        XCTAssertNil(model.activeMutation)
+        XCTAssertTrue(log.records.isEmpty)
+    }
+
+    @MainActor
+    func testFailedPrivilegedCommandSurfacesTheMessage() async throws {
+        let log = OperationFailureLog()
+        let failure = PrivilegedCommandError.failed(invocation: "sudo container system dns create test", exitCode: 1, message: "cannot create domain (try sudo?)")
+        let service = DNSServiceStub(mutationError: failure, domains: [])
+        let model = DNSModel(service: service, resolverReader: ResolverReaderStub(files: []), hostResolver: HostResolverStub(), failureLog: log)
+
+        let created = await model.createDomain(DNSCreateConfiguration(domain: try DNSDomainName(validating: "test"), localhostRedirect: nil))
+        XCTAssertFalse(created)
+        XCTAssertEqual(model.actionError, "cannot create domain (try sudo?)")
+        XCTAssertEqual(log.records.count, 1)
+        XCTAssertNil(model.activeMutation)
+    }
+
+    func testCLIServiceAsksForAdministratorAccessWithTheDomainInThePrompt() async throws {
+        let runner = PrivilegedRunnerStub()
+        let service = CLIDNSService(cli: DNSCLIStub(), executableURL: URL(fileURLWithPath: "/usr/local/bin/container"), privilegedRunner: runner)
+
+        try await service.createDomain(DNSCreateConfiguration(domain: DNSDomainName(validating: "test"), localhostRedirect: DNSNameserver(validating: "192.168.64.1")))
+        try await service.deleteDomain(DNSDeleteConfiguration(domain: DNSDomainName(validating: "test")))
+
+        let commands = await runner.commands
+        XCTAssertEqual(commands.count, 2)
+        XCTAssertEqual(commands.first?.arguments, ["system", "dns", "create", "test", "--localhost", "192.168.64.1"])
+        XCTAssertEqual(commands.first?.executableURL.path, "/usr/local/bin/container")
+        XCTAssertEqual(commands.first?.displayInvocation, "sudo /usr/local/bin/container system dns create test --localhost 192.168.64.1")
+        XCTAssertEqual(commands.last?.arguments, ["system", "dns", "delete", "test"])
+        XCTAssertTrue(commands.allSatisfy { $0.prompt.contains("test") })
+    }
+
+    func testCLIServiceReportsADismissedDialogAsCancelled() async throws {
+        let service = CLIDNSService(cli: DNSCLIStub(), executableURL: URL(fileURLWithPath: "/usr/local/bin/container"), privilegedRunner: PrivilegedRunnerStub(error: .cancelled))
+        do {
+            try await service.deleteDomain(DNSDeleteConfiguration(domain: DNSDomainName(validating: "test")))
+            XCTFail("Expected the cancellation to be rethrown")
+        } catch let error as PrivilegedCommandError {
+            XCTAssertEqual(error, .cancelled)
+        }
+    }
+
+    func testPrivilegedScriptQuotesEveryWordAndPinsTheEnvironment() throws {
+        let command = PrivilegedCommand(executableURL: URL(fileURLWithPath: "/Users/dev/tools/my container/container"), arguments: ["system", "dns", "create", "test"], prompt: "Add “test”")
+        let shell = OSAScriptPrivilegedCommandRunner.shellCommand(for: command, homeDirectory: "/Users/dev")
+
+        XCTAssertEqual(shell, "'/usr/bin/env' 'HOME=/Users/dev' 'PATH=\(OSAScriptPrivilegedCommandRunner.path)' '/Users/dev/tools/my container/container' 'system' 'dns' 'create' 'test'")
+
+        let script = OSAScriptPrivilegedCommandRunner.script(for: command, homeDirectory: "/Users/dev")
+        XCTAssertTrue(script.hasPrefix("do shell script \""))
+        XCTAssertTrue(script.hasSuffix("with administrator privileges"))
+        XCTAssertTrue(script.contains("with prompt \"Add “test”\""))
+    }
+
+    func testPrivilegedQuotingSurvivesQuotesAndBackslashes() {
+        XCTAssertEqual(OSAScriptPrivilegedCommandRunner.quoted("it's"), #"'it'\''s'"#)
+        XCTAssertEqual(OSAScriptPrivilegedCommandRunner.quoted("$(whoami); echo hi"), "'$(whoami); echo hi'")
+        XCTAssertEqual(OSAScriptPrivilegedCommandRunner.literal(#"say "hi" \ now"#), #""say \"hi\" \\ now""#)
+    }
+
+    func testPrivilegedFailuresAreClassified() {
+        XCTAssertEqual(
+            OSAScriptPrivilegedCommandRunner.failure(standardError: "34:107: execution error: User canceled. (-128)", exitCode: 1, invocation: "sudo container"),
+            .cancelled
+        )
+        XCTAssertEqual(
+            OSAScriptPrivilegedCommandRunner.failure(standardError: "34:107: execution error: cannot create domain (try sudo?) (1)\n", exitCode: 1, invocation: "sudo container"),
+            .failed(invocation: "sudo container", exitCode: 1, message: "cannot create domain (try sudo?)")
+        )
+        XCTAssertEqual(
+            OSAScriptPrivilegedCommandRunner.failure(standardError: "osascript: no such file", exitCode: 2, invocation: "sudo container"),
+            .failed(invocation: "sudo container", exitCode: 2, message: "osascript: no such file")
+        )
+    }
+
+    @MainActor
     func testDNSModelRecordsRefreshFailure() async {
         let log = OperationFailureLog()
         let model = DNSModel(service: DNSServiceStub(error: CLIError.invalidOutput(description: "bad")), resolverReader: ResolverReaderStub(files: []), hostResolver: HostResolverStub(), failureLog: log)
@@ -87,9 +219,44 @@ final class DNSManagementTests: XCTestCase {
 
 private actor DNSServiceStub: DNSManaging {
     let error: Error?
-    init(error: Error? = nil) { self.error = error }
-    func listDomains() async throws -> [String] { if let error { throw error }; return ["cont"] }
-    func loadServiceDomain() async throws -> String? { if let error { throw error }; return "cont" }
+    private var mutationError: Error?
+    private(set) var domains: [String]
+    private(set) var createdConfigurations: [DNSCreateConfiguration] = []
+    private(set) var deletedConfigurations: [DNSDeleteConfiguration] = []
+
+    init(error: Error? = nil, mutationError: Error? = nil, domains: [String] = ["cont"]) {
+        self.error = error
+        self.mutationError = mutationError
+        self.domains = domains
+    }
+
+    func listDomains() async throws -> [String] { if let error { throw error }; return domains }
+    func loadServiceDomain() async throws -> String? { if let error { throw error }; return domains.first }
+
+    func createDomain(_ configuration: DNSCreateConfiguration) async throws {
+        createdConfigurations.append(configuration)
+        if let mutationError { throw mutationError }
+        if !domains.contains(configuration.domain.rawValue) { domains.append(configuration.domain.rawValue) }
+    }
+
+    func deleteDomain(_ configuration: DNSDeleteConfiguration) async throws {
+        deletedConfigurations.append(configuration)
+        if let mutationError { throw mutationError }
+        domains.removeAll { $0 == configuration.domain.rawValue }
+    }
+}
+
+private actor PrivilegedRunnerStub: PrivilegedCommandRunning {
+    private(set) var commands: [PrivilegedCommand] = []
+    private let error: PrivilegedCommandError?
+
+    init(error: PrivilegedCommandError? = nil) { self.error = error }
+
+    func run(_ command: PrivilegedCommand) async throws -> String {
+        commands.append(command)
+        if let error { throw error }
+        return ""
+    }
 }
 
 private struct ResolverReaderStub: ResolverDirectoryReading {
