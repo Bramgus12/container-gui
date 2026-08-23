@@ -21,7 +21,7 @@ struct SystemView: View {
                     UpdateCard(model: updates)
                 }
                 SystemDiskUsageSection(model: model, reclaim: { confirmsReclaim = true })
-                if let dns { SystemDNSSection(model: dns) }
+                if let dns { SystemDNSSection(model: dns, system: model) }
                 SystemLogsSection(model: model)
                 UpdateSection(model: updates)
             }
@@ -117,10 +117,22 @@ struct SystemView: View {
 
 private struct SystemDNSSection: View {
     @Bindable var model: DNSModel
+    /// The DNS domain only takes effect when the service restarts, so the
+    /// section can restart it from where the change was made.
+    let system: SystemModel
     @State private var addModel: AddLocalDomainModel?
     @State private var domainModel: SetServiceDomainModel?
     @State private var domainToRemove: String?
     @State private var showsResolverContents = false
+
+    /// Restarts the service, then reloads DNS so the notice clears itself as
+    /// soon as the service reports the domain it just read.
+    private func restartService() {
+        Task {
+            await system.perform(.restart)
+            await model.refresh()
+        }
+    }
 
     private var removeConfiguration: DNSDeleteConfiguration? {
         guard let domainToRemove, let domain = try? DNSDomainName(validating: domainToRemove) else { return nil }
@@ -159,8 +171,11 @@ private struct SystemDNSSection: View {
                     message: "Restart the container service to apply the new DNS domain",
                     detail: "\(pending) is written to \(model.configFilePath); the service reads its DNS domain when it starts.",
                     scope: .card,
-                    severity: .attention
+                    severity: .attention,
+                    actionTitle: "Restart Service",
+                    action: { restartService() }
                 )
+                .disabled(system.serviceOperation != nil)
                 .accessibilityIdentifier("system.dns.restartNotice")
             }
 
