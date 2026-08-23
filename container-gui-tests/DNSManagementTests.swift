@@ -76,6 +76,59 @@ final class DNSManagementTests: XCTestCase {
     }
 
     @MainActor
+    func testSettingTheServiceDomainWritesTheConfigAndAsksForARestart() async throws {
+        let configFile = ConfigFileStub()
+        // The service still reports the domain it loaded at start.
+        let model = DNSModel(service: DNSServiceStub(domains: ["test"], serviceDomain: "cont"), resolverReader: ResolverReaderStub(files: []), hostResolver: HostResolverStub(), failureLog: OperationFailureLog(), configFile: configFile)
+
+        let saved = await model.setServiceDomain(try DNSDomainName(validating: "test"))
+        XCTAssertTrue(saved)
+        XCTAssertEqual(configFile.writtenDomains, ["test"])
+        XCTAssertEqual(model.pendingServiceDomain, "test")
+        XCTAssertNil(model.actionError)
+        XCTAssertFalse(model.isWritingConfig)
+    }
+
+    @MainActor
+    func testTheRestartNoticeClearsOnceTheServiceReportsTheDomain() async throws {
+        let model = DNSModel(service: DNSServiceStub(domains: ["test"], serviceDomain: "test"), resolverReader: ResolverReaderStub(files: []), hostResolver: HostResolverStub(), failureLog: OperationFailureLog(), configFile: ConfigFileStub())
+
+        let saved = await model.setServiceDomain(try DNSDomainName(validating: "test"))
+        XCTAssertTrue(saved)
+        XCTAssertNil(model.pendingServiceDomain)
+        XCTAssertEqual(model.readiness, .resolving(domain: "test"))
+    }
+
+    @MainActor
+    func testAnUneditableConfigSurfacesTheMessageAndLeavesNothingPending() async throws {
+        let log = OperationFailureLog()
+        let failure = ConfigFileError.unsupportedLayout(path: "/Users/test/.config/container/config.toml")
+        let model = DNSModel(service: DNSServiceStub(domains: [], serviceDomain: nil), resolverReader: ResolverReaderStub(files: []), hostResolver: HostResolverStub(), failureLog: log, configFile: ConfigFileStub(error: failure))
+
+        let saved = await model.setServiceDomain(try DNSDomainName(validating: "test"))
+        XCTAssertFalse(saved)
+        XCTAssertNil(model.pendingServiceDomain)
+        XCTAssertEqual(log.records.count, 1)
+        XCTAssertEqual(model.actionError, failure.localizedDescription)
+    }
+
+    @MainActor
+    func testAddLocalDomainCanSetTheDomainItIsAdding() async {
+        let configFile = ConfigFileStub()
+        let dns = DNSModel(service: DNSServiceStub(domains: ["test"], serviceDomain: "cont"), resolverReader: ResolverReaderStub(files: []), hostResolver: HostResolverStub(), failureLog: OperationFailureLog(), configFile: configFile)
+        let model = AddLocalDomainModel(dns: dns)
+        model.domain = "test"
+        XCTAssertFalse(model.isServiceDomain)
+
+        await model.setAsServiceDomain()
+        XCTAssertEqual(configFile.writtenDomains, ["test"])
+        XCTAssertTrue(model.didSetServiceDomain)
+        XCTAssertNil(model.configError)
+        // The banner now reports the domain as the service one, pending a restart.
+        XCTAssertTrue(model.isServiceDomain)
+    }
+
+    @MainActor
     func testAddLocalDomainKeepsItsOwnFailureAndClearsItOnSuccess() async {
         let failure = PrivilegedCommandError.failed(invocation: "sudo container", exitCode: 1, message: "cannot create domain (try sudo?)")
         let dns = DNSModel(service: DNSServiceStub(mutationError: failure, domains: []), resolverReader: ResolverReaderStub(files: []), hostResolver: HostResolverStub(), failureLog: OperationFailureLog())
@@ -224,14 +277,33 @@ private actor DNSServiceStub: DNSManaging {
     private(set) var createdConfigurations: [DNSCreateConfiguration] = []
     private(set) var deletedConfigurations: [DNSDeleteConfiguration] = []
 
+    /// The domain the service reports, which is the one it loaded at start and
+    /// so can lag behind what `config.toml` now says. Defaults to tracking the
+    /// resolver list, which is what most of these tests want.
+    private let reportedServiceDomain: String?
+    private let reportsFirstDomain: Bool
+
     init(error: Error? = nil, mutationError: Error? = nil, domains: [String] = ["cont"]) {
         self.error = error
         self.mutationError = mutationError
         self.domains = domains
+        reportedServiceDomain = nil
+        reportsFirstDomain = true
+    }
+
+    init(domains: [String], serviceDomain: String?) {
+        error = nil
+        mutationError = nil
+        self.domains = domains
+        reportedServiceDomain = serviceDomain
+        reportsFirstDomain = false
     }
 
     func listDomains() async throws -> [String] { if let error { throw error }; return domains }
-    func loadServiceDomain() async throws -> String? { if let error { throw error }; return domains.first }
+    func loadServiceDomain() async throws -> String? {
+        if let error { throw error }
+        return reportsFirstDomain ? domains.first : reportedServiceDomain
+    }
 
     func createDomain(_ configuration: DNSCreateConfiguration) async throws {
         createdConfigurations.append(configuration)
@@ -243,6 +315,22 @@ private actor DNSServiceStub: DNSManaging {
         deletedConfigurations.append(configuration)
         if let mutationError { throw mutationError }
         domains.removeAll { $0 == configuration.domain.rawValue }
+    }
+}
+
+private final class ConfigFileStub: ServiceDomainWriting, @unchecked Sendable {
+    private let lock = NSLock()
+    private let error: Error?
+    private var written: [String] = []
+
+    init(error: Error? = nil) { self.error = error }
+
+    var writtenDomains: [String] { lock.withLock { written } }
+
+    func writeServiceDomain(_ domain: DNSDomainName) throws -> URL {
+        if let error { throw error }
+        lock.withLock { written.append(domain.rawValue) }
+        return URL(fileURLWithPath: "/tmp/config.toml")
     }
 }
 

@@ -7,7 +7,9 @@ final class AddLocalDomainModel: Identifiable {
     var domain = ""
     var localhostRedirect = ""
     private(set) var didCopy = false
+    private(set) var didSetServiceDomain = false
     private(set) var addError: String?
+    private(set) var configError: String?
     let dns: DNSModel
     init(dns: DNSModel) { self.dns = dns }
 
@@ -26,6 +28,21 @@ final class AddLocalDomainModel: Identifiable {
         return domain.isEmpty ? "test" : domain
     }
     var isAdding: Bool { dns.activeMutation == .create(trimmed(domain)) }
+    /// True once this domain is the one the service registers containers under,
+    /// whether it was already set or the sheet just wrote it.
+    var isServiceDomain: Bool {
+        let value = trimmed(domain)
+        return !value.isEmpty && (dns.serviceDomain == value || dns.pendingServiceDomain == value)
+    }
+
+    /// Writes the domain being added to `config.toml`, so the sheet finishes the
+    /// second half of the setup instead of describing it.
+    func setAsServiceDomain() async {
+        guard let domain = try? DNSDomainName(validating: trimmed(domain)) else { return }
+        configError = nil
+        didSetServiceDomain = await dns.setServiceDomain(domain)
+        configError = didSetServiceDomain ? nil : dns.actionError
+    }
 
     func copy() { guard let configuration else { return }; dns.copyCreateCommand(configuration); didCopy = true }
     /// The sheet stays up over the banner that would otherwise carry a failure,
@@ -53,8 +70,17 @@ struct AddLocalDomainSheet: View {
                     Text("Containers will answer as <name>.\(model.previewDomain)").font(.caption).foregroundStyle(Color.dsTextSecondary)
                     LabeledContent("Redirect an IP to localhost (optional)") { TextField("192.168.64.1", text: $model.localhostRedirect).labelsHidden().dsMonoField().accessibilityIdentifier("system.dns.create.localhost") }
                     if let error = model.localhostError { Text(error).font(.caption).foregroundStyle(Color.dsStateDestructive) }
-                    InlineBanner(message: "The service domain must also be set in config.toml or containers will not register here.", scope: .card, severity: .attention, actionTitle: "Copy TOML") { model.dns.copyConfigSnippet(domain: model.domain) }
-                    Button("Reveal Config") { model.dns.revealConfigFile() }
+                    if model.isServiceDomain {
+                        InlineBanner(message: "This is already the service domain, so containers will register here.", scope: .card, severity: .info)
+                    } else {
+                        InlineBanner(message: "The service domain must also be set in config.toml or containers will not register here.", scope: .card, severity: .attention, actionTitle: "Set as Service Domain") { Task { await model.setAsServiceDomain() } }
+                            .accessibilityIdentifier("system.dns.create.setServiceDomain")
+                    }
+                    if let error = model.configError {
+                        InlineBanner(message: "config.toml could not be changed", detail: error, scope: .card, severity: .error, copyValue: model.dns.configSnippet(domain: model.domain))
+                            .accessibilityIdentifier("system.dns.create.configError")
+                    }
+                    HStack { Button("Reveal Config") { model.dns.revealConfigFile() }; Button("Copy TOML") { model.dns.copyConfigSnippet(domain: model.domain) } }
                     if let error = model.addError {
                         InlineBanner(message: "The domain could not be added", detail: error, scope: .card, severity: .error, copyValue: model.sudoCommand)
                             .accessibilityIdentifier("system.dns.create.error")

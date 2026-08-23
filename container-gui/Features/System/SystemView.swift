@@ -118,6 +118,7 @@ struct SystemView: View {
 private struct SystemDNSSection: View {
     @Bindable var model: DNSModel
     @State private var addModel: AddLocalDomainModel?
+    @State private var domainModel: SetServiceDomainModel?
     @State private var domainToRemove: String?
     @State private var showsResolverContents = false
 
@@ -135,10 +136,11 @@ private struct SystemDNSSection: View {
             HStack(alignment: .top, spacing: DSMetrics.spacing12) {
                 DSCard {
                     VStack(alignment: .leading, spacing: DSMetrics.spacing8) {
-                        HStack { Text("Step 1 · Service").font(.dsCardHeading); Spacer(); if model.serviceDomain == nil { StateChip(title: "Missing", state: .attention) } else { TagChip(title: "Applied") } }
+                        HStack { Text("Step 1 · Service").font(.dsCardHeading); Spacer(); if model.pendingServiceDomain != nil { StateChip(title: "Restart needed", state: .attention) } else if model.serviceDomain == nil { StateChip(title: "Missing", state: .attention) } else { TagChip(title: "Applied") } }
                         SystemCardRow(label: "Domain", value: model.serviceDomain ?? "Not set")
+                        if let pending = model.pendingServiceDomain { SystemCardRow(label: "Written", value: pending) }
                         Spacer(minLength: 8)
-                        HStack { Button("Reveal Config") { model.revealConfigFile() }.accessibilityIdentifier("system.dns.revealConfig"); Button("Copy TOML") { model.copyConfigSnippet() }.accessibilityIdentifier("system.dns.copyConfig") }
+                        HStack { Button("Set Domain…") { domainModel = SetServiceDomainModel(dns: model) }.disabled(model.isWritingConfig).accessibilityIdentifier("system.dns.setDomain"); Button("Reveal Config") { model.revealConfigFile() }.accessibilityIdentifier("system.dns.revealConfig"); Button("Copy TOML") { model.copyConfigSnippet() }.accessibilityIdentifier("system.dns.copyConfig") }
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
                 DSCard {
@@ -150,6 +152,16 @@ private struct SystemDNSSection: View {
                         HStack { Button("Test Resolution") { Task { await model.probeResolution() } }.disabled(model.registeredNames.isEmpty || model.isProbing).accessibilityIdentifier("system.dns.probe"); if let domain = model.serviceDomain { Button("Remove…", role: .destructive) { domainToRemove = domain }.disabled(model.activeMutation != nil).accessibilityIdentifier("system.dns.remove") } }
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }
+            }
+
+            if let pending = model.pendingServiceDomain {
+                InlineBanner(
+                    message: "Restart the container service to apply the new DNS domain",
+                    detail: "\(pending) is written to \(model.configFilePath); the service reads its DNS domain when it starts.",
+                    scope: .card,
+                    severity: .attention
+                )
+                .accessibilityIdentifier("system.dns.restartNotice")
             }
 
             if let probe = model.probe { DNSProbeStrip(probe: probe, hostname: model.registeredNames.first?.hostname ?? "") }
@@ -173,6 +185,7 @@ private struct SystemDNSSection: View {
         }
         .accessibilityIdentifier("system.dns.section")
         .sheet(item: $addModel) { AddLocalDomainSheet(model: $0) }
+        .sheet(item: $domainModel) { SetServiceDomainSheet(model: $0) }
         .alert("Remove Local Domain?", isPresented: Binding(get: { domainToRemove != nil }, set: { if !$0 { domainToRemove = nil } })) {
             Button("Remove", role: .destructive) { if let configuration = removeConfiguration { Task { await model.deleteDomain(configuration) } } }
             Button("Copy Command") { if let configuration = removeConfiguration { model.copyDeleteCommand(configuration) } }

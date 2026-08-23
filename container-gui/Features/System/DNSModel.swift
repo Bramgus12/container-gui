@@ -31,20 +31,26 @@ final class DNSModel {
     private(set) var didCopyCommand = false
     private(set) var actionError: String?
     private(set) var activeMutation: DNSMutation?
+    private(set) var isWritingConfig = false
+    /// A domain written to `config.toml` that the service has not reported yet,
+    /// which means it loads its DNS domain at start and needs restarting.
+    private(set) var pendingServiceDomain: String?
 
     private let service: any DNSManaging
     private let resolverReader: any ResolverDirectoryReading
     private let hostResolver: any HostResolving
     private let failureLog: OperationFailureLog
     private let copier: any DiagnosticsCopying
+    private let configFile: any ServiceDomainWriting
     private var refreshGeneration = 0
 
-    init(service: any DNSManaging, resolverReader: any ResolverDirectoryReading, hostResolver: any HostResolving, failureLog: OperationFailureLog, copier: (any DiagnosticsCopying)? = nil) {
+    init(service: any DNSManaging, resolverReader: any ResolverDirectoryReading, hostResolver: any HostResolving, failureLog: OperationFailureLog, copier: (any DiagnosticsCopying)? = nil, configFile: (any ServiceDomainWriting)? = nil) {
         self.service = service
         self.resolverReader = resolverReader
         self.hostResolver = hostResolver
         self.failureLog = failureLog
         self.copier = copier ?? SystemDiagnosticsCopier()
+        self.configFile = configFile ?? ContainerConfigFile(url: resolverReader.configFileURL())
     }
 
     func loadIfNeeded() async { if listState == .idle { await refresh() } }
@@ -67,6 +73,7 @@ final class DNSModel {
                 LocalDNSDomain(name: name, resolverFile: resolverFiles.first { $0.domain == name }, isServiceDomain: name == serviceDomain, registeredCount: registeredNames.filter { $0.hostname.hasSuffix(".\(name)") }.count)
             }
             readiness = .resolve(serviceDomain: serviceDomain, resolverDomains: listedDomains)
+            if pendingServiceDomain == serviceDomain { pendingServiceDomain = nil }
             listState = .loaded
         } catch {
             if Self.isCancellation(error) { listState = domains.isEmpty ? .idle : .loaded; return }
@@ -109,10 +116,36 @@ final class DNSModel {
         }
     }
 
+    /// Sets the service domain in `config.toml` for the user. The file is theirs,
+    /// so this needs no administrator access — but the service reads its DNS
+    /// domain at start, so the write only counts once the service reports it.
+    @discardableResult
+    func setServiceDomain(_ domain: DNSDomainName) async -> Bool {
+        guard !isWritingConfig, activeMutation == nil else { return false }
+        isWritingConfig = true
+        actionError = nil
+        defer { isWritingConfig = false }
+
+        do {
+            _ = try configFile.writeServiceDomain(domain)
+        } catch {
+            failureLog.record(operation: "Set service DNS domain", error: error)
+            actionError = DiagnosticSanitizer.sanitize(error.localizedDescription)
+            return false
+        }
+
+        pendingServiceDomain = domain.rawValue
+        await refresh()
+        return true
+    }
+
     func copyCreateCommand(_ configuration: DNSCreateConfiguration) { copy(configuration.sudoCommand) }
     func copyDeleteCommand(_ configuration: DNSDeleteConfiguration) { copy(configuration.sudoCommand) }
-    func copyConfigSnippet(domain: String? = nil) { copy("[dns]\ndomain = \"\(domain ?? serviceDomain ?? "cont")\"") }
+    func configSnippet(domain: String? = nil) -> String { "[dns]\ndomain = \"\(domain ?? serviceDomain ?? "cont")\"" }
+    func copyConfigSnippet(domain: String? = nil) { copy(configSnippet(domain: domain)) }
     func revealConfigFile() { NSWorkspace.shared.activateFileViewerSelecting([resolverReader.configFileURL()]) }
+    /// The config file's path, abbreviated with `~` the way the user would write it.
+    var configFilePath: String { (resolverReader.configFileURL().path as NSString).abbreviatingWithTildeInPath }
     func dismissActionError() { actionError = nil }
 
     /// Runs one privileged change at a time and reloads afterwards, so the list
