@@ -1,3 +1,76 @@
+# Container GUI 1.3.0
+
+Install or upgrade with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+```
+
+Container GUI 1.3.0 finishes the local DNS setup. Both halves of it — the
+resolver entry that needs root and the service domain in your own
+`config.toml` — are now changes the app makes for you, instead of commands and
+snippets it asks you to run and paste yourself.
+
+## Changes
+
+- Adds and removes local DNS domains directly. Writing to `/etc/resolver` needs
+  root, so the app raises the standard macOS authentication dialog, naming the
+  domain it is about to change, and runs the command through the Security Agent
+  once you authenticate. Dismissing the dialog cancels the change and reports
+  nothing as having happened.
+- Sets the service DNS domain in `~/.config/container/config.toml`. The file is
+  yours, so this needs no administrator access. The edit is surgical: it
+  rewrites the one `domain` line under `[dns]` and copies every other setting,
+  comment, and blank line through unchanged, so a `domain` key in another table
+  is left alone. A file that states its DNS settings as an inline table or an
+  array of tables is reported as uneditable rather than rewritten.
+- Detects when a written domain is not yet in force. The service reads its DNS
+  domain when it starts, so the app compares what it wrote against what the
+  service reports; when they differ, the DNS section shows a restart notice with
+  a **Restart Service** button, and the notice clears itself once the service
+  reports the new domain.
+- Keeps every manual path. **Copy Command**, **Copy TOML**, and **Reveal Config**
+  remain wherever the app can now make the change itself.
+
+## Compatibility and validation
+
+- macOS 26 or later on Apple-silicon Macs.
+- Apple Container CLI `0.12.0` or later and earlier than `2.0.0`.
+- The app installs no privileged helper and holds no standing elevated rights.
+  Each `/etc/resolver` change is authorised on its own through macOS.
+- _Record the tested macOS, hardware, CLI version, app commit, tester, and date
+  here before publishing, per `docs/RELEASE_CHECKLIST.md`._
+
+## Download verification
+
+SHA-256: `<fill in from the checksum scripts/release.sh prints>`
+
+The disk image is signed with a Developer ID Application certificate and
+notarized by Apple. Verify an installed copy yourself with:
+
+```sh
+spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"
+```
+
+## Upgrade and rollback
+
+Re-run the install command above to upgrade in place. To roll back, pin a
+previous release, for example:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash -s -- --version v1.2.1
+```
+
+Releases up to and including 1.2.0 are ad-hoc signed and not notarized, so
+rolling back to one restores the Gatekeeper approval steps described in their
+release notes.
+
+## Known limitations
+
+The app does not yet manage registry authentication, build secrets or SSH
+forwarding, interactive terminals, import/export, or kernel settings,
+image/container pruning, or remote hosts.
+
 # Container GUI 1.2.1
 
 Install or upgrade with:

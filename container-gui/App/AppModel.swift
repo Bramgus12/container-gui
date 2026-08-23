@@ -313,6 +313,7 @@ final class AppModel {
     private(set) var statsPoller: ContainerStatsPoller?
 
     private let cliFactory: any ContainerCLIMaking
+    private let privilegedRunner: any PrivilegedCommandRunning
     private var containerLister: (any ContainerListing)?
     private var containerMutator: (any ContainerMutating)?
     private var containerRunner: (any ContainerRunning)?
@@ -343,10 +344,12 @@ final class AppModel {
         volumeService: (any VolumeManaging)? = nil,
         builderService: (any BuilderManaging)? = nil,
         dnsService: (any DNSManaging)? = nil,
+        privilegedRunner: any PrivilegedCommandRunning = OSAScriptPrivilegedCommandRunner(),
         failureLog: OperationFailureLog? = nil
     ) {
         self.setup = setup
         self.cliFactory = cliFactory
+        self.privilegedRunner = privilegedRunner
         self.containerLister = containerLister
         self.containerMutator = containerMutator
         self.containerRunner = containerRunner
@@ -458,7 +461,7 @@ final class AppModel {
                 service: CLISystemService(cli: cli),
                 failureLog: failureLog
             )
-            dnsModel = DNSModel(service: CLIDNSService(cli: cli), resolverReader: SystemResolverDirectoryReader(), hostResolver: SystemHostResolver(), failureLog: failureLog)
+            dnsModel = DNSModel(service: CLIDNSService(cli: cli, executableURL: context.executableURL, privilegedRunner: privilegedRunner), resolverReader: SystemResolverDirectoryReader(), hostResolver: SystemHostResolver(), failureLog: failureLog)
             containers = []
             selectedContainerID = nil
             containerListState = .idle

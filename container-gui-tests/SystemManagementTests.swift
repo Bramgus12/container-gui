@@ -140,6 +140,40 @@ final class SystemModelTests: XCTestCase {
         XCTAssertNil(model.actionError)
     }
 
+    func testRestartStopsThenStartsAndLeavesTheServiceRunning() async {
+        let service = SystemServiceStub()
+        let model = SystemModel(
+            context: makeSystemContext(),
+            service: service,
+            failureLog: OperationFailureLog(),
+            diagnosticsCopier: DiagnosticsCopierSpy()
+        )
+
+        await model.perform(.restart)
+
+        let calls = await service.calls
+        XCTAssertEqual(calls, ["stop", "start"])
+        XCTAssertTrue(model.status.isRunning)
+        XCTAssertNil(model.actionError)
+        XCTAssertNil(model.serviceOperation)
+    }
+
+    func testRestartingAStoppedServiceOnlyStartsIt() async {
+        let service = SystemServiceStub(running: false)
+        let model = SystemModel(
+            context: makeSystemContext(isRunning: false),
+            service: service,
+            failureLog: OperationFailureLog(),
+            diagnosticsCopier: DiagnosticsCopierSpy()
+        )
+
+        await model.perform(.restart)
+
+        let calls = await service.calls
+        XCTAssertEqual(calls, ["start"])
+        XCTAssertTrue(model.status.isRunning)
+    }
+
     func testDiagnosticsRedactFailureAndIncludeExitCodeWithoutEnvironment() {
         let failureLog = OperationFailureLog()
         failureLog.record(
@@ -219,7 +253,13 @@ private actor SystemCLIStub: ContainerCLI {
 
 private actor SystemServiceStub: SystemManaging {
     private(set) var stopCount = 0
+    private(set) var startCount = 0
+    /// Every start and stop in order, so a restart can be checked as a sequence
+    /// rather than as two counts.
+    private(set) var calls: [String] = []
     private var running = true
+
+    init(running: Bool = true) { self.running = running }
 
     func loadSnapshot() -> SystemSnapshot {
         SystemSnapshot(
@@ -260,11 +300,14 @@ private actor SystemServiceStub: SystemManaging {
     }
 
     func startService() {
+        startCount += 1
+        calls.append("start")
         running = true
     }
 
     func stopService() {
         stopCount += 1
+        calls.append("stop")
         running = false
     }
 }
@@ -278,7 +321,7 @@ private final class DiagnosticsCopierSpy: DiagnosticsCopying {
     }
 }
 
-private func makeSystemContext() -> PreflightContext {
+private func makeSystemContext(isRunning: Bool = true) -> PreflightContext {
     PreflightContext(
         executableURL: URL(fileURLWithPath: "/usr/local/bin/container"),
         versions: SystemVersion(components: [
@@ -296,8 +339,8 @@ private func makeSystemContext() -> PreflightContext {
             ),
         ]),
         status: SystemStatus(dto: SystemStatusDTO(
-            status: "ready",
-            healthy: true,
+            status: isRunning ? "ready" : "stopped",
+            healthy: isRunning,
             version: "1.0.1",
             message: nil
         ))

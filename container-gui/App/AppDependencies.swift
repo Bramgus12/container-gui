@@ -15,7 +15,8 @@ enum AppDependencies {
             )
             return AppModel(
                 setup: setup,
-                cliFactory: UITestContainerCLIFactory(scenario: scenario)
+                cliFactory: UITestContainerCLIFactory(scenario: scenario),
+                privilegedRunner: UITestPrivilegedCommandRunner()
             )
         }
         #endif
@@ -80,6 +81,14 @@ private actor InMemoryUpdatePreferences: UpdatePreferencesStoring {
 @MainActor
 private struct NoopDiagnosticsCopier: DiagnosticsCopying {
     func copy(_ value: String) {}
+}
+
+/// Tests never raise the macOS authentication dialog, so every privileged
+/// request reports that the user dismissed it.
+nonisolated private struct UITestPrivilegedCommandRunner: PrivilegedCommandRunning {
+    func run(_ command: PrivilegedCommand) throws -> String {
+        throw PrivilegedCommandError.cancelled
+    }
 }
 
 nonisolated private enum UITestPreflightScenario: String, Sendable {

@@ -168,11 +168,14 @@ extension SystemLoadingState {
 enum SystemServiceOperation: String, Equatable, Sendable {
     case start = "Starting service"
     case stop = "Stopping service"
+    /// Stop followed by start, for settings the service only reads at launch.
+    case restart = "Restarting service"
 
     var localizedDescription: LocalizedStringResource {
         switch self {
         case .start: "Starting service"
         case .stop: "Stopping service"
+        case .restart: "Restarting service"
         }
     }
 }
@@ -281,6 +284,11 @@ final class SystemModel {
                     version: status.version,
                     message: "The service is stopped."
                 ))
+            case .restart:
+                // A stopped service has nothing to stop, so a restart of one is
+                // just a start.
+                if status.isRunning { try await service.stopService() }
+                try await service.startService()
             }
             await refresh()
         } catch {
