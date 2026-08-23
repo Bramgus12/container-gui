@@ -78,8 +78,10 @@ curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/script
 
 The installer downloads the latest release disk image, checks its SHA-256
 against the checksum GitHub publishes for the release asset, verifies the app's
-code signature, installs it into `/Applications`, and removes the
-`com.apple.quarantine` attribute so macOS does not block the first launch.
+code signature, installs it into `/Applications`, and clears the
+`com.apple.quarantine` attribute. Releases are notarized, so that attribute
+would not block a launch; clearing it just skips the first-run prompt for a copy
+the installer already verified.
 
 To read the script before running it:
 
@@ -103,12 +105,12 @@ result under **System → Updates**, where the check can also be run on demand o
 turned off entirely. **Container GUI → Check for Updates…** checks immediately.
 Updating is always the same one-line command as installing.
 
-> [!WARNING]
-> Container GUI releases are currently ad-hoc signed and **not notarized by
-> Apple**. Apple cannot verify the developer identity or confirm that the app
-> passed its automated malware scan. The installer clears Gatekeeper's
-> quarantine flag for this one app, which is why it opens without the approval
-> steps below. Only continue if you trust this project and understand the risk.
+> [!NOTE]
+> Container GUI releases are signed with a Developer ID Application certificate
+> and notarized by Apple, and the notarization ticket is stapled to both the app
+> and the disk image. Gatekeeper accepts them without any approval detour, and
+> the check works offline. Releases up to and including 1.2.0 were ad-hoc signed
+> and not notarized.
 
 ### Installing from the DMG by hand
 
@@ -120,19 +122,19 @@ its SHA-256 with the checksum in the release notes:
 shasum -a 256 ~/Downloads/Container-GUI.dmg
 ```
 
-Because the app is not Developer ID signed or notarized, Gatekeeper prevents a
-browser-downloaded copy from opening. To approve this specific app without
-disabling Gatekeeper globally:
+Open the disk image and drag **Container GUI.app** to the Applications folder.
+Because the app is Developer ID signed and notarized, it opens on first launch
+without a Gatekeeper detour. Confirm the signature and the stapled notarization
+ticket yourself with:
 
-1. Move **Container GUI.app** to the Applications folder and try to open it.
-2. Open **System Settings**, select **Privacy & Security**, and scroll to
-   **Security**.
-3. Click **Open Anyway** for Container GUI, authenticate, and confirm **Open**.
+```sh
+spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"
+xcrun stapler validate "/Applications/Container GUI.app"
+```
 
-The **Open Anyway** option is available for about an hour after the blocked
-launch attempt. See Apple's guide to
-[opening an app from an unknown developer](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac)
-for the current steps and security considerations.
+If macOS does block the launch, the copy is damaged or was tampered with after
+signing. Delete it, download the DMG again, and compare the checksum before
+retrying rather than approving it in **Privacy & Security**.
 
 ### Building from source
 
@@ -201,7 +203,7 @@ xcodebuild test \
   -destination "platform=macOS"
 ```
 
-Create an ad-hoc signed Release build and DMG with:
+Create the Developer ID signed, notarized Release build and DMG with:
 
 ```sh
 ./scripts/release.sh
@@ -209,8 +211,22 @@ Create an ad-hoc signed Release build and DMG with:
 
 The outputs are written to `build/export/Container GUI.app` and
 `build/export/Container-GUI.dmg`. The disk image includes an Applications
-shortcut for drag-and-drop installation. These artifacts are not notarized;
-see the [installation warning](#3-install-container-gui) above.
+shortcut for drag-and-drop installation. Both artifacts are signed with the
+Developer ID Application certificate, notarized by Apple, and stapled.
+
+This needs a Developer ID Application certificate in the keychain and notary
+credentials stored once:
+
+```sh
+xcrun notarytool store-credentials container-gui-notary \
+  --apple-id <your Apple ID> --team-id CN495B7KTS --password <app-specific password>
+```
+
+Create the app-specific password at [account.apple.com](https://account.apple.com)
+under **Sign-In and Security → App-Specific Passwords**. Run
+`./scripts/release.sh --help` for the App Store Connect API key alternative and
+the other overrides. `./scripts/release.sh --skip-notarization` produces a
+signed but unpublishable build for local checks.
 
 ### Opt-in real smoke test
 

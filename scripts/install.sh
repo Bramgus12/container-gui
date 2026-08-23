@@ -5,9 +5,10 @@
 #   curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
 #
 # Downloads the released disk image, verifies its checksum and code signature,
-# installs the app, and removes the com.apple.quarantine attribute so the app
-# opens without a Gatekeeper detour. Container GUI is ad-hoc signed and is not
-# notarized by Apple; see the README for what that means.
+# installs the app, and removes the com.apple.quarantine attribute. Releases are
+# Developer ID signed and notarized, so the attribute would not block a launch;
+# clearing it just avoids the first-run prompt for a copy the installer already
+# verified. Releases up to and including 1.2.0 were ad-hoc signed instead.
 #
 # Written for bash 3.2 so it runs on a stock macOS install.
 

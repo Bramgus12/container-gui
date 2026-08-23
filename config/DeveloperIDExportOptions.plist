@@ -2,9 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- scripts/release.sh copies this template to build/ExportOptions.plist and
+	     fills in teamID from the project before exporting the archive. -->
 	<key>method</key>
 	<string>developer-id</string>
+	<key>destination</key>
+	<string>export</string>
 	<key>signingStyle</key>
-	<string>automatic</string>
+	<string>manual</string>
+	<key>signingCertificate</key>
+	<string>Developer ID Application</string>
+	<key>teamID</key>
+	<string>CN495B7KTS</string>
+	<key>stripSwiftSymbols</key>
+	<true/>
 </dict>
 </plist>

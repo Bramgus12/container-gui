@@ -43,20 +43,30 @@ hardware, CLI version, app commit, tester, and date in the release notes.
 
 ## Package and install
 
-Create the current ad-hoc signed distribution:
+Create the signed, notarized distribution:
 
 ```sh
 ./scripts/release.sh
 ```
 
-The script archives with an ad-hoc signature, creates `Container-GUI.dmg`,
-verifies the app signature with `codesign`, verifies the disk image, and prints
-its SHA-256 checksum. Confirm the DMG contains both `Container GUI.app` and the
-Applications shortcut. It does not use a Developer ID certificate, submit the
-app to Apple's notary service, or staple a notarization ticket. Confirm the
-README warning and installation instructions are present. Install the app from
-the DMG on a second clean Mac, approve it through Privacy & Security, complete
-onboarding, and repeat the lifecycle smoke test through the GUI.
+The script archives with the Developer ID Application certificate and the
+Hardened Runtime, exports it, submits the app to Apple's notary service, staples
+the ticket, builds and signs `Container-GUI.dmg`, notarizes and staples the disk
+image too, runs the Gatekeeper assessment on both, and prints the SHA-256
+checksum. A Developer ID Application certificate and stored notary credentials
+are prerequisites; see the build section of the README.
+
+- Confirm the DMG contains both `Container GUI.app` and the Applications
+  shortcut.
+- Confirm the run printed `accepted` with `source=Notarized Developer ID` for
+  the app and the disk image.
+- Confirm `xcrun stapler validate` passes on both artifacts, and that the app
+  still validates after being copied out of the DMG.
+- Download the published DMG in a browser on a second clean Mac and confirm it
+  opens with no Gatekeeper dialog and no Privacy & Security approval, then
+  complete onboarding and repeat the lifecycle smoke test through the GUI.
+- Confirm the notarization holds offline: disable networking on that Mac and
+  launch the app again.
 
 After the release and its `Container-GUI.dmg` asset are published, verify the
 one-command installer against it on a clean Apple-silicon Mac:

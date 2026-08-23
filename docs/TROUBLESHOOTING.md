@@ -25,22 +25,30 @@ check fails.
 
 ## macOS still blocks the app after installing
 
-Confirm the quarantine attribute is gone:
+Releases from 1.2.1 onward are signed with a Developer ID Application
+certificate and notarized by Apple, with the ticket stapled to both the app and
+the disk image, so Gatekeeper should accept them without any approval step, even
+offline. If macOS blocks the app anyway, check what Gatekeeper actually objects
+to:
 
 ```sh
-xattr -r -l "/Applications/Container GUI.app" | grep com.apple.quarantine
+spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"
+xcrun stapler validate "/Applications/Container GUI.app"
+codesign --verify --deep --strict --verbose=2 "/Applications/Container GUI.app"
 ```
 
-No output means the app is not quarantined. If the attribute is present, run the
-install command again, or remove it directly:
+`accepted` with `source=Notarized Developer ID` means the installed copy is
+sound and the problem lies elsewhere. Anything else means the copy is damaged or
+was modified after signing: delete it and install again, comparing the DMG
+checksum with the release notes. Do not work around a failing signature by
+approving the app in **System Settings → Privacy & Security**.
+
+Releases up to and including 1.2.0 were ad-hoc signed and not notarized. Those
+older builds rely on the quarantine attribute being cleared:
 
 ```sh
 xattr -d -r com.apple.quarantine "/Applications/Container GUI.app"
 ```
-
-A copy that was downloaded and unpacked in a browser is quarantined until this
-attribute is removed or the app is approved in **System Settings → Privacy &
-Security**.
 
 ## The update check fails
 
