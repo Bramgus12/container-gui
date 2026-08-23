@@ -5,10 +5,9 @@
 #   curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
 #
 # Downloads the released disk image, verifies its checksum and code signature,
-# installs the app, and removes the com.apple.quarantine attribute. Releases are
-# Developer ID signed and notarized, so the attribute would not block a launch;
-# clearing it just avoids the first-run prompt for a copy the installer already
-# verified. Releases up to and including 1.2.0 were ad-hoc signed instead.
+# and installs the app. Releases are Developer ID signed and notarized, so
+# Gatekeeper accepts the app on first launch; the installer deliberately leaves
+# that check in place rather than clearing any quarantine attribute.
 #
 # Written for bash 3.2 so it runs on a stock macOS install.
 
@@ -335,14 +334,7 @@ install_app() {
     run_privileged /bin/mv "$staged_path" "$target" || fail "Could not move $APP_NAME into place."
     staged_path=""
 
-    info "Removing the quarantine attribute"
-    run_privileged /usr/bin/xattr -d -r com.apple.quarantine "$target" >/dev/null 2>&1 || true
-
     verify_signature "$target" "Remove $target and report this at https://github.com/$REPO/issues."
-
-    if /usr/bin/xattr -r -l "$target" 2>/dev/null | /usr/bin/grep -q 'com.apple.quarantine'; then
-        warn "Some quarantine attributes remain. macOS may still block the first launch; approve the app in System Settings > Privacy & Security."
-    fi
 
     local installed_version=""
     installed_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$target/Contents/Info.plist" 2>/dev/null)" || installed_version=""

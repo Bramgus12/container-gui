@@ -121,9 +121,11 @@ shasum -a 256 ~/Downloads/Container-GUI.dmg
 ```
 
 Open the disk image and drag **Container GUI.app** to the Applications folder.
-Because the app is Developer ID signed and notarized, it opens on first launch
-without a Gatekeeper detour. Confirm the signature and the stapled notarization
-ticket yourself with:
+Because the app is Developer ID signed and notarized, macOS opens it after the
+one-time "downloaded from the Internet" confirmation that every browser download
+gets, in which it reports that Apple checked the app for malicious software.
+There is no **Privacy & Security** detour. Confirm the signature and the stapled
+notarization ticket yourself with:
 
 ```sh
 spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"
