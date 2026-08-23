@@ -1,3 +1,66 @@
+# Container GUI 1.2.1
+
+Install or upgrade with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+```
+
+Container GUI 1.2.1 is the first release signed with a Developer ID certificate
+and notarized by Apple. The application code is unchanged from 1.2.0.
+
+## Changes
+
+- Signs the app and the disk image with a Developer ID Application certificate,
+  notarizes both with Apple, and staples the tickets to each. macOS now accepts
+  the app on first launch with no Privacy & Security approval, and the check
+  works offline.
+- Rewrites `scripts/release.sh` to run the whole signing, notarization, and
+  stapling pipeline, verifying the Hardened Runtime, the secure timestamp, and
+  the Gatekeeper assessment of both artifacts before it reports success.
+
+## Compatibility and validation
+
+- macOS 26 or later on Apple-silicon Macs.
+- Apple Container CLI `0.12.0` or later and earlier than `2.0.0`.
+- Apple's notary service accepted both the app and the disk image. Verified on
+  Apple silicon with macOS 27.0 on 23 August 2026 that `spctl --assess` reports
+  `accepted` with `source=Notarized Developer ID` for the app and the image, and
+  that the app still carries a valid stapled ticket after being copied out of
+  the disk image.
+- Runtime behavior carries over from the 1.2.0 validation, since no application
+  code changed in this release.
+
+## Download verification
+
+SHA-256: `7f38c8e161880eac0dd0d83b34d414721751f66cb76dc4872602ef084be36afd`
+
+The disk image is signed with a Developer ID Application certificate and
+notarized by Apple. Verify an installed copy yourself with:
+
+```sh
+spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"
+```
+
+## Upgrade and rollback
+
+Re-run the install command above to upgrade in place. To roll back, pin a
+previous release, for example:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash -s -- --version v1.2.0
+```
+
+Releases up to and including 1.2.0 are ad-hoc signed and not notarized, so
+rolling back to one restores the Gatekeeper approval steps described in their
+release notes.
+
+## Known limitations
+
+The app does not yet manage registry authentication, build secrets or SSH
+forwarding, interactive terminals, import/export, or kernel settings,
+image/container pruning, or remote hosts.
+
 # Container GUI 1.2.0
 
 Install or upgrade with:
