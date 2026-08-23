@@ -38,12 +38,19 @@ snippets it asks you to run and paste yourself.
 - Apple Container CLI `0.12.0` or later and earlier than `2.0.0`.
 - The app installs no privileged helper and holds no standing elevated rights.
   Each `/etc/resolver` change is authorised on its own through macOS.
-- _Record the tested macOS, hardware, CLI version, app commit, tester, and date
-  here before publishing, per `docs/RELEASE_CHECKLIST.md`._
+- Built from commit `76be378` on Apple silicon with macOS 27.0 and Apple
+  Container CLI `1.2.2` on 23 August 2026. Apple's notary service accepted both
+  the app and the disk image; `spctl --assess` reports `accepted` with
+  `source=Notarized Developer ID` for each, and the app still validates after
+  being copied out of the disk image.
+- The full unit and UI suites pass (227 unit tests, 17 UI tests). The manual
+  gates in `docs/RELEASE_CHECKLIST.md` — VoiceOver, the real smoke test, and the
+  clean-Mac download test — have not been run for this release, and the macOS
+  authentication dialog has not been exercised end to end.
 
 ## Download verification
 
-SHA-256: `<fill in from the checksum scripts/release.sh prints>`
+SHA-256: `7a88bb5c55dfa4848d810b35778c800daac08505bf6b03da1633398b50f477ac`
 
 The disk image is signed with a Developer ID Application certificate and
 notarized by Apple. Verify an installed copy yourself with:
