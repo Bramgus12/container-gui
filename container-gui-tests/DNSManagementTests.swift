@@ -56,8 +56,10 @@ final class DNSManagementTests: XCTestCase {
 
     func testCLIServiceDecodesShippingJSON() async throws {
         let service = CLIDNSService(cli: DNSCLIStub())
-        XCTAssertEqual(try await service.listDomains(), ["cont"])
-        XCTAssertEqual(try await service.loadServiceDomain(), "cont")
+        let domains = try await service.listDomains()
+        XCTAssertEqual(domains, ["cont"])
+        let serviceDomain = try await service.loadServiceDomain()
+        XCTAssertEqual(serviceDomain, "cont")
         XCTAssertEqual(ContainerCommand.systemDNSList.arguments, ["system", "dns", "list", "--format", "json"])
         XCTAssertEqual(ContainerCommand.systemProperties.arguments, ["system", "property", "list", "--format", "json"])
     }
