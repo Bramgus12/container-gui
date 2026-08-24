@@ -578,6 +578,8 @@ private struct ContainerListView: View {
     @State private var pendingKill: PendingContainerKill?
     @State private var confirmsPrune = false
     @State private var runContainerModel: RunContainerModel?
+    @State private var copyFilesModel: CopyFilesModel?
+    @State private var exportModel: ExportContainerModel?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -659,6 +661,20 @@ private struct ContainerListView: View {
                         }
                         .disabled(!canPerform(.kill(signal: .term)))
                         .accessibilityIdentifier("containers.signalMenu")
+
+                        Divider()
+
+                        Button("Copy Files…") {
+                            requestCopy()
+                        }
+                        .disabled(selectedContainer == nil)
+                        .accessibilityIdentifier("containers.copyFiles")
+
+                        Button("Export…") {
+                            requestExport()
+                        }
+                        .disabled(selectedContainer == nil)
+                        .accessibilityIdentifier("containers.export")
 
                         Divider()
 
@@ -764,6 +780,12 @@ private struct ContainerListView: View {
                 } else {
                     Text("No stopped containers were found.")
                 }
+            }
+            .sheet(item: $copyFilesModel) { copyModel in
+                CopyFilesSheet(model: copyModel, appModel: model)
+            }
+            .sheet(item: $exportModel) { export in
+                ExportContainerSheet(model: export, appModel: model)
             }
             .sheet(item: $runContainerModel) { runModel in
                 RunContainerSheet(
@@ -884,6 +906,16 @@ private struct ContainerListView: View {
 
         Divider()
 
+        Button("Copy Files…") {
+            copyFilesModel = CopyFilesModel(containerID: container.id)
+        }
+
+        Button("Export…") {
+            requestExport(of: container)
+        }
+
+        Divider()
+
         Button("Delete…", role: .destructive) {
             requestDeletion(of: container, force: false)
         }
@@ -1000,6 +1032,32 @@ private struct ContainerListView: View {
     private func perform(_ mutation: ContainerMutation) {
         guard let selectedContainer else { return }
         Task { await model.perform(mutation, on: selectedContainer.id) }
+    }
+
+    private func requestCopy() {
+        guard let selectedContainer else { return }
+        copyFilesModel = CopyFilesModel(containerID: selectedContainer.id)
+    }
+
+    private func requestExport() {
+        guard let selectedContainer else { return }
+        requestExport(of: selectedContainer)
+    }
+
+    /// The destination is chosen before the sheet opens, so the sheet has
+    /// nothing to fill in and the save panel handles warning about an existing
+    /// file rather than the export overwriting one silently.
+    private func requestExport(of container: ContainerSummary) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(container.id).tar"
+        panel.prompt = "Export"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        exportModel = ExportContainerModel(
+            containerID: container.id,
+            destination: url.path,
+            containerWasRunning: container.state == .running
+        )
     }
 
     /// SIGKILL gives the process no chance to shut down, so it is confirmed the
