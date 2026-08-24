@@ -107,6 +107,7 @@ enum RunContainerOutcome: Equatable {
 @Observable
 final class RunContainerModel: Identifiable {
     let id = UUID()
+    var mode: RunConfiguration.Mode = .run
     var image = ""
     var name = ""
     var detached = true
@@ -242,10 +243,15 @@ final class RunContainerModel: Identifiable {
     }
 
     var commandPreview: String {
-        guard let configuration else { return "container run" }
+        guard let configuration else {
+            return mode == .run ? "container run" : "container create"
+        }
+        let command: ContainerCommand = mode == .run
+            ? .run(configuration)
+            : .create(configuration)
         return ProcessContainerCLI.displayInvocation(
             executable: "container",
-            arguments: ContainerCommand.run(configuration).arguments
+            arguments: command.arguments
         )
     }
 
@@ -307,6 +313,36 @@ final class RunContainerModel: Identifiable {
 
     func removeArgument(id: UUID) {
         arguments.removeAll { $0.id == id }
+    }
+
+    func submit(using appModel: AppModel) async -> RunContainerOutcome {
+        switch mode {
+        case .run: await run(using: appModel)
+        case .create: await create(using: appModel)
+        }
+    }
+
+    /// Creating starts no process, so there is nothing to stream and nothing to
+    /// cancel partway: the sheet closes as soon as the identifier comes back.
+    func create(using appModel: AppModel) async -> RunContainerOutcome {
+        guard let configuration, !isRunning else { return .failed }
+
+        isRunning = true
+        progress = ""
+        errorMessage = nil
+        defer { isRunning = false }
+
+        do {
+            _ = try await appModel.createContainer(configuration)
+            return .succeeded
+        } catch is CancellationError {
+            return .cancelled
+        } catch CLIError.cancelled {
+            return .cancelled
+        } catch {
+            errorMessage = DiagnosticSanitizer.sanitize(error.localizedDescription)
+            return .failed
+        }
     }
 
     func run(using appModel: AppModel) async -> RunContainerOutcome {

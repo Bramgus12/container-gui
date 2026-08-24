@@ -100,6 +100,45 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(waitUntil(timeout: 3) { !fixture.exists })
     }
 
+    func testCreateModeAddsAContainerWithoutStartingIt() {
+        let app = launch(scenario: "lifecycle")
+
+        let runButton = app.buttons["containers.run"]
+        XCTAssertTrue(runButton.waitForExistence(timeout: 3))
+        runButton.click()
+
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 3))
+
+        let imageField = sheet.textFields["run.image"]
+        XCTAssertTrue(imageField.waitForExistence(timeout: 3))
+        imageField.click()
+        imageField.typeText("alpine:3.21")
+        let nameField = sheet.textFields["run.name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 3))
+        nameField.click()
+        nameField.typeText("made-by-create")
+
+        let mode = sheet.radioGroups["run.mode"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 3))
+        mode.radioButtons["Create"].click()
+
+        let submit = sheet.buttons["run.submit"]
+        XCTAssertTrue(submit.waitForExistence(timeout: 3))
+        XCTAssertEqual(submit.label, "Create", "The action button follows the mode.")
+        submit.click()
+
+        let created = app.staticTexts["made-by-create"].firstMatch
+        XCTAssertTrue(
+            created.waitForExistence(timeout: 3),
+            "Creating should refresh the list with the new container."
+        )
+        // Created, not started: the fixture reports it as such, and Start is the
+        // action still on offer for it.
+        created.click()
+        XCTAssertTrue(waitUntil(timeout: 3) { app.buttons["containers.start"].isEnabled })
+    }
+
     func testSignalMenuSendsTheChosenSignalToARunningContainer() {
         let app = launch(scenario: "lifecycle")
 

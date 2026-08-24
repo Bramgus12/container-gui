@@ -42,7 +42,7 @@ struct RunContainerSheet: View {
         }
         .task(id: runRequestID) {
             guard let requestID = runRequestID else { return }
-            let outcome = await model.run(using: appModel)
+            let outcome = await model.submit(using: appModel)
 
             guard runRequestID == requestID else {
                 isCancelling = false
@@ -106,15 +106,32 @@ struct RunContainerSheet: View {
             accessibilityIDPrefix: "run"
         )
 
-        // Run stays available from any page: only the first page is
-        // required, so there is no reason to walk the rest to start.
-        Button("Run") {
-            runRequestID = UUID()
+        Picker("Action", selection: $model.mode) {
+            Text("Run").tag(RunConfiguration.Mode.run)
+            Text("Create").tag(RunConfiguration.Mode.create)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+        .disabled(operationIsActive)
+        .accessibilityIdentifier("run.mode")
+
+        // Submitting stays available from any page: only the first page is
+        // required, so there is no reason to walk the rest to start. The two
+        // titles are spelled out rather than picked with a ternary so that both
+        // are extracted for localisation.
+        Group {
+            if model.mode == .run {
+                Button("Run") { runRequestID = UUID() }
+                    .accessibilityIdentifier("run.submit")
+            } else {
+                Button("Create") { runRequestID = UUID() }
+                    .accessibilityIdentifier("run.submit")
+            }
         }
         .keyboardShortcut(.defaultAction)
         .buttonStyle(.borderedProminent)
         .disabled(operationIsActive || !model.canRun)
-        .accessibilityIdentifier("run.submit")
     }
 
     @ViewBuilder
@@ -134,6 +151,7 @@ struct RunContainerSheet: View {
                     )
 
                     Toggle("Run detached", isOn: $model.detached)
+                        .disabled(model.mode == .create)
                     Toggle("Remove when stopped", isOn: $model.removeWhenStopped)
                 }
 

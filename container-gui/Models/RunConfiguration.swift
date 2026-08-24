@@ -294,7 +294,7 @@ nonisolated struct RunConfiguration: Equatable, Sendable {
 
     /// `container create` takes the same flags as `container run` apart from
     /// `--progress`, and nothing runs, so detaching is meaningless there.
-    nonisolated enum Mode: Equatable, Sendable {
+    nonisolated enum Mode: Hashable, Sendable {
         case run
         case create
     }
