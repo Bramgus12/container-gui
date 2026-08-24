@@ -1,4 +1,10 @@
-# Container GUI 1.4.0 (unreleased)
+# Container GUI 1.4.0
+
+Install or upgrade with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+```
 
 Container GUI 1.4.0 closes the gap between what the Apple Container CLI can do
 to a container and what the app can. Creating without starting, signalling,
