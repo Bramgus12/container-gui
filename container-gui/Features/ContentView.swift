@@ -575,7 +575,12 @@ private struct SidebarActivityBlock: View {
 private struct ContainerListView: View {
     @Bindable var model: AppModel
     @State private var pendingDeletion: PendingContainerDeletion?
+    @State private var pendingKill: PendingContainerKill?
+    @State private var confirmsPrune = false
     @State private var runContainerModel: RunContainerModel?
+    @State private var copyFilesModel: CopyFilesModel?
+    @State private var exportModel: ExportContainerModel?
+    @State private var execModel: ExecModel?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -619,6 +624,16 @@ private struct ContainerListView: View {
                     .accessibilityIdentifier("containers.refresh")
                 }
 
+                ToolbarItem {
+                    Button {
+                        confirmsPrune = true
+                    } label: {
+                        Label("Prune Stopped Containers", systemImage: "trash.slash")
+                    }
+                    .disabled(!model.canPruneContainers)
+                    .accessibilityIdentifier("containers.prune")
+                }
+
                 ToolbarItemGroup {
                     Button {
                         perform(.start)
@@ -637,6 +652,39 @@ private struct ContainerListView: View {
                     .accessibilityIdentifier("containers.stop")
 
                     Menu {
+                        Menu("Send Signal") {
+                            ForEach(KillSignal.allCases, id: \.self) { signal in
+                                Button(signal.displayName) {
+                                    requestKill(signal: signal)
+                                }
+                                .disabled(!canPerform(.kill(signal: signal)))
+                            }
+                        }
+                        .disabled(!canPerform(.kill(signal: .term)))
+                        .accessibilityIdentifier("containers.signalMenu")
+
+                        Divider()
+
+                        Button("Run a Command…") {
+                            requestExec()
+                        }
+                        .disabled(!execIsAvailable)
+                        .accessibilityIdentifier("containers.exec")
+
+                        Button("Copy Files…") {
+                            requestCopy()
+                        }
+                        .disabled(selectedContainer == nil)
+                        .accessibilityIdentifier("containers.copyFiles")
+
+                        Button("Export…") {
+                            requestExport()
+                        }
+                        .disabled(selectedContainer == nil)
+                        .accessibilityIdentifier("containers.export")
+
+                        Divider()
+
                         Button("Delete…", role: .destructive) {
                             requestDeletion(force: false)
                         }
@@ -659,6 +707,7 @@ private struct ContainerListView: View {
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 0) {
                     mutationErrorBanner
+                    operationErrorBanner
                     refreshErrorBanner
                 }
             }
@@ -692,6 +741,61 @@ private struct ContainerListView: View {
                 } else {
                     Text("This permanently deletes “\(deletion.containerID)”. This action cannot be undone.")
                 }
+            }
+            .alert(
+                "Force Kill Container?",
+                isPresented: Binding(
+                    get: { pendingKill != nil },
+                    set: { if !$0 { pendingKill = nil } }
+                ),
+                presenting: pendingKill
+            ) { kill in
+                Button("Send SIGKILL", role: .destructive) {
+                    Task { await model.perform(.kill(signal: kill.signal), on: kill.containerID) }
+                    pendingKill = nil
+                }
+                .accessibilityIdentifier("containers.confirmKill")
+                Button("Cancel", role: .cancel) { pendingKill = nil }
+            } message: { kill in
+                Text(
+                    """
+                    “\(kill.containerID)” is stopped immediately and cannot shut down \
+                    cleanly, so unsaved work inside it is lost.
+                    """
+                )
+            }
+            .alert("Prune Stopped Containers?", isPresented: $confirmsPrune) {
+                Button("Prune", role: .destructive) {
+                    Task { await model.pruneContainers() }
+                }
+                .accessibilityIdentifier("containers.confirmPrune")
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Every stopped container is permanently deleted. This action cannot be undone.")
+            }
+            .alert(
+                "Container Prune Complete",
+                isPresented: Binding(
+                    get: { model.lastPruneResult != nil },
+                    set: { if !$0 { model.dismissPruneResult() } }
+                )
+            ) {
+                Button("OK") { model.dismissPruneResult() }
+            } message: {
+                if let removed = model.lastPruneResult?.removedContainerIDs, !removed.isEmpty {
+                    Text("Deleted \(removed.count) container(s): \(removed.formatted()).")
+                } else {
+                    Text("No stopped containers were found.")
+                }
+            }
+            .sheet(item: $execModel) { exec in
+                ExecSheet(model: exec, appModel: model)
+            }
+            .sheet(item: $copyFilesModel) { copyModel in
+                CopyFilesSheet(model: copyModel, appModel: model)
+            }
+            .sheet(item: $exportModel) { export in
+                ExportContainerSheet(model: export, appModel: model)
             }
             .sheet(item: $runContainerModel) { runModel in
                 RunContainerSheet(
@@ -800,6 +904,31 @@ private struct ContainerListView: View {
         }
         .disabled(!model.canPerform(.stop, on: container))
 
+        Menu("Send Signal") {
+            ForEach(KillSignal.allCases, id: \.self) { signal in
+                Button(signal.displayName) {
+                    requestKill(of: container, signal: signal)
+                }
+                .disabled(!model.canPerform(.kill(signal: signal), on: container))
+            }
+        }
+        .disabled(!model.canPerform(.kill(signal: .term), on: container))
+
+        Divider()
+
+        Button("Run a Command…") {
+            execModel = ExecModel(containerID: container.id)
+        }
+        .disabled(container.state != .running)
+
+        Button("Copy Files…") {
+            copyFilesModel = CopyFilesModel(containerID: container.id)
+        }
+
+        Button("Export…") {
+            requestExport(of: container)
+        }
+
         Divider()
 
         Button("Delete…", role: .destructive) {
@@ -885,6 +1014,21 @@ private struct ContainerListView: View {
         }
     }
 
+    @ViewBuilder
+    private var operationErrorBanner: some View {
+        if let failure = model.operationFailure {
+            InlineBanner(
+                message: "\(failure.operation) failed",
+                detail: failure.message,
+                scope: .bar,
+                severity: .error,
+                copyValue: failure.message,
+                onDismiss: model.dismissOperationFailure
+            )
+            .accessibilityIdentifier("containers.operationError")
+        }
+    }
+
     private var selectedContainer: ContainerSummary? {
         guard let id = model.selectedContainerID else { return nil }
         return model.containers.first { $0.id == id }
@@ -903,6 +1047,58 @@ private struct ContainerListView: View {
     private func perform(_ mutation: ContainerMutation) {
         guard let selectedContainer else { return }
         Task { await model.perform(mutation, on: selectedContainer.id) }
+    }
+
+    /// There is no process to join until the container is running.
+    private var execIsAvailable: Bool {
+        selectedContainer?.state == .running
+    }
+
+    private func requestExec() {
+        guard let selectedContainer, selectedContainer.state == .running else { return }
+        execModel = ExecModel(containerID: selectedContainer.id)
+    }
+
+    private func requestCopy() {
+        guard let selectedContainer else { return }
+        copyFilesModel = CopyFilesModel(containerID: selectedContainer.id)
+    }
+
+    private func requestExport() {
+        guard let selectedContainer else { return }
+        requestExport(of: selectedContainer)
+    }
+
+    /// The destination is chosen before the sheet opens, so the sheet has
+    /// nothing to fill in and the save panel handles warning about an existing
+    /// file rather than the export overwriting one silently.
+    private func requestExport(of container: ContainerSummary) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(container.id).tar"
+        panel.prompt = "Export"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        exportModel = ExportContainerModel(
+            containerID: container.id,
+            destination: url.path,
+            containerWasRunning: container.state == .running
+        )
+    }
+
+    /// SIGKILL gives the process no chance to shut down, so it is confirmed the
+    /// way deleting is. Every other signal is something a process can handle, and
+    /// asking first would only be noise.
+    private func requestKill(signal: KillSignal) {
+        guard let selectedContainer else { return }
+        requestKill(of: selectedContainer, signal: signal)
+    }
+
+    private func requestKill(of container: ContainerSummary, signal: KillSignal) {
+        guard signal == .kill else {
+            Task { await model.perform(.kill(signal: signal), on: container.id) }
+            return
+        }
+        pendingKill = PendingContainerKill(containerID: container.id, signal: signal)
     }
 
     private func requestDeletion(force: Bool) {
@@ -1000,6 +1196,11 @@ private struct ContainerListFooter: View {
 private struct PendingContainerDeletion: Equatable {
     let containerID: String
     let mutation: ContainerMutation
+}
+
+private struct PendingContainerKill: Equatable {
+    let containerID: String
+    let signal: KillSignal
 }
 
 #Preview("Missing CLI") {

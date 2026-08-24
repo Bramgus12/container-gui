@@ -57,6 +57,85 @@ final class RunContainerModelTests: XCTestCase {
         XCTAssertTrue(model.commandPreview.contains("'GREETING=hello world'"))
     }
 
+    func testCreateModePreviewsCreateWithoutTheRunOnlyFlags() {
+        let model = RunContainerModel()
+        model.image = "alpine:3.21"
+        model.detached = true
+
+        XCTAssertTrue(model.commandPreview.hasPrefix("container run "))
+        XCTAssertTrue(model.commandPreview.contains("--progress plain"))
+        XCTAssertTrue(model.commandPreview.contains("--detach"))
+
+        model.mode = .create
+
+        XCTAssertTrue(model.commandPreview.hasPrefix("container create "))
+        // Nothing is started, so there is no progress to report and nothing to
+        // detach from.
+        XCTAssertFalse(model.commandPreview.contains("--progress"))
+        XCTAssertFalse(model.commandPreview.contains("--detach"))
+    }
+
+    func testEmptyDraftPreviewsTheVerbItWouldRun() {
+        let model = RunContainerModel()
+
+        XCTAssertEqual(model.commandPreview, "container run")
+        model.mode = .create
+        XCTAssertEqual(model.commandPreview, "container create")
+    }
+
+    func testCreateModeSelectsTheNewContainerWithoutStreamingAProcess() async {
+        let runner = StubContainerRunner(events: [.terminated(exitCode: 0)])
+        let lifecycle = CreatingLifecycleService(identifier: "web")
+        let lister = RunContainerLister(
+            containers: [makeSummary(id: "web", state: "created")]
+        )
+        let appModel = AppModel(
+            setup: SetupModel(),
+            containerLister: lister,
+            containerRunner: runner,
+            lifecycleService: lifecycle
+        )
+        let form = RunContainerModel()
+        form.mode = .create
+        form.image = "alpine:3.21"
+        form.name = "web"
+
+        let outcome = await form.submit(using: appModel)
+
+        XCTAssertEqual(outcome, .succeeded)
+        XCTAssertNil(form.errorMessage)
+        XCTAssertEqual(appModel.selectedContainerID, "web")
+        XCTAssertTrue(form.progress.isEmpty, "Creating streams no process output.")
+        XCTAssertTrue(runner.configurations.isEmpty, "Creating must not run the container.")
+        let created = await lifecycle.configurations
+        XCTAssertEqual(created, [try? RunConfiguration(image: "alpine:3.21", name: "web")].compactMap { $0 })
+    }
+
+    func testCreateFailurePreservesTheDraftAndExposesTheError() async {
+        let lifecycle = CreatingLifecycleService(
+            identifier: "web",
+            error: CLIError.nonZeroExit(
+                invocation: "container create",
+                exitCode: 1,
+                standardError: "no such image"
+            )
+        )
+        let appModel = AppModel(
+            setup: SetupModel(),
+            containerLister: RunContainerLister(containers: []),
+            lifecycleService: lifecycle
+        )
+        let form = RunContainerModel()
+        form.mode = .create
+        form.image = "alpine:3.21"
+
+        let outcome = await form.submit(using: appModel)
+
+        XCTAssertEqual(outcome, .failed)
+        XCTAssertEqual(form.image, "alpine:3.21", "The draft must survive a failure.")
+        XCTAssertEqual(form.errorMessage?.contains("no such image"), true)
+    }
+
     func testSuccessfulRunShowsProgressRefreshesAndSelectsNamedContainer() async {
         let runner = StubContainerRunner(events: [
             .standardError("pulling layer\n"),
@@ -259,4 +338,49 @@ private func makeSummary(id: String, state: String) -> ContainerSummary {
     """
     let dto = try! JSONDecoder().decode(ContainerDTO.self, from: Data(json.utf8))
     return ContainerSummary(dto: dto)!
+}
+
+private actor CreatingLifecycleService: ContainerLifecycleManaging {
+    private let identifier: String
+    private let error: (any Error & Sendable)?
+    private(set) var configurations: [RunConfiguration] = []
+
+    init(identifier: String, error: (any Error & Sendable)? = nil) {
+        self.identifier = identifier
+        self.error = error
+    }
+
+    func createContainer(_ configuration: RunConfiguration) async throws -> String {
+        configurations.append(configuration)
+        if let error { throw error }
+        return identifier
+    }
+
+    func copy(_ operation: CopyOperation) async throws {}
+
+    nonisolated func exportContainer(
+        id: String,
+        to output: String
+    ) -> AsyncThrowingStream<ProcessEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
+
+    func pruneContainers() async throws -> ContainerPruneResult {
+        ContainerPruneResult(removedContainerIDs: [])
+    }
+
+    nonisolated func exec(
+        containerID: String,
+        configuration: ExecConfiguration
+    ) -> AsyncThrowingStream<ProcessEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
+
+    nonisolated func attachExec(
+        containerID: String,
+        configuration: ExecConfiguration,
+        terminalSize: TerminalSize?
+    ) throws -> any InteractiveProcessSession {
+        throw CLIError.launchFailed(message: "Not supported by the stub.")
+    }
 }

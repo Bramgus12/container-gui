@@ -132,12 +132,14 @@ nonisolated struct CLIImageService: ImageManaging {
 nonisolated enum ContainerMutation: Equatable, Sendable {
     case start
     case stop
+    case kill(signal: KillSignal)
     case delete(force: Bool)
 
     var displayName: String {
         switch self {
         case .start: "Start"
         case .stop: "Stop"
+        case .kill(let signal): "Send SIG\(signal.rawValue)"
         case .delete(force: false): "Delete"
         case .delete(force: true): "Force Delete"
         }
@@ -148,6 +150,8 @@ nonisolated enum ContainerMutation: Equatable, Sendable {
         case (.start, .created), (.start, .stopped):
             true
         case (.stop, .running), (.stop, .paused):
+            true
+        case (.kill, .running), (.kill, .paused):
             true
         case (.delete(force: false), .created), (.delete(force: false), .stopped):
             true
@@ -167,6 +171,8 @@ nonisolated enum ContainerMutation: Equatable, Sendable {
             .start(id: identifier)
         case .stop:
             .stop(id: identifier, timeout: nil)
+        case .kill(let signal):
+            .kill(id: identifier, signal: signal)
         case .delete(let force):
             .delete(id: identifier, force: force)
         }
@@ -255,6 +261,24 @@ struct ImageDeletionFailure: Identifiable, Equatable, Sendable {
     let message: String
 }
 
+/// Lifecycle work that is not scoped to a single container, and so cannot use
+/// the per-container reservation in `containerMutations`.
+enum ContainerBulkOperation: Equatable, Sendable {
+    case prune
+
+    var displayName: String {
+        switch self {
+        case .prune: "Prune"
+        }
+    }
+}
+
+struct ContainerOperationFailure: Identifiable, Equatable, Sendable {
+    let id = UUID()
+    let operation: String
+    let message: String
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -293,6 +317,9 @@ final class AppModel {
         didSet { statsPoller?.setPaused(!containerMutations.isEmpty) }
     }
     private(set) var mutationFailure: ContainerMutationFailure?
+    private(set) var bulkOperation: ContainerBulkOperation?
+    private(set) var lastPruneResult: ContainerPruneResult?
+    private(set) var operationFailure: ContainerOperationFailure?
     private(set) var images: [ImageSummary] = [] {
         didSet {
             updateFilteredImages()
@@ -318,6 +345,7 @@ final class AppModel {
     private var containerMutator: (any ContainerMutating)?
     private var containerRunner: (any ContainerRunning)?
     private var containerDiagnoser: (any ContainerDiagnosing)?
+    private var lifecycleService: (any ContainerLifecycleManaging)?
     private var imageService: (any ImageManaging)?
     private var imageBuilder: (any ImageBuilding)?
     private let failureLog: OperationFailureLog
@@ -337,6 +365,7 @@ final class AppModel {
         containerMutator: (any ContainerMutating)? = nil,
         containerRunner: (any ContainerRunning)? = nil,
         containerDiagnoser: (any ContainerDiagnosing)? = nil,
+        lifecycleService: (any ContainerLifecycleManaging)? = nil,
         imageService: (any ImageManaging)? = nil,
         imageBuilder: (any ImageBuilding)? = nil,
         networkService: (any NetworkManaging)? = nil,
@@ -354,6 +383,7 @@ final class AppModel {
         self.containerMutator = containerMutator
         self.containerRunner = containerRunner
         self.containerDiagnoser = containerDiagnoser
+        self.lifecycleService = lifecycleService
         self.imageService = imageService
         self.imageBuilder = imageBuilder
         self.failureLog = failureLog ?? OperationFailureLog()
@@ -438,6 +468,7 @@ final class AppModel {
             containerRunner = CLIContainerRunService(cli: cli)
             let diagnostics = CLIContainerDiagnosticsService(cli: cli)
             containerDiagnoser = diagnostics
+            lifecycleService = CLIContainerLifecycleService(cli: cli)
             statsPoller = ContainerStatsPoller(provider: diagnostics)
             imageService = CLIImageService(cli: cli)
             imageBuilder = CLIImageBuildService(cli: cli)
@@ -467,6 +498,9 @@ final class AppModel {
             containerListState = .idle
             containerMutations = [:]
             mutationFailure = nil
+            bulkOperation = nil
+            lastPruneResult = nil
+            operationFailure = nil
             images = []
             selectedImageID = nil
             imageListState = .idle
@@ -886,11 +920,13 @@ final class AppModel {
     }
 
     func canPerform(_ mutation: ContainerMutation, on container: ContainerSummary) -> Bool {
-        containerMutations[container.id] == nil && mutation.isAllowed(for: container.state)
+        bulkOperation == nil
+            && containerMutations[container.id] == nil
+            && mutation.isAllowed(for: container.state)
     }
 
     func perform(_ mutation: ContainerMutation, on containerID: String) async {
-        guard containerMutations[containerID] == nil else {
+        guard bulkOperation == nil, containerMutations[containerID] == nil else {
             return
         }
         guard let container = containers.first(where: { $0.id == containerID }),
@@ -1118,6 +1154,173 @@ final class AppModel {
             throw error
         }
         selectNewContainer(configuration: configuration, standardOutput: standardOutput)
+    }
+
+    // MARK: - Lifecycle operations
+
+    /// Pruning deletes containers the app did not name, so it waits until no
+    /// per-container operation is in flight and blocks new ones while it runs.
+    var canPruneContainers: Bool {
+        bulkOperation == nil
+            && containerMutations.isEmpty
+            && containers.contains { $0.state == .stopped }
+    }
+
+    func pruneContainers() async {
+        guard canPruneContainers, let lifecycleService else { return }
+
+        bulkOperation = .prune
+        operationFailure = nil
+        lastPruneResult = nil
+        defer { bulkOperation = nil }
+
+        do {
+            lastPruneResult = try await lifecycleService.pruneContainers()
+        } catch is CancellationError {
+            // Cancellation is an intentional transition, not a user-facing failure.
+        } catch CLIError.cancelled {
+            // ProcessContainerCLI normalizes process cancellation.
+        } catch {
+            failureLog.record(operation: "Prune containers", error: error)
+            operationFailure = ContainerOperationFailure(
+                operation: "Prune containers",
+                message: DiagnosticSanitizer.sanitize(error.localizedDescription)
+            )
+        }
+
+        await refreshContainers()
+        Task { [weak self] in
+            await self?.systemModel?.refresh()
+        }
+    }
+
+    /// Creates a container without starting it, then selects it.
+    @discardableResult
+    func createContainer(_ configuration: RunConfiguration) async throws -> String {
+        guard let lifecycleService else {
+            throw CLIError.launchFailed(message: "The container executable is not ready.")
+        }
+
+        let identifier: String
+        do {
+            identifier = try await lifecycleService.createContainer(configuration)
+        } catch {
+            failureLog.record(operation: "Create container", error: error)
+            throw error
+        }
+
+        await refreshContainers()
+        if imageService != nil {
+            await refreshImages()
+        }
+        if containers.contains(where: { $0.id == identifier }) {
+            selectedContainerID = identifier
+        }
+        return identifier
+    }
+
+    func copyFiles(_ operation: CopyOperation) async throws {
+        guard let lifecycleService else {
+            throw CLIError.launchFailed(message: "The container executable is not ready.")
+        }
+        do {
+            try await lifecycleService.copy(operation)
+        } catch {
+            failureLog.record(operation: "Copy files", error: error)
+            throw error
+        }
+    }
+
+    func exportContainer(
+        id: String,
+        to output: String,
+        onEvent: (ProcessEvent) -> Void
+    ) async throws {
+        guard let lifecycleService else {
+            throw CLIError.launchFailed(message: "The container executable is not ready.")
+        }
+        do {
+            try await forward(
+                lifecycleService.exportContainer(id: id, to: output),
+                describedBy: "export",
+                onEvent: onEvent
+            )
+        } catch {
+            failureLog.record(operation: "Export container", error: error)
+            throw error
+        }
+    }
+
+    func execCommand(
+        containerID: String,
+        configuration: ExecConfiguration,
+        onEvent: (ProcessEvent) -> Void
+    ) async throws {
+        guard let lifecycleService else {
+            throw CLIError.launchFailed(message: "The container executable is not ready.")
+        }
+        do {
+            try await forward(
+                lifecycleService.exec(containerID: containerID, configuration: configuration),
+                describedBy: "exec",
+                onEvent: onEvent
+            )
+        } catch {
+            failureLog.record(operation: "Exec in container", error: error)
+            throw error
+        }
+    }
+
+    func makeExecSession(
+        containerID: String,
+        configuration: ExecConfiguration,
+        terminalSize: TerminalSize?
+    ) throws -> any InteractiveProcessSession {
+        guard let lifecycleService else {
+            throw CLIError.launchFailed(message: "The container executable is not ready.")
+        }
+        do {
+            return try lifecycleService.attachExec(
+                containerID: containerID,
+                configuration: configuration,
+                terminalSize: terminalSize
+            )
+        } catch {
+            failureLog.record(operation: "Attach to container", error: error)
+            throw error
+        }
+    }
+
+    func dismissPruneResult() {
+        lastPruneResult = nil
+    }
+
+    func dismissOperationFailure() {
+        operationFailure = nil
+    }
+
+    /// Replays a streamed command to the caller, turning a non-zero exit into
+    /// the same error shape the other streaming operations produce.
+    private func forward(
+        _ events: AsyncThrowingStream<ProcessEvent, Error>,
+        describedBy invocation: String,
+        onEvent: (ProcessEvent) -> Void
+    ) async throws {
+        var standardError = ""
+        for try await event in events {
+            if case .standardError(let output) = event {
+                standardError.append(output)
+            }
+            if case .terminated(let exitCode) = event, exitCode != 0 {
+                onEvent(event)
+                throw CLIError.nonZeroExit(
+                    invocation: invocation,
+                    exitCode: exitCode,
+                    standardError: DiagnosticSanitizer.sanitize(standardError)
+                )
+            }
+            onEvent(event)
+        }
     }
 
     func reconcileAfterCancelledRun() async {

@@ -279,8 +279,23 @@ private actor UITestContainerCLI: ContainerCLI {
         case .stop(let id, _):
             update(id: id.rawValue, state: "stopped")
             output = ""
+        case .kill(let id, _):
+            update(id: id.rawValue, state: "stopped")
+            output = ""
         case .delete(let id, _):
             containers.removeAll { $0.id == id.rawValue }
+            output = ""
+        case .create(let configuration):
+            let id = configuration.name?.rawValue ?? "ui-test-created"
+            addContainer(id: id, image: configuration.image.rawValue, state: "created")
+            output = "\(id)\n"
+        case .pruneContainers:
+            let pruned = containers.filter { $0.state == "stopped" }.map(\.id)
+            containers.removeAll { $0.state == "stopped" }
+            output = pruned.joined(separator: "\n")
+        case .exec:
+            output = "ui test exec output\n"
+        case .copy, .exportContainer:
             output = ""
         case .systemVersion:
             output = """
@@ -433,8 +448,25 @@ private actor UITestContainerCLI: ContainerCLI {
                     continuation.yield(.terminated(exitCode: 0))
                     continuation.finish()
                 default:
-                    continuation.yield(.terminated(exitCode: 0))
-                    continuation.finish()
+                    // Everything else is a plain state change on the fixture, and
+                    // the services pick whichever of run and stream suits them —
+                    // the lifecycle ones stream so they are not bound by the
+                    // 60-second timeout that `run(_:)` applies. Delegating keeps
+                    // one definition of what the fake CLI does, so a command
+                    // handled in `run` cannot silently do nothing when streamed.
+                    do {
+                        let result = try await run(command)
+                        if !result.standardOutput.isEmpty {
+                            continuation.yield(.standardOutput(result.standardOutput))
+                        }
+                        if !result.standardError.isEmpty {
+                            continuation.yield(.standardError(result.standardError))
+                        }
+                        continuation.yield(.terminated(exitCode: result.exitCode))
+                        continuation.finish()
+                    } catch {
+                        continuation.finish(throwing: error)
+                    }
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
@@ -515,9 +547,9 @@ private actor UITestContainerCLI: ContainerCLI {
         containers[index].state = state
     }
 
-    private func addContainer(id: String, image: String) {
+    private func addContainer(id: String, image: String, state: String = "running") {
         containers.removeAll { $0.id == id }
-        containers.append(FixtureContainer(id: id, image: image, state: "running"))
+        containers.append(FixtureContainer(id: id, image: image, state: state))
     }
 
     private func addImage(_ reference: String) {

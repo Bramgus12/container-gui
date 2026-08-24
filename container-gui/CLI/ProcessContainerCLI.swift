@@ -82,6 +82,23 @@ actor ProcessContainerCLI: ContainerCLI {
         }
     }
 
+    nonisolated func attach(
+        _ command: ContainerCommand,
+        terminalSize: TerminalSize?
+    ) throws -> any InteractiveProcessSession {
+        try validateExecutable()
+        let request = InteractiveSessionRequest(
+            executableURL: executableURL,
+            arguments: command.arguments,
+            environment: environment,
+            terminalSize: terminalSize
+        )
+        if let terminalSize {
+            return try PseudoTerminalSession(request: request, size: terminalSize)
+        }
+        return try PipeInteractiveSession(request: request)
+    }
+
     private func makeRequest(for command: ContainerCommand) throws -> ProcessRequest {
         try validateExecutable()
         return ProcessRequest(
@@ -193,7 +210,7 @@ actor ProcessContainerCLI: ContainerCLI {
         }
     }
 
-    private func validateExecutable() throws {
+    nonisolated private func validateExecutable() throws {
         guard executableURL.isFileURL, executableURL.path.hasPrefix("/") else {
             throw CLIError.executableIsNotAbsolute(executableURL)
         }

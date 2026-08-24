@@ -100,6 +100,109 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(waitUntil(timeout: 3) { !fixture.exists })
     }
 
+    func testCreateModeAddsAContainerWithoutStartingIt() {
+        let app = launch(scenario: "lifecycle")
+
+        let runButton = app.buttons["containers.run"]
+        XCTAssertTrue(runButton.waitForExistence(timeout: 3))
+        runButton.click()
+
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 3))
+
+        let imageField = sheet.textFields["run.image"]
+        XCTAssertTrue(imageField.waitForExistence(timeout: 3))
+        imageField.click()
+        imageField.typeText("alpine:3.21")
+        let nameField = sheet.textFields["run.name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 3))
+        nameField.click()
+        nameField.typeText("made-by-create")
+
+        let mode = sheet.radioGroups["run.mode"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 3))
+        mode.radioButtons["Create"].click()
+
+        let submit = sheet.buttons["run.submit"]
+        XCTAssertTrue(submit.waitForExistence(timeout: 3))
+        XCTAssertEqual(submit.label, "Create", "The action button follows the mode.")
+        submit.click()
+
+        let created = app.staticTexts["made-by-create"].firstMatch
+        XCTAssertTrue(
+            created.waitForExistence(timeout: 3),
+            "Creating should refresh the list with the new container."
+        )
+        // Created, not started: the fixture reports it as such, and Start is the
+        // action still on offer for it.
+        created.click()
+        XCTAssertTrue(waitUntil(timeout: 3) { app.buttons["containers.start"].isEnabled })
+    }
+
+    func testSignalMenuSendsTheChosenSignalToARunningContainer() {
+        let app = launch(scenario: "lifecycle")
+
+        let fixture = app.staticTexts["demo-stopped"]
+        XCTAssertTrue(fixture.waitForExistence(timeout: 3))
+        fixture.click()
+
+        let start = app.buttons["containers.start"]
+        XCTAssertTrue(start.waitForExistence(timeout: 3))
+        start.click()
+        XCTAssertTrue(waitUntil(timeout: 3) {
+            app.descendants(matching: .any)
+                .matching(NSPredicate(format: "label == %@", "Running"))
+                .firstMatch.exists
+        })
+
+        app.menuButtons["containers.moreActions"].click()
+        let signalMenu = app.menuItems["Send Signal"]
+        XCTAssertTrue(signalMenu.waitForExistence(timeout: 2))
+        signalMenu.click()
+
+        // SIGTERM is the one signal a process can act on, so it is sent straight
+        // away; only SIGKILL stops to ask.
+        let term = app.menuItems["SIGTERM (graceful)"]
+        XCTAssertTrue(term.waitForExistence(timeout: 2))
+        term.click()
+
+        XCTAssertTrue(waitUntil(timeout: 3) {
+            app.descendants(matching: .any)
+                .matching(NSPredicate(format: "label == %@", "Stopped"))
+                .firstMatch.exists
+        })
+    }
+
+    func testPruneRemovesStoppedContainersOnlyAfterConfirmation() {
+        let app = launch(scenario: "lifecycle")
+
+        let fixture = app.staticTexts["demo-stopped"]
+        XCTAssertTrue(fixture.waitForExistence(timeout: 3))
+
+        let prune = app.buttons["containers.prune"]
+        XCTAssertTrue(prune.waitForExistence(timeout: 3))
+        XCTAssertTrue(prune.isEnabled, "A stopped container is prunable.")
+        prune.click()
+
+        let confirmation = app.sheets
+            .containing(.staticText, identifier: "Prune Stopped Containers?")
+            .firstMatch
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 2))
+        XCTAssertTrue(fixture.exists, "Nothing may be deleted until pruning is confirmed.")
+        confirmation.buttons["Prune"].click()
+
+        XCTAssertTrue(waitUntil(timeout: 3) { !fixture.exists })
+
+        let summary = app.sheets
+            .containing(.staticText, identifier: "Container Prune Complete")
+            .firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 2))
+        summary.buttons["OK"].click()
+
+        // With nothing stopped left, the button retires itself.
+        XCTAssertTrue(waitUntil(timeout: 3) { !prune.isEnabled })
+    }
+
     func testNetworkInventoryInspectionAndVersionSpecificCreateControls() {
         let app = launch(scenario: "networkCurrent")
         let destination = app.descendants(matching: .any)["destination.networks"]
