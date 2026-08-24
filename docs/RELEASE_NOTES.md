@@ -1,3 +1,58 @@
+# Container GUI 1.4.0 (unreleased)
+
+Container GUI 1.4.0 closes the gap between what the Apple Container CLI can do
+to a container and what the app can. Creating without starting, signalling,
+pruning, running a command inside a container, copying files in and out, and
+exporting a filesystem are all reachable from the containers screen.
+
+## Changes
+
+- Creates a container without starting it. The run sheet gains a **Run** /
+  **Create** control; the action button and the command preview follow it.
+  Nothing is started, so there is no progress to stream and nothing to detach
+  from — the sheet closes as soon as the new container is created and selects
+  it.
+- Sends a signal to a running container. **Send Signal** on the More Actions and
+  row menus offers an allowlist of signals rather than a free-text field.
+  SIGKILL is confirmed first because the process gets no chance to shut down;
+  signals a process can handle are sent without a prompt.
+- Prunes stopped containers from a toolbar button, with a confirmation before
+  anything is deleted and a summary of what was removed. Pruning deletes
+  containers the app did not name, so it waits until no per-container operation
+  is in flight and blocks new ones while it runs.
+- Runs a one-off command inside a running container and shows what it printed,
+  with environment variables, user, and working directory. The process gets no
+  terminal, which suits what a GUI is good for; **Open in Terminal** hands the
+  interactive form of the same command to Terminal.app for anything that expects
+  to be typed at.
+- Copies files between a container and the local filesystem in either direction,
+  with a file panel for the host side.
+- Exports a container's filesystem as a tar archive, choosing the destination in
+  a save panel so an existing file is never overwritten silently, and reporting
+  progress for a write that can take a while. A container that is still running
+  is exported as a snapshot of a filesystem being written to, and the sheet says
+  so rather than refusing.
+
+## Compatibility and validation
+
+- macOS 26 or later on Apple-silicon Macs.
+- Apple Container CLI `0.12.0` or later and earlier than `2.0.0`.
+- Flag names for every new command were checked against `container <command>
+  --help` from CLI `1.2.2`: `create` takes the run flags without `--progress`,
+  `kill` takes `--signal`, `export` takes `--output`, and `copy` is the
+  canonical spelling of `cp`.
+- The full unit and UI suites pass (309 unit tests, 20 UI tests). The manual
+  gates in `docs/RELEASE_CHECKLIST.md` have not been run for this release, and
+  the notarization and download-verification details below are recorded when the
+  release is cut.
+
+## Known limitations
+
+Interactive terminals still run in Terminal.app rather than inside the app. The
+pseudo-terminal plumbing exists and is tested, but no terminal view is wired to
+it. The app does not yet manage registry authentication, build secrets or SSH
+forwarding, import, or kernel settings, or remote hosts.
+
 # Container GUI 1.3.0
 
 Install or upgrade with:

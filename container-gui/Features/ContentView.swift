@@ -580,6 +580,7 @@ private struct ContainerListView: View {
     @State private var runContainerModel: RunContainerModel?
     @State private var copyFilesModel: CopyFilesModel?
     @State private var exportModel: ExportContainerModel?
+    @State private var execModel: ExecModel?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -663,6 +664,12 @@ private struct ContainerListView: View {
                         .accessibilityIdentifier("containers.signalMenu")
 
                         Divider()
+
+                        Button("Run a Command…") {
+                            requestExec()
+                        }
+                        .disabled(!execIsAvailable)
+                        .accessibilityIdentifier("containers.exec")
 
                         Button("Copy Files…") {
                             requestCopy()
@@ -780,6 +787,9 @@ private struct ContainerListView: View {
                 } else {
                     Text("No stopped containers were found.")
                 }
+            }
+            .sheet(item: $execModel) { exec in
+                ExecSheet(model: exec, appModel: model)
             }
             .sheet(item: $copyFilesModel) { copyModel in
                 CopyFilesSheet(model: copyModel, appModel: model)
@@ -905,6 +915,11 @@ private struct ContainerListView: View {
         .disabled(!model.canPerform(.kill(signal: .term), on: container))
 
         Divider()
+
+        Button("Run a Command…") {
+            execModel = ExecModel(containerID: container.id)
+        }
+        .disabled(container.state != .running)
 
         Button("Copy Files…") {
             copyFilesModel = CopyFilesModel(containerID: container.id)
@@ -1032,6 +1047,16 @@ private struct ContainerListView: View {
     private func perform(_ mutation: ContainerMutation) {
         guard let selectedContainer else { return }
         Task { await model.perform(mutation, on: selectedContainer.id) }
+    }
+
+    /// There is no process to join until the container is running.
+    private var execIsAvailable: Bool {
+        selectedContainer?.state == .running
+    }
+
+    private func requestExec() {
+        guard let selectedContainer, selectedContainer.state == .running else { return }
+        execModel = ExecModel(containerID: selectedContainer.id)
     }
 
     private func requestCopy() {

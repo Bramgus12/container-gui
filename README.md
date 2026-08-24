@@ -29,7 +29,8 @@ directly, never through a shell.
 
 | | Capability | What you can do |
 | :---: | --- | --- |
-| 📦 | **Containers** | Search, filter, run, start, stop, and safely delete containers. |
+| 📦 | **Containers** | Search, filter, run, create without starting, start, stop, signal, prune, and safely delete containers. |
+| ⌨️ | **Commands & files** | Run a one-off command inside a running container, hand the interactive form to Terminal, copy files in and out, and export a container's filesystem as a tar archive. |
 | 🔎 | **Deep inspection** | Explore structured container configuration, networking, ports, mounts, image variants, and OCI metadata. |
 | 📜 | **Logs & stats** | Follow bounded logs and monitor CPU, memory, network, and block I/O. |
 | 🖼️ | **Images** | Search local images, inspect metadata, stream pull progress, run, and delete with dependency-aware cleanup. |
@@ -187,9 +188,10 @@ app treats safety as a product feature:
   comment, and blank line through unchanged. The write is atomic, and a file
   that states its DNS settings in a shape the app cannot edit safely is reported
   rather than rewritten.
-- **Confirmation before destructive actions.** Delete, force delete, image
-  delete, network delete/prune, and service stop explain their impact before
-  proceeding.
+- **Confirmation before destructive actions.** Delete, force delete, SIGKILL,
+  container prune, image delete, network delete/prune, and service stop explain
+  their impact before proceeding. Signals a process can handle are sent without
+  a prompt.
 - **Cancellable work.** Long-running child processes are terminated when their
   operation is cancelled.
 - **Bounded output.** Retained command output and logs are capped to prevent
@@ -265,10 +267,10 @@ workflows. It does not yet manage:
 
 - registry authentication;
 - build secrets or SSH forwarding;
-- interactive terminals;
-- import and export;
-- kernel settings;
-- image or container prune operations; or
+- interactive terminals inside the app — a command that needs one is handed to
+  Terminal instead;
+- import;
+- kernel settings; or
 - remote container hosts.
 
 New major Apple Container CLI versions remain unsupported until their JSON
