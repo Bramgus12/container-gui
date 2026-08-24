@@ -292,9 +292,20 @@ nonisolated struct RunConfiguration: Equatable, Sendable {
         self.command = command
     }
 
+    /// `container create` takes the same flags as `container run` apart from
+    /// `--progress`, and nothing runs, so detaching is meaningless there.
+    nonisolated enum Mode: Equatable, Sendable {
+        case run
+        case create
+    }
+
     var arguments: [String] {
-        var result = ["run", "--progress", "plain"]
-        if detached {
+        arguments(mode: .run)
+    }
+
+    func arguments(mode: Mode) -> [String] {
+        var result = mode == .run ? ["run", "--progress", "plain"] : ["create"]
+        if detached, mode == .run {
             result.append("--detach")
         }
         if removeWhenStopped {

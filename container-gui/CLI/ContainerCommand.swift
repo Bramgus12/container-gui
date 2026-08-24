@@ -13,9 +13,15 @@ nonisolated enum ContainerCommand: Equatable, Sendable {
     case listContainers(includeStopped: Bool)
     case inspectContainer(id: ContainerIdentifier)
     case run(RunConfiguration)
+    case create(RunConfiguration)
     case start(id: ContainerIdentifier)
     case stop(id: ContainerIdentifier, timeout: StopTimeout?)
+    case kill(id: ContainerIdentifier, signal: KillSignal?)
     case delete(id: ContainerIdentifier, force: Bool)
+    case pruneContainers
+    case exec(id: ContainerIdentifier, configuration: ExecConfiguration)
+    case copy(CopyOperation)
+    case exportContainer(id: ContainerIdentifier, output: LocalPath)
     case logs(id: ContainerIdentifier, follow: Bool, tail: LogTail?)
     case stats(ids: [ContainerIdentifier])
 
@@ -70,12 +76,24 @@ nonisolated enum ContainerCommand: Equatable, Sendable {
             ["inspect", id.rawValue]
         case .run(let configuration):
             configuration.arguments
+        case .create(let configuration):
+            configuration.arguments(mode: .create)
         case .start(let id):
             ["start", id.rawValue]
         case .stop(let id, let timeout):
             ["stop"] + (timeout.map { ["--time", String($0.seconds)] } ?? []) + [id.rawValue]
+        case .kill(let id, let signal):
+            ["kill"] + (signal.map { ["--signal", $0.rawValue] } ?? []) + [id.rawValue]
         case .delete(let id, let force):
             ["delete"] + (force ? ["--force"] : []) + [id.rawValue]
+        case .pruneContainers:
+            ["prune"]
+        case .exec(let id, let configuration):
+            configuration.arguments(for: id)
+        case .copy(let operation):
+            operation.arguments
+        case .exportContainer(let id, let output):
+            ["export", "--output", output.rawValue, id.rawValue]
         case .logs(let id, let follow, let tail):
             ["logs"]
                 + (follow ? ["--follow"] : [])
