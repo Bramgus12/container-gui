@@ -47,10 +47,35 @@ exporting a filesystem are all reachable from the containers screen.
   --help` from CLI `1.2.2`: `create` takes the run flags without `--progress`,
   `kill` takes `--signal`, `export` takes `--output`, and `copy` is the
   canonical spelling of `cp`.
-- The full unit and UI suites pass (309 unit tests, 20 UI tests). The manual
-  gates in `docs/RELEASE_CHECKLIST.md` have not been run for this release, and
-  the notarization and download-verification details below are recorded when the
-  release is cut.
+- Built from commit `0fb1876` on Apple silicon with macOS 27.0 and Apple
+  Container CLI `1.2.2` on 24 August 2026. Apple's notary service accepted both
+  the app and the disk image; `spctl --assess` reports `accepted` with
+  `source=Notarized Developer ID` for each, and the app still validates after
+  being copied out of the disk image.
+- The full unit and UI suites pass (328 tests in all). The manual gates in
+  `docs/RELEASE_CHECKLIST.md` — VoiceOver, the real smoke test, and the
+  clean-Mac download test — have not been run for this release, and the new
+  lifecycle commands have not been exercised against a real CLI end to end.
+
+## Download verification
+
+SHA-256: `0a07d3db683f835de9307dbfc53aaa8e97276630247650fb41d64403da782aff`
+
+The disk image is signed with a Developer ID Application certificate and
+notarized by Apple. Verify an installed copy yourself with:
+
+```sh
+spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"
+```
+
+## Upgrade and rollback
+
+Re-run the install command above to upgrade in place. To roll back, pin a
+previous release, for example:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash -s -- --version v1.3.0
+```
 
 ## Known limitations
 
