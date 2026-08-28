@@ -62,6 +62,10 @@ final class DNSManagementTests: XCTestCase {
         XCTAssertEqual(serviceDomain, "cont")
         XCTAssertEqual(ContainerCommand.systemDNSList.arguments, ["system", "dns", "list", "--format", "json"])
         XCTAssertEqual(ContainerCommand.systemProperties.arguments, ["system", "property", "list", "--format", "json"])
+
+        let withoutDNSSection = CLIDNSService(cli: DNSCLIStub(properties: #"{"machine":{"cpus":5}}"#), executableURL: URL(fileURLWithPath: "/usr/local/bin/container"), privilegedRunner: PrivilegedRunnerStub())
+        let missingDomain = try await withoutDNSSection.loadServiceDomain()
+        XCTAssertNil(missingDomain)
     }
 
     @MainActor
@@ -358,8 +362,16 @@ private struct HostResolverStub: HostResolving {
 }
 
 private actor DNSCLIStub: ContainerCLI {
+    /// The service domain is one field of a payload that also carries build,
+    /// container, kernel, machine, network, registry, and vminit sections.
+    let properties: String
+
+    init(properties: String = #"{"container":{"cpus":4},"dns":{"domain":"cont"},"machine":{"cpus":5,"virtualization":false},"network":{},"registry":{"domain":"docker.io"}}"#) {
+        self.properties = properties
+    }
+
     func run(_ command: ContainerCommand) async throws -> CommandResult {
-        let output = command == .systemDNSList ? #"["cont"]"# : #"{"dns":{"domain":"cont"}}"#
+        let output = command == .systemDNSList ? #"["cont"]"# : properties
         return CommandResult(standardOutput: output, standardError: "", exitCode: 0, duration: .zero, invocation: "container")
     }
     nonisolated func stream(_ command: ContainerCommand) -> AsyncThrowingStream<ProcessEvent, Error> { AsyncThrowingStream { $0.finish() } }

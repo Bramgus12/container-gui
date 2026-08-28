@@ -5,6 +5,9 @@ nonisolated struct SystemSnapshot: Equatable, Sendable {
     let versions: SystemVersion
     let status: SystemStatus
     let diskUsage: SystemDiskUsage
+    /// Absent when the CLI could not answer `system property list`, which is not
+    /// a reason to fail the rest of the snapshot.
+    let properties: SystemProperties?
 }
 
 nonisolated protocol SystemManaging: Sendable {
@@ -73,6 +76,14 @@ actor CLISystemService: SystemManaging, SystemReclaiming {
         async let versionResult = cli.run(.systemVersion)
         async let statusResult = cli.run(.systemStatus)
         async let diskResult = cli.run(.systemDiskUsage)
+        async let propertyResult = cli.run(.systemProperties)
+
+        // The properties are supplementary, so a CLI that cannot list them —
+        // an older release, or one whose payload will not parse — leaves them
+        // absent instead of taking the whole snapshot down.
+        let properties = (try? await propertyResult).flatMap {
+            try? SystemProperties.decode(from: Data($0.standardOutput.utf8))
+        }
 
         do {
             let (versionCommand, statusCommand, diskCommand) = try await (
@@ -100,7 +111,8 @@ actor CLISystemService: SystemManaging, SystemReclaiming {
             return SystemSnapshot(
                 versions: SystemVersion(components: components),
                 status: SystemStatus(dto: statusDTO),
-                diskUsage: usage
+                diskUsage: usage,
+                properties: properties
             )
         } catch let error as CLIError {
             throw error
@@ -186,6 +198,7 @@ final class SystemModel {
     private(set) var versions: SystemVersion
     private(set) var status: SystemStatus
     private(set) var diskUsage: SystemDiskUsage?
+    private(set) var properties: SystemProperties?
     private(set) var logs = ""
     private(set) var snapshotState: SystemLoadingState = .idle
     private(set) var logsState: SystemLoadingState = .idle
@@ -241,6 +254,7 @@ final class SystemModel {
             versions = value.versions
             status = value.status
             diskUsage = value.diskUsage
+            properties = value.properties
             snapshotState = .loaded
         case .failure(let error):
             if isCancellation(error) {
@@ -330,6 +344,17 @@ final class SystemModel {
             "CLI version: \(versions.cli?.version ?? "unavailable")",
             "Server version: \(versions.server?.version ?? status.version ?? "unavailable")",
         ]
+
+        if let properties, !properties.sections.isEmpty {
+            lines.append("Service configuration:")
+            for section in properties.sections {
+                for key in section.values.keys.sorted() {
+                    lines.append("- \(section.name).\(key) = \(section.values[key] ?? "")")
+                }
+            }
+        } else {
+            lines.append("Service configuration: unavailable")
+        }
 
         if failureLog.records.isEmpty {
             lines.append("Recent operation failures: none")

@@ -308,7 +308,16 @@ private actor UITestContainerCLI: ContainerCLI {
         case .systemDNSList:
             output = #"["cont"]"#
         case .systemProperties:
-            output = #"{"dns":{"domain":"cont"}}"#
+            output = """
+            {"build":{"cpus":2,"image":"ghcr.io/example/builder:0.1.0","memory":"2048mb","rosetta":true},\
+            "container":{"cpus":4,"memory":"1gb"},\
+            "dns":{"domain":"cont"},\
+            "kernel":{"binaryPath":"opt/example/vmlinux","digest":"sha256:ui-test-kernel"},\
+            "machine":{"cpus":5,"homeMount":"rw","memory":"9gb","virtualization":false},\
+            "network":{},\
+            "registry":{"domain":"example.test"},\
+            "vminit":{"image":"ghcr.io/example/vminit:0.1.0"}}
+            """
         case .systemLogs:
             output = (1...40)
                 .map { "UI test service log line \($0)." }

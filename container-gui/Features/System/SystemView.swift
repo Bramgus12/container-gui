@@ -21,6 +21,7 @@ struct SystemView: View {
                     UpdateCard(model: updates)
                 }
                 SystemDiskUsageSection(model: model, reclaim: { confirmsReclaim = true })
+                SystemPropertiesSection(model: model)
                 if let dns { SystemDNSSection(model: dns, system: model) }
                 SystemLogsSection(model: model)
                 UpdateSection(model: updates)
@@ -534,6 +535,53 @@ private struct SystemDiskUsageSection: View {
         )
     }
 
+}
+
+/// Everything `container system property list` reports, grouped the way the CLI
+/// groups it. The section names and keys are the CLI's own, so a section or key
+/// a later CLI adds appears here without a change to this view.
+private struct SystemPropertiesSection: View {
+    let model: SystemModel
+
+    var body: some View {
+        DSCard {
+            VStack(alignment: .leading, spacing: DSMetrics.spacing12) {
+                Label("Configuration", systemImage: "slider.horizontal.3")
+                    .font(.dsCardHeading)
+                content
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityIdentifier("system.properties")
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let properties = model.properties, !properties.sections.isEmpty {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 240), alignment: .leading)],
+                alignment: .leading,
+                spacing: DSMetrics.spacing16
+            ) {
+                ForEach(properties.sections) { section in
+                    VStack(alignment: .leading, spacing: DSMetrics.spacing8) {
+                        SectionLabel(rawTitle: section.displayName)
+                        InspectionKeyValueList(section.values, emptyText: "Not configured")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        } else if model.snapshotState == .idle || model.snapshotState == .loading {
+            ProgressView("Loading configuration…")
+                .frame(maxWidth: .infinity, minHeight: 60)
+        } else {
+            // Not an error banner: the rest of the pane loaded, and a CLI that
+            // cannot list its properties is still a working CLI.
+            Text("The service reported no configuration. Older CLI versions do not list one.")
+                .font(.caption)
+                .foregroundStyle(Color.dsTextSecondary)
+        }
+    }
 }
 
 private struct SystemLogsSection: View {

@@ -36,6 +36,128 @@ nonisolated struct SystemVersion: Equatable, Sendable {
     }
 }
 
+/// The `container system property list` payload: an open-ended map of section
+/// names to the values the service was configured with. The CLI has grown
+/// sections over time — 1.3.0 emits build, container, dns, kernel, machine,
+/// network, registry, and vminit — so this decodes whatever it is handed rather
+/// than a fixed shape, and keeps every value as the string the CLI printed.
+nonisolated struct SystemProperties: Equatable, Sendable {
+    nonisolated struct Section: Identifiable, Equatable, Sendable {
+        /// The CLI's own section name, such as `vminit`.
+        let name: String
+        /// The CLI's own keys, such as `homeMount`, and their printed values.
+        let values: [String: String]
+
+        var id: String { name }
+
+        var displayName: String {
+            Self.displayNames[name] ?? name.capitalized
+        }
+
+        private static let displayNames = [
+            "build": "Builder defaults",
+            "container": "Container defaults",
+            "dns": "DNS",
+            "kernel": "Kernel",
+            "machine": "Machine",
+            "network": "Network",
+            "other": "Other",
+            "registry": "Registry",
+            "vminit": "VM init",
+        ]
+    }
+
+    let sections: [Section]
+
+    /// The sections the CLI is known to emit, in the order they read best: the
+    /// virtual machine first, then what it runs, then where images come from.
+    /// Anything the CLI adds later is appended alphabetically.
+    private static let preferredOrder = [
+        "machine",
+        "container",
+        "build",
+        "kernel",
+        "vminit",
+        "registry",
+        "network",
+        "dns",
+    ]
+
+    static func decode(from data: Data) throws -> SystemProperties {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw CLIError.invalidOutput(
+                description: "System properties were not a JSON object."
+            )
+        }
+
+        var sections: [Section] = []
+        var loose: [String: String] = [:]
+        for (name, value) in object {
+            if let nested = value as? [String: Any] {
+                sections.append(Section(name: name, values: flatten(nested)))
+            } else if let scalar = string(from: value) {
+                loose[name] = scalar
+            }
+        }
+        if !loose.isEmpty {
+            sections.append(Section(name: "other", values: loose))
+        }
+
+        return SystemProperties(sections: sections.sorted { left, right in
+            let leftRank = preferredOrder.firstIndex(of: left.name) ?? preferredOrder.count
+            let rightRank = preferredOrder.firstIndex(of: right.name) ?? preferredOrder.count
+            if leftRank != rightRank { return leftRank < rightRank }
+            return left.name < right.name
+        })
+    }
+
+    func value(section: String, key: String) -> String? {
+        sections.first { $0.name == section }?.values[key]
+    }
+
+    var dnsDomain: String? {
+        value(section: "dns", key: "domain")
+    }
+
+    /// Nested objects become dotted keys, so a future section that groups its
+    /// values still renders as a flat list.
+    private static func flatten(
+        _ object: [String: Any],
+        prefix: String = ""
+    ) -> [String: String] {
+        var values: [String: String] = [:]
+        for (key, value) in object {
+            let path = prefix.isEmpty ? key : "\(prefix).\(key)"
+            if let nested = value as? [String: Any] {
+                values.merge(flatten(nested, prefix: path)) { current, _ in current }
+            } else if let scalar = string(from: value) {
+                values[path] = scalar
+            }
+        }
+        return values
+    }
+
+    private static func string(from value: Any) -> String? {
+        // JSON booleans arrive as NSNumber, so they have to be recognised before
+        // the number case or `false` renders as `0`.
+        if let number = value as? NSNumber,
+           CFGetTypeID(number as CFTypeRef) == CFBooleanGetTypeID() {
+            return number.boolValue ? "true" : "false"
+        }
+        switch value {
+        case let string as String:
+            return string
+        // `stringValue` keeps whole numbers whole: `2` rather than `2.0`.
+        case let number as NSNumber:
+            return number.stringValue
+        case let array as [Any]:
+            return array.compactMap { string(from: $0) }.joined(separator: ", ")
+        default:
+            return nil
+        }
+    }
+}
+
 nonisolated struct ContainerStatsDTO: Decodable, Equatable, Sendable {
     let id: String
     let memoryUsageBytes: UInt64?

@@ -40,7 +40,7 @@ directly, never through a shell.
 | 🌐 | **Networks** | List, search, inspect, create, delete, and prune networks, with Apple Container 0.12 and 1.x compatibility. |
 | 🔗 | **Container networking** | Attach a new container to multiple networks with optional MAC addresses and MTUs. |
 | 🧭 | **Local DNS** | Review resolver readiness, then set the service domain in `config.toml` and add or remove local domains in `/etc/resolver` — the app makes both changes for you, asking macOS to authenticate you for the one that needs root. |
-| ❤️ | **System health** | Check CLI, server, and image-builder status; control their lifecycles; and review disk usage and recent logs. |
+| ❤️ | **System health** | Check CLI, server, and image-builder status; control their lifecycles; and review disk usage, the service configuration, and recent logs. |
 | ⬆️ | **Update checks** | See when a newer Container GUI release exists, read its notes, and copy the upgrade command. |
 | 🩺 | **Diagnostics** | Copy a sanitized support report with common secrets and credentials redacted. |
 

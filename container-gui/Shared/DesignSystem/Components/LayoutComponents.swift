@@ -32,6 +32,13 @@ struct SectionLabel: View {
         self.systemImage = systemImage
     }
 
+    /// For titles that come from the CLI rather than from us, which must not be
+    /// looked up in the string catalog.
+    init(rawTitle: String) {
+        text = Text(verbatim: rawTitle)
+        systemImage = nil
+    }
+
     var body: some View {
         HStack(spacing: DSMetrics.spacing4) {
             if let systemImage {

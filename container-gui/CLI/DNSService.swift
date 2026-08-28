@@ -32,8 +32,15 @@ actor CLIDNSService: DNSManaging {
     }
 
     func loadServiceDomain() async throws -> String? {
-        let properties = try await decode(SystemPropertiesDTO.self, command: .systemProperties)
-        return properties.dns?.domain
+        do {
+            let result = try await cli.run(.systemProperties)
+            let properties = try SystemProperties.decode(
+                from: Data(result.standardOutput.utf8)
+            )
+            return properties.dnsDomain
+        } catch {
+            throw sanitizedDNSError(error)
+        }
     }
 
     func createDomain(_ configuration: DNSCreateConfiguration) async throws {
@@ -72,11 +79,6 @@ actor CLIDNSService: DNSManaging {
             throw sanitizedDNSError(error)
         }
     }
-}
-
-nonisolated private struct SystemPropertiesDTO: Decodable {
-    struct DNS: Decodable { let domain: String? }
-    let dns: DNS?
 }
 
 nonisolated private func sanitizedPrivilegedError(_ error: PrivilegedCommandError) -> PrivilegedCommandError {
