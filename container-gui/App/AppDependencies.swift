@@ -222,6 +222,17 @@ private actor UITestContainerCLI: ContainerCLI {
         var sizeInBytes: UInt64
     }
 
+    private struct FixtureMachine: Sendable {
+        var name: String
+        var state: String
+        var isDefault: Bool
+        var address: String?
+        var cpus: Int
+        var memoryBytes: UInt64
+        var diskBytes: UInt64
+        var homeMount: String
+    }
+
     private let scenario: UITestPreflightScenario
     private var containers: [FixtureContainer]
     private var images = ["ghcr.io/example/demo:1.0"]
@@ -244,6 +255,28 @@ private actor UITestContainerCLI: ContainerCLI {
         ),
     ]
     private var volumes = [FixtureVolume(name: "ui-test-volume", sizeInBytes: 10_485_760)]
+    private var machines = [
+        FixtureMachine(
+            name: "ui-test-machine",
+            state: "running",
+            isDefault: true,
+            address: "192.168.64.10",
+            cpus: 8,
+            memoryBytes: 8_589_934_592,
+            diskBytes: 2_576_980_377,
+            homeMount: "rw"
+        ),
+        FixtureMachine(
+            name: "ui-test-machine-stopped",
+            state: "stopped",
+            isDefault: false,
+            address: nil,
+            cpus: 4,
+            memoryBytes: 4_294_967_296,
+            diskBytes: 1_169_260_544,
+            homeMount: "ro"
+        ),
+    ]
     private var builderState: String?
 
     init(scenario: UITestPreflightScenario) {
@@ -404,6 +437,30 @@ private actor UITestContainerCLI: ContainerCLI {
             A deliberately long UI test log line that should wrap inside the inspector without creating a horizontal scrollbar or an extra logical line number.
             final UI test log line
             """
+        case .listMachines:
+            output = machineListJSON
+        case .inspectMachine(let id):
+            output = machineInspectJSON(name: id?.rawValue ?? defaultMachineName)
+        case .createMachine(let configuration):
+            let name = configuration.name?.rawValue ?? "ui-test-created-machine"
+            addMachine(name: name, configuration: configuration)
+            output = "\(name)\n"
+        case .setMachineConfiguration(let configuration):
+            applyBootConfiguration(configuration)
+            output = "\(configuration.name?.rawValue ?? defaultMachineName ?? "")\n"
+        case .setDefaultMachine(let id):
+            setDefaultMachine(named: id.rawValue)
+            output = ""
+        case .stopMachine(let id):
+            updateMachine(named: id?.rawValue ?? defaultMachineName, state: "stopped")
+            output = "\(id?.rawValue ?? defaultMachineName ?? "")\n"
+        case .deleteMachine(let id):
+            machines.removeAll { $0.name == id.rawValue }
+            output = "\(id.rawValue)\n"
+        case .machineLogs(let options):
+            output = options.showsBootLog ? machineBootLog : machineOutputLog
+        case .machineRun:
+            output = "ui test machine output\n"
         case .systemStart, .systemStop, .pullImage, .build, .run, .stats:
             output = ""
         }
@@ -540,6 +597,97 @@ private actor UITestContainerCLI: ContainerCLI {
         return """
         {"id":"\(network.name)","configuration":{"name":"\(network.name)","mode":"\(network.mode)","creationDate":"2026-06-16T00:00:15.123Z","labels":\(labels),"plugin":"\(network.plugin)","options":{"fixture":"enabled"}},"status":{\(status.joined(separator: ","))}}
         """
+    }
+
+    private var defaultMachineName: String? {
+        machines.first(where: \.isDefault)?.name ?? machines.first?.name
+    }
+
+    private var machineListJSON: String {
+        "[\(machines.map(machineJSON).joined(separator: ","))]"
+    }
+
+    private func machineInspectJSON(name: String?) -> String {
+        guard let name, let machine = machines.first(where: { $0.name == name }) else {
+            return "[]"
+        }
+        // The fixture mirrors the real payload: `image`, `platform` and
+        // `userSetup` are nested, and `virtualization` and `kernelPath` are
+        // absent because `machine inspect` does not report them.
+        return """
+        [{\(machineFields(machine)),"homeMount":"\(machine.homeMount)",\
+        "image":{"reference":"docker.io/library/alpine:3.22","descriptor":\
+        {"digest":"sha256:ui-test-machine","mediaType":"application/vnd.oci.image.index.v1+json","size":9218}},\
+        "platform":{"os":"linux","architecture":"arm64"},\
+        "userSetup":{"username":"uitest","uid":501,"gid":20}}]
+        """
+    }
+
+    private func machineJSON(_ machine: FixtureMachine) -> String {
+        "{\(machineFields(machine)),\"default\":\(machine.isDefault)}"
+    }
+
+    private func machineFields(_ machine: FixtureMachine) -> String {
+        let address = machine.address.map { #","ipAddress":"\#($0)""# } ?? ""
+        return """
+        "id":"\(machine.name)","status":"\(machine.state)","cpus":\(machine.cpus),\
+        "memory":\(machine.memoryBytes),"diskSize":\(machine.diskBytes),\
+        "createdDate":"2026-08-19T09:12:44Z"\(address)
+        """
+    }
+
+    private var machineBootLog: String {
+        """
+        [    0.000000] Booting Linux on physical CPU 0x0000000000
+        [    0.184203] virtio_blk virtio2: [vda] 1310720 512-byte logical blocks
+        [    0.688230] machine-init: ready
+        """
+    }
+
+    private var machineOutputLog: String {
+        """
+        ui test machine stdio line one
+        ui test machine stdio line two
+        """
+    }
+
+    private func addMachine(name: String, configuration: MachineCreateConfiguration) {
+        machines.removeAll { $0.name == name }
+        machines.append(FixtureMachine(
+            name: name,
+            state: configuration.bootsAfterCreating ? "running" : "stopped",
+            isDefault: configuration.setsDefault || machines.isEmpty,
+            address: configuration.bootsAfterCreating ? "192.168.64.20" : nil,
+            cpus: configuration.boot.cpus?.value ?? 4,
+            memoryBytes: 4_294_967_296,
+            diskBytes: 1_073_741_824,
+            homeMount: configuration.boot.homeMount?.rawValue ?? "rw"
+        ))
+        if configuration.setsDefault {
+            setDefaultMachine(named: name)
+        }
+    }
+
+    private func applyBootConfiguration(_ configuration: MachineSetConfiguration) {
+        let name = configuration.name?.rawValue ?? defaultMachineName
+        guard let index = machines.firstIndex(where: { $0.name == name }) else { return }
+        if let cpus = configuration.boot.cpus { machines[index].cpus = cpus.value }
+        if let homeMount = configuration.boot.homeMount {
+            machines[index].homeMount = homeMount.rawValue
+        }
+    }
+
+    private func setDefaultMachine(named name: String) {
+        guard machines.contains(where: { $0.name == name }) else { return }
+        for index in machines.indices {
+            machines[index].isDefault = machines[index].name == name
+        }
+    }
+
+    private func updateMachine(named name: String?, state: String) {
+        guard let name, let index = machines.firstIndex(where: { $0.name == name }) else { return }
+        machines[index].state = state
+        if state == "stopped" { machines[index].address = nil }
     }
 
     private func inspectJSON(for id: String) -> String {

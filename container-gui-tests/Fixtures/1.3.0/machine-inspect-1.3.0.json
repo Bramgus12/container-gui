@@ -1,0 +1,28 @@
+[
+  {
+    "cpus": 4,
+    "createdDate": "2026-08-30T19:54:05Z",
+    "diskSize": 1169260544,
+    "homeMount": "rw",
+    "id": "gui-fixture-probe",
+    "image": {
+      "descriptor": {
+        "digest": "sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce",
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "size": 9218
+      },
+      "reference": "docker.io/library/alpine:3.22"
+    },
+    "memory": 9663676416,
+    "platform": {
+      "architecture": "arm64",
+      "os": "linux"
+    },
+    "status": "stopped",
+    "userSetup": {
+      "gid": 20,
+      "uid": 501,
+      "username": "bramgussekloo"
+    }
+  }
+]

@@ -141,6 +141,27 @@ final class DNSModel {
 
     func copyCreateCommand(_ configuration: DNSCreateConfiguration) { copy(configuration.sudoCommand) }
     func copyDeleteCommand(_ configuration: DNSDeleteConfiguration) { copy(configuration.sudoCommand) }
+
+    /// The sudo-in-a-terminal alternative to the macOS authorization dialog. The
+    /// sheet needs the service to open the pseudo-terminal, so it is built here
+    /// rather than handing the service out.
+    func makeSudoCommand(create configuration: DNSCreateConfiguration) -> PrivilegedCommandModel {
+        PrivilegedCommandModel(
+            title: "Add local domain",
+            arguments: configuration.arguments,
+            sudoCommand: configuration.sudoCommand,
+            service: service
+        )
+    }
+
+    func makeSudoCommand(delete configuration: DNSDeleteConfiguration) -> PrivilegedCommandModel {
+        PrivilegedCommandModel(
+            title: "Remove local domain",
+            arguments: configuration.arguments,
+            sudoCommand: configuration.sudoCommand,
+            service: service
+        )
+    }
     func configSnippet(domain: String? = nil) -> String { "[dns]\ndomain = \"\(domain ?? serviceDomain ?? "cont")\"" }
     func copyConfigSnippet(domain: String? = nil) { copy(configSnippet(domain: domain)) }
     func revealConfigFile() { NSWorkspace.shared.activateFileViewerSelecting([resolverReader.configFileURL()]) }

@@ -26,6 +26,7 @@ xcodebuild test \
     -configuration Release \
     -destination "platform=macOS" \
     -derivedDataPath "$derived_data_path" \
+    -skipPackagePluginValidation \
     "$@" \
     ENABLE_TESTABILITY=YES \
     ENABLE_HARDENED_RUNTIME=NO \

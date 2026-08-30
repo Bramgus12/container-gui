@@ -78,6 +78,8 @@ nonisolated final class PseudoTerminalSession: InteractiveProcessSession, @unche
     private var exitSource: DispatchSourceProcess?
     private var processIdentifier: pid_t = -1
     private var isFinished = false
+    /// The tail of a UTF-8 sequence the last read cut in half.
+    private var carriedBytes: [UInt8] = []
 
     init(request: InteractiveSessionRequest, size: TerminalSize) throws {
         let (stream, continuation) = AsyncThrowingStream.makeStream(
@@ -242,8 +244,10 @@ nonisolated final class PseudoTerminalSession: InteractiveProcessSession, @unche
             var buffer = [UInt8](repeating: 0, count: 4_096)
             let count = read(descriptor, &buffer, buffer.count)
             if count > 0 {
-                let text = String(decoding: buffer[0..<count], as: UTF8.self)
-                self.continuation.yield(.standardOutput(text))
+                let text = self.decode(buffer[0..<count])
+                if !text.isEmpty {
+                    self.continuation.yield(.standardOutput(text))
+                }
             } else if count == 0 || (count < 0 && errno != EAGAIN && errno != EINTR) {
                 // A closed pseudo-terminal reports EIO rather than end of file.
                 // The exit code arrives separately through the termination
@@ -253,6 +257,55 @@ nonisolated final class PseudoTerminalSession: InteractiveProcessSession, @unche
         }
         lock.withLock { readSource = source }
         source.resume()
+    }
+
+    /// Reads land on arbitrary byte boundaries, so a multi-byte character can be
+    /// split between two of them. Decoding each read on its own would turn every
+    /// such character into U+FFFD — visible as soon as anything draws a box or
+    /// prints an accent. The incomplete tail is held back and prefixed onto the
+    /// next read instead.
+    ///
+    /// Only a *trailing* truncated sequence is deferred. Invalid bytes anywhere
+    /// else still decode to U+FFFD, which is what a terminal should show for
+    /// genuinely malformed output rather than swallowing it.
+    private func decode(_ bytes: ArraySlice<UInt8>) -> String {
+        var pending = lock.withLock {
+            let carried = carriedBytes
+            carriedBytes = []
+            return carried
+        }
+        pending.append(contentsOf: bytes)
+
+        let tail = Self.incompleteSuffixLength(of: pending)
+        guard tail > 0 else { return String(decoding: pending, as: UTF8.self) }
+
+        let split = pending.count - tail
+        lock.withLock { carriedBytes = Array(pending[split...]) }
+        return String(decoding: pending[..<split], as: UTF8.self)
+    }
+
+    /// The number of trailing bytes that begin a UTF-8 sequence the read did not
+    /// finish delivering, or zero when the buffer ends on a character boundary.
+    static func incompleteSuffixLength(of bytes: [UInt8]) -> Int {
+        guard !bytes.isEmpty else { return 0 }
+        // A sequence is at most four bytes, so only the last three can be the
+        // start of a truncated one.
+        for offset in 1...min(3, bytes.count) {
+            let byte = bytes[bytes.count - offset]
+            if byte & 0b1100_0000 == 0b1000_0000 {
+                continue // A continuation byte: keep walking back to the leader.
+            }
+            let expected: Int
+            switch byte {
+            case 0x00...0x7F: expected = 1
+            case 0xC0...0xDF: expected = 2
+            case 0xE0...0xEF: expected = 3
+            case 0xF0...0xF7: expected = 4
+            default: return 0 // Not a valid leader — let the decoder mark it.
+            }
+            return expected > offset ? offset : 0
+        }
+        return 0
     }
 
     private func stopReading() {
@@ -297,7 +350,20 @@ nonisolated final class PseudoTerminalSession: InteractiveProcessSession, @unche
         while true {
             let count = read(descriptor, &buffer, buffer.count)
             guard count > 0 else { break }
-            continuation.yield(.standardOutput(String(decoding: buffer[0..<count], as: UTF8.self)))
+            let text = decode(buffer[0..<count])
+            if !text.isEmpty {
+                continuation.yield(.standardOutput(text))
+            }
+        }
+        // Nothing more is coming, so a sequence still held back was genuinely
+        // truncated by the child. Emit it rather than dropping output.
+        let remainder = lock.withLock {
+            let carried = carriedBytes
+            carriedBytes = []
+            return carried
+        }
+        if !remainder.isEmpty {
+            continuation.yield(.standardOutput(String(decoding: remainder, as: UTF8.self)))
         }
         if flags >= 0 {
             flags = fcntl(descriptor, F_SETFL, flags)

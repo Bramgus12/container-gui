@@ -43,6 +43,16 @@ nonisolated enum ContainerCommand: Equatable, Sendable {
     case deleteVolume(name: VolumeName)
     case pruneVolumes
 
+    case listMachines
+    case inspectMachine(id: MachineIdentifier?)
+    case createMachine(configuration: MachineCreateConfiguration)
+    case setMachineConfiguration(MachineSetConfiguration)
+    case setDefaultMachine(id: MachineIdentifier)
+    case stopMachine(id: MachineIdentifier?)
+    case deleteMachine(id: MachineIdentifier)
+    case machineLogs(MachineLogOptions)
+    case machineRun(configuration: MachineRunConfiguration)
+
     case build(BuildConfiguration)
     case builderStatus
     case builderStart(configuration: BuilderStartConfiguration)
@@ -134,6 +144,25 @@ nonisolated enum ContainerCommand: Equatable, Sendable {
             ["volume", "delete", name.rawValue]
         case .pruneVolumes:
             ["volume", "prune"]
+
+        case .listMachines:
+            ["machine", "list", "--format", "json"]
+        case .inspectMachine(let id):
+            ["machine", "inspect"] + (id.map { [$0.rawValue] } ?? [])
+        case .createMachine(let configuration):
+            configuration.arguments
+        case .setMachineConfiguration(let configuration):
+            configuration.arguments
+        case .setDefaultMachine(let id):
+            ["machine", "set-default", id.rawValue]
+        case .stopMachine(let id):
+            ["machine", "stop"] + (id.map { [$0.rawValue] } ?? [])
+        case .deleteMachine(let id):
+            ["machine", "delete", id.rawValue]
+        case .machineLogs(let options):
+            options.arguments
+        case .machineRun(let configuration):
+            configuration.arguments
 
         case .build(let configuration):
             configuration.arguments

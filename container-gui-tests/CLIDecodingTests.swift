@@ -254,6 +254,68 @@ final class CLIDecodingTests: XCTestCase {
         XCTAssertEqual(ImageSummary(dto: imageDTO)?.createdAt, Date(timeIntervalSinceReferenceDate: 0))
     }
 
+    /// The fixtures are captured verbatim from `container machine list
+    /// --format json` on CLI 1.3.0. Memory and disk arrive as byte counts even
+    /// though every flag that writes them takes "8G".
+    func testDecodesMachineListFixture() throws {
+        let dtos: [MachineDTO] = try decodeFixture("1.3.0/machines-1.3.0.json")
+        let machines = dtos.compactMap(MachineSummary.init(dto:))
+
+        XCTAssertEqual(machines.count, 3)
+
+        let stopped = try XCTUnwrap(machines.first)
+        XCTAssertEqual(stopped.id, "gui-fixture-probe")
+        XCTAssertEqual(stopped.state, .stopped)
+        XCTAssertTrue(stopped.isDefault)
+        XCTAssertNil(stopped.address)
+        XCTAssertEqual(stopped.cpus, 4)
+        XCTAssertEqual(stopped.memoryBytes, 9_663_676_416)
+        XCTAssertEqual(stopped.diskBytes, 1_169_260_544)
+        XCTAssertNotNil(stopped.createdAt)
+
+        let running = machines[1]
+        XCTAssertEqual(running.state, .running)
+        XCTAssertFalse(running.isDefault)
+        XCTAssertEqual(running.address, "192.168.64.10")
+
+        // An unrecognised state degrades rather than dropping the row, and an
+        // unknown field does not fail the decode.
+        let future = machines[2]
+        XCTAssertEqual(future.state, .unknown("provisioning"))
+        XCTAssertNil(future.diskBytes)
+    }
+
+    func testDecodesMachineInspectionFixtures() throws {
+        let dtos: [MachineInspectionDTO] = try decodeFixture("1.3.0/machine-inspect-1.3.0.json")
+        let dto = try XCTUnwrap(dtos.first)
+        let inspection = try XCTUnwrap(MachineInspection(dto: dto, rawJSON: "{}"))
+
+        XCTAssertEqual(inspection.summary.id, "gui-fixture-probe")
+        XCTAssertEqual(inspection.summary.state, .stopped)
+        XCTAssertEqual(inspection.imageReference, "docker.io/library/alpine:3.22")
+        XCTAssertEqual(
+            inspection.imageDigest,
+            "sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce"
+        )
+        XCTAssertEqual(inspection.platformDescription, "linux/arm64")
+        XCTAssertEqual(inspection.homeMount, .readWrite)
+        XCTAssertEqual(inspection.userDescription, "bramgussekloo · uid 501")
+
+        // Both are stored by the service but absent from every observed
+        // `machine inspect` payload, so the inspector cannot show them.
+        XCTAssertNil(inspection.virtualization)
+        XCTAssertNil(inspection.kernelPath)
+
+        let runningDTOs: [MachineInspectionDTO] =
+            try decodeFixture("1.3.0/machine-inspect-running-1.3.0.json")
+        let running = try XCTUnwrap(
+            runningDTOs.first.flatMap { MachineInspection(dto: $0, rawJSON: "{}") }
+        )
+        XCTAssertEqual(running.summary.state, .running)
+        XCTAssertEqual(running.summary.address, "192.168.64.10")
+        XCTAssertEqual(running.homeMount, .readOnly)
+    }
+
     private func decodeFixture<Value: Decodable>(_ path: String) throws -> Value {
         let file = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

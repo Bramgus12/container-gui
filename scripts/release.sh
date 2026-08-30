@@ -206,6 +206,11 @@ print "Signing identity: $signing_identity"
 print "Team ID: $team_id"
 
 rm -rf "$archive_path"
+# SwiftTerm ships a SwiftPM build plugin that generates its build-info source.
+# Xcode asks for that plugin to be trusted interactively the first time, which a
+# scripted build cannot answer, so validation is skipped here. The package is
+# pinned by Package.resolved, so what runs is the revision the repository
+# recorded rather than whatever the tag points at today.
 xcodebuild archive \
     -quiet \
     -project "$project_root/container-gui.xcodeproj" \
@@ -213,6 +218,7 @@ xcodebuild archive \
     -configuration Release \
     -archivePath "$archive_path" \
     -derivedDataPath "$derived_data_path" \
+    -skipPackagePluginValidation \
     CODE_SIGN_STYLE=Manual \
     CODE_SIGN_IDENTITY="$signing_identity" \
     DEVELOPMENT_TEAM="$team_id" \

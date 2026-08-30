@@ -61,6 +61,7 @@ final class AddLocalDomainModel: Identifiable {
 struct AddLocalDomainSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: AddLocalDomainModel
+    @State fileprivate var sudoCommand: PrivilegedCommandModel?
     var body: some View {
         SheetScaffold(command: model.sudoCommand, commandAccessibilityID: "system.dns.create.preview") {
             Form {
@@ -97,8 +98,18 @@ struct AddLocalDomainSheet: View {
                 Text("Writing to /etc/resolver needs administrator access, so macOS will ask for your password.").font(.caption).foregroundStyle(Color.dsTextSecondary)
             }
             Button(model.didCopy ? "Copied" : "Copy Command") { model.copy() }.disabled(model.configuration == nil || model.isAdding).accessibilityIdentifier("system.dns.create.copy")
+            Button("Run with sudo…") { if let configuration = model.configuration { sudoCommand = model.dns.makeSudoCommand(create: configuration) } }.disabled(model.configuration == nil || model.isAdding).accessibilityIdentifier("system.dns.create.sudo")
             Button("Re-check") { Task { await model.dns.refresh(); if model.dns.domains.contains(where: { $0.name == model.domain }) { dismiss() } } }.disabled(model.isAdding).accessibilityIdentifier("system.dns.create.recheck")
             Button("Add Domain") { Task { if await model.add() { dismiss() } } }.buttonStyle(.borderedProminent).disabled(model.configuration == nil || model.isAdding).accessibilityIdentifier("system.dns.create.submit")
+        }
+        .sheet(item: $sudoCommand) { command in
+            PrivilegedCommandSheet(model: command) {
+                // Reload from /etc/resolver rather than assuming the write
+                // landed, then close the add sheet once the domain is really
+                // there.
+                await model.dns.refresh()
+                if model.dns.domains.contains(where: { $0.name == model.domain }) { dismiss() }
+            }
         }
     }
 }

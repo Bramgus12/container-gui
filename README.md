@@ -33,6 +33,9 @@ directly, never through a shell.
 | ⌨️ | **Commands & files** | Run a one-off command inside a running container, hand the interactive form to Terminal, copy files in and out, and export a container's filesystem as a tar archive. |
 | 🔎 | **Deep inspection** | Explore structured container configuration, networking, ports, mounts, image variants, and OCI metadata. |
 | 📜 | **Logs & stats** | Follow bounded logs and monitor CPU, memory, network, and block I/O. |
+| 🖥️ | **Machines** | List, search, and inspect the long-lived Linux VMs `container machine` manages; create them with every flag pre-filled from what the CLI would compute; move the default; stop and delete. Needs CLI 1.0.0 or later. |
+| 🐚 | **Machine shells** | Open a real login shell inside a machine in an embedded terminal, or run a one-off command, with environment, user, and working directory controls. |
+| ⚙️ | **Boot configuration** | Edit CPUs, memory, home mount, nested virtualization, and the kernel as a running-versus-after-restart pair, because `container machine set` only takes effect on the next boot. |
 | 🖼️ | **Images** | Search local images, inspect metadata, stream pull progress, run, and delete with dependency-aware cleanup. |
 | 🛠️ | **Builds** | Build tagged images from a local Dockerfile with arguments, labels, target/platform, cache, resource, pull, and output controls. |
 | 💾 | **Volumes** | List, search, inspect, create, delete, and prune persistent volumes across Apple Container 0.12 and 1.x JSON shapes. |
@@ -61,8 +64,11 @@ directly, never through a shell.
 
 - An **Apple-silicon Mac** running **macOS 26 or later**
 - [Apple Container](https://github.com/apple/container/releases) CLI version
-  **0.12.0 or later and earlier than 2.0.0**
-- Xcode, when building Container GUI from source
+  **0.12.0 or later and earlier than 2.0.0**. The **Machines** screen needs
+  **1.0.0 or later**, since that is when `container machine` was added; below it
+  the screen is hidden rather than shown broken.
+- Xcode, when building Container GUI from source — see
+  [Building from source](#building-from-source) for its two setup steps
 
 ### 2. Install Apple Container
 
@@ -140,13 +146,35 @@ retrying rather than approving it in **Privacy & Security**.
 
 ### Building from source
 
-```sh
-git clone https://github.com/Bramgus12/container-gui.git
-cd container-gui
-open container-gui.xcodeproj
+The app depends on [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm),
+which provides the terminal emulator behind **Machines → Open Shell**. It is
+resolved automatically by Swift Package Manager, but it brings two one-time
+setup requirements with it.
+
+SwiftTerm ships a Metal shader, so the Metal Toolchain component has to be
+installed once per machine:
+
+```bash
+xcodebuild -downloadComponent MetalToolchain
+```
+
+Then clone and open the project:
+
+```bash
+git clone https://github.com/Bramgus12/container-gui.git && cd container-gui && open container-gui.xcodeproj
 ```
 
 In Xcode, select the **Container GUI** scheme and press <kbd>⌘</kbd><kbd>R</kbd>.
+The first build asks you to trust SwiftTerm's SwiftPM build plugin; approve it
+once and Xcode remembers.
+
+Command-line builds cannot answer that prompt, so they pass
+`-skipPackagePluginValidation`. `scripts/release.sh` and `scripts/test-release.sh`
+already do:
+
+```bash
+xcodebuild -scheme "Container GUI" -destination "platform=macOS" -skipPackagePluginValidation build
+```
 
 ## How it works
 

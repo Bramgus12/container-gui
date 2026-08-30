@@ -274,6 +274,52 @@ final class DNSManagementTests: XCTestCase {
     }
 }
 
+extension DNSManagementTests {
+
+    /// The sudo path runs the privileged change in an embedded terminal instead
+    /// of the macOS authorization dialog. It must still reach the CLI without a
+    /// shell: sudo by absolute path, the container binary as its first argument,
+    /// and the rest passed as a vector.
+    func testPrivilegedRequestInvokesSudoWithoutAShell() throws {
+        let executable = URL(fileURLWithPath: "/usr/local/bin/container")
+        let configuration = try DNSCreateConfiguration(
+            domain: DNSDomainName(validating: "test"),
+            localhostRedirect: nil
+        )
+
+        let request = CLIDNSService.privilegedRequest(
+            executableURL: executable,
+            arguments: configuration.arguments,
+            terminalSize: .default
+        )
+
+        XCTAssertEqual(request.executableURL.path, "/usr/bin/sudo")
+        XCTAssertEqual(
+            request.arguments,
+            ["/usr/local/bin/container", "system", "dns", "create", "test"]
+        )
+        // A terminal size is what makes the session allocate a pty, and sudo
+        // refuses to prompt without one.
+        XCTAssertNotNil(request.terminalSize)
+        XCTAssertNil(request.environment["SUDO_ASKPASS"])
+    }
+
+    /// A domain that looks like shell syntax stays one argument, because nothing
+    /// on this path is parsed by a shell.
+    func testPrivilegedRequestPassesAwkwardValuesAsSingleArguments() throws {
+        let executable = URL(fileURLWithPath: "/opt/homebrew/bin/container")
+        let awkward = "a b; echo hi"
+        let request = CLIDNSService.privilegedRequest(
+            executableURL: executable,
+            arguments: ["system", "dns", "delete", awkward],
+            terminalSize: .default
+        )
+
+        XCTAssertEqual(request.arguments.last, awkward)
+        XCTAssertEqual(request.arguments.count, 5)
+    }
+}
+
 private actor DNSServiceStub: DNSManaging {
     let error: Error?
     private var mutationError: Error?
@@ -319,6 +365,15 @@ private actor DNSServiceStub: DNSManaging {
         deletedConfigurations.append(configuration)
         if let mutationError { throw mutationError }
         domains.removeAll { $0 == configuration.domain.rawValue }
+    }
+
+    /// Tests never spawn a real `sudo`, so the stub refuses the way a
+    /// non-process CLI does.
+    nonisolated func attachPrivileged(
+        arguments: [String],
+        terminalSize: TerminalSize
+    ) throws -> any InteractiveProcessSession {
+        throw CLIError.launchFailed(message: "Interactive sessions are not available in tests.")
     }
 }
 

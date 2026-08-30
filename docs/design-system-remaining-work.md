@@ -11,6 +11,40 @@ Audited against the working tree on `main` (uncommitted). `xcodebuild -scheme "C
 build` succeeds with no warnings, and the full test suite passes, including the six new
 `DesignSystemDataTests`.
 
+## 0. Machines (design section 3)
+
+Design section 3 added a Machines destination covering the whole
+`container machine` subcommand set. It is implemented: models, service, the nine
+`ContainerCommand` cases, the list and inspector (3a), the create sheet (3b), the
+boot-configuration editor (3c), the run sheet with an embedded terminal (3d), and
+the logs pane (3e).
+
+Three findings from building it against the real CLI are worth keeping:
+
+- **`machine inspect` does not report `virtualization` or `kernelPath`.** Both
+  are stored by the service — they are in `boot-config.json` on disk — but
+  neither appears in the inspect payload on CLI 1.3.0. The inspector shows the
+  rows only when the CLI supplies them and says so otherwise, rather than
+  inventing a value. `MachineInspectionDTO` decodes both already, so a later CLI
+  that reports them needs no code change.
+- **There is no live-versus-stored pair in any payload.** `machine set` writes
+  immediately and `inspect` returns the stored values, so "restart pending" is
+  tracked in `MachineModel.pendingRestartSettings` and cleared when the machine
+  is next seen stopped. This is the fallback the plan anticipated.
+- **`machine logs` fails on a machine that never booted**, reporting that
+  `stdio.log` does not exist — and it names `stdio.log` even when `--boot` was
+  requested. That is treated as the empty state, not an error.
+
+Outstanding for this section:
+
+- The inspector is built on `InspectionViews`, so **PR A converts it for free**.
+  Nothing machine-specific needs redoing.
+- No UI test yet for the Machines destination; the `UITestContainerCLI` fixture
+  has the machine arms, so the test is the only missing piece.
+- Booting a machine fails on this hardware with "Operation not supported by
+  device", so **3d's terminal has not been exercised against a live machine** —
+  only its form, argument building, and failure path are covered by tests.
+
 ## 1. Status of the original plan
 
 | Phase | State | Notes |

@@ -388,7 +388,10 @@ private struct MainNavigationView: View {
                         ?? context.versions.cli?.version
                         ?? "—"
                 )
-                List(AppDestination.allCases, selection: $model.destination) { destination in
+                List(
+                    AppDestination.available(with: model.machineCapabilities),
+                    selection: $model.destination
+                ) { destination in
                     SidebarRow(
                         icon: destination.systemImage,
                         title: destination.title,
@@ -399,17 +402,29 @@ private struct MainNavigationView: View {
                     .accessibilityIdentifier("destination.\(destination.rawValue.lowercased())")
                 }
                 .listStyle(.sidebar)
-                SidebarActivityBlock(
-                    poller: model.statsPoller,
-                    diskUsage: model.systemModel?.diskUsage
-                ) {
-                    model.destination = .system
+                // Machines swap the glance layer for the one fact that governs
+                // every machine subcommand: which machine an omitted ID means.
+                if model.destination == .machines, let machineModel = model.machineModel {
+                    SidebarDefaultMachineBlock(machine: machineModel.defaultMachine)
+                } else {
+                    SidebarActivityBlock(
+                        poller: model.statsPoller,
+                        diskUsage: model.systemModel?.diskUsage
+                    ) {
+                        model.destination = .system
+                    }
                 }
             }
         } detail: {
             switch model.destination {
             case .containers:
                 ContainerListView(model: model)
+            case .machines:
+                if let machineModel = model.machineModel {
+                    MachinesView(model: machineModel)
+                } else {
+                    ProgressView("Loading machines…")
+                }
             case .images:
                 ImageListView(model: model)
             case .volumes:
@@ -488,6 +503,43 @@ private struct SidebarHeader: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.dsHairline).frame(height: DSMetrics.hairline)
         }
+    }
+}
+
+/// Almost every `container machine` subcommand falls back to the default
+/// machine when the ID is omitted, so which machine that is belongs on screen
+/// wherever machines are being worked on.
+private struct SidebarDefaultMachineBlock: View {
+    let machine: MachineSummary?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DSMetrics.spacing8) {
+            SectionLabel(title: "Default machine")
+
+            if let machine {
+                HStack(spacing: DSMetrics.spacing8) {
+                    StateDot(
+                        machine.state.designState,
+                        accessibilityLabel: "\(machine.id), \(machine.state.localizedTitleString)"
+                    )
+                    MonoText(value: machine.id, truncation: .middle)
+                }
+                Text("Used whenever a command omits a machine ID — shells, logs, config, stop.")
+                    .font(.caption)
+                    .foregroundStyle(Color.dsTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("No default machine. Commands that omit an ID have nothing to act on.")
+                    .font(.caption)
+                    .foregroundStyle(Color.dsTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DSMetrics.spacing12)
+        .background(Color.dsSurfaceRaised, in: RoundedRectangle(cornerRadius: DSMetrics.inlineRadius))
+        .padding(DSMetrics.spacing8)
+        .accessibilityIdentifier("sidebar.defaultMachine")
     }
 }
 

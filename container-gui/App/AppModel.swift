@@ -190,6 +190,7 @@ nonisolated struct ContainerMutationFailure: Identifiable, Equatable, Sendable {
 
 enum AppDestination: String, CaseIterable, Identifiable, Sendable {
     case containers = "Containers"
+    case machines = "Machines"
     case images = "Images"
     case volumes = "Volumes"
     case networks = "Networks"
@@ -200,6 +201,7 @@ enum AppDestination: String, CaseIterable, Identifiable, Sendable {
     var title: LocalizedStringResource {
         switch self {
         case .containers: "Containers"
+        case .machines: "Machines"
         case .images: "Images"
         case .volumes: "Volumes"
         case .networks: "Networks"
@@ -210,11 +212,18 @@ enum AppDestination: String, CaseIterable, Identifiable, Sendable {
     var systemImage: String {
         switch self {
         case .containers: "shippingbox"
+        case .machines: "desktopcomputer"
         case .images: "square.stack.3d.up"
         case .volumes: "externaldrive"
         case .networks: "network"
         case .system: "gauge.with.dots.needle.67percent"
         }
+    }
+
+    /// `container machine` arrived in Apple Container 1.0.0 and the app supports
+    /// 0.12.0 upward, so the sidebar is built from this rather than `allCases`.
+    static func available(with machines: MachineCapabilities) -> [AppDestination] {
+        allCases.filter { $0 != .machines || machines.isSupported }
     }
 }
 
@@ -334,6 +343,10 @@ final class AppModel {
     private(set) var imageDeletionFailure: ImageDeletionFailure?
     private(set) var networkModel: NetworkModel?
     private(set) var volumeModel: VolumeModel?
+    private(set) var machineModel: MachineModel?
+    /// Defaults to supported so a model built without a preflight context — the
+    /// previews and the unit tests — still shows the destination.
+    private(set) var machineCapabilities = MachineCapabilities(isSupported: true)
     private(set) var builderModel: BuilderModel?
     private(set) var systemModel: SystemModel?
     private(set) var dnsModel: DNSModel?
@@ -371,6 +384,8 @@ final class AppModel {
         networkService: (any NetworkManaging)? = nil,
         networkCapabilities: NetworkCapabilities? = nil,
         volumeService: (any VolumeManaging)? = nil,
+        machineService: (any MachineManaging)? = nil,
+        machineCapabilities: MachineCapabilities? = nil,
         builderService: (any BuilderManaging)? = nil,
         dnsService: (any DNSManaging)? = nil,
         privilegedRunner: any PrivilegedCommandRunning = OSAScriptPrivilegedCommandRunner(),
@@ -398,6 +413,12 @@ final class AppModel {
         }
         if let volumeService {
             volumeModel = VolumeModel(service: volumeService, failureLog: self.failureLog)
+        }
+        if let machineService {
+            machineModel = MachineModel(service: machineService, failureLog: self.failureLog)
+        }
+        if let machineCapabilities {
+            self.machineCapabilities = machineCapabilities
         }
         if let builderService {
             builderModel = BuilderModel(service: builderService, failureLog: self.failureLog)
@@ -483,6 +504,13 @@ final class AppModel {
                 service: CLIVolumeService(cli: cli),
                 failureLog: failureLog
             )
+            machineCapabilities = MachineCapabilities(version: cliVersion)
+            machineModel = machineCapabilities.isSupported
+                ? MachineModel(service: CLIMachineService(cli: cli), failureLog: failureLog)
+                : nil
+            if !machineCapabilities.isSupported, destination == .machines {
+                destination = .containers
+            }
             builderModel = BuilderModel(
                 service: CLIBuilderService(cli: cli),
                 failureLog: failureLog
@@ -544,6 +572,7 @@ final class AppModel {
     func inventoryCount(for destination: AppDestination) -> Int? {
         switch destination {
         case .containers: containers.count
+        case .machines: machineModel?.machines.count
         case .images: images.count
         case .volumes: volumeModel?.volumes.count
         case .networks: networkModel?.networks.count
@@ -562,9 +591,10 @@ final class AppModel {
         async let images: Void = refreshImages()
         async let volumes: Void = volumeModel?.refresh() ?? ()
         async let networks: Void = networkModel?.refresh() ?? ()
+        async let machines: Void = machineModel?.refresh() ?? ()
         async let builder: Void = builderModel?.refresh() ?? ()
         async let system: Void = systemModel?.refresh() ?? ()
-        _ = await (images, volumes, networks, builder, system)
+        _ = await (images, volumes, networks, machines, builder, system)
         rebuildInventoryIndex()
     }
 

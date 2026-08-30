@@ -578,6 +578,66 @@ final class OnboardingUITests: XCTestCase {
             .firstMatch
     }
 
+    func testMachineInventoryInspectionAndCreateSheet() {
+        let app = launch(scenario: "ready")
+        let destination = app.descendants(matching: .any)["destination.machines"]
+        XCTAssertTrue(destination.waitForExistence(timeout: 3))
+        destination.click()
+
+        // The sidebar swaps its glance block for the default machine, because
+        // that is what every command with no machine ID resolves to.
+        XCTAssertTrue(
+            app.descendants(matching: .any)["sidebar.defaultMachine"]
+                .waitForExistence(timeout: 3)
+        )
+
+        // The machine's name is also in the sidebar block, which comes first in
+        // the hierarchy, so the row is selected by its address cell — that
+        // appears only in the table until the inspector opens.
+        let row = app.staticTexts["192.168.64.10"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 3))
+        row.click()
+
+        XCTAssertTrue(sectionLabel(app, "Boot configuration").waitForExistence(timeout: 3))
+        XCTAssertTrue(sectionLabel(app, "Network & user").exists)
+
+        // Already the default, so moving it is refused rather than being a
+        // command that would do nothing.
+        XCTAssertFalse(app.buttons["machine.setDefault"].isEnabled)
+
+        app.buttons["machines.create"].click()
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 3))
+
+        // The sheet opens pre-filled from what the CLI would compute, so only
+        // the image is missing and Create stays disabled until it is given.
+        let submit = sheet.buttons["machines.create.submit"]
+        XCTAssertFalse(submit.isEnabled)
+
+        let image = sheet.textFields["machines.create.image"]
+        XCTAssertTrue(image.waitForExistence(timeout: 3))
+        image.click()
+        image.typeText("alpine:3.22")
+        XCTAssertTrue(submit.isEnabled)
+
+        sheet.buttons["machines.create.next"].click()
+        XCTAssertTrue(sheet.staticTexts["Resources"].waitForExistence(timeout: 3))
+
+        sheet.buttons["machines.create.cancel"].click()
+        XCTAssertTrue(app.staticTexts["192.168.64.10"].firstMatch.waitForExistence(timeout: 3))
+    }
+
+    /// `container machine` arrived in Apple Container 1.0.0, so on 0.12 the
+    /// destination has to be absent rather than present and broken.
+    func testMachinesDestinationIsHiddenOnOlderCLIVersions() {
+        let app = launch(scenario: "networkLegacy")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["destination.containers"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.descendants(matching: .any)["destination.machines"].exists)
+    }
+
     private func launch(scenario: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [

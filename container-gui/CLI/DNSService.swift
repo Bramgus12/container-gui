@@ -7,6 +7,18 @@ nonisolated protocol DNSManaging: Sendable {
     func createDomain(_ configuration: DNSCreateConfiguration) async throws
     /// Removes the `/etc/resolver` entry. macOS authenticates the user first.
     func deleteDomain(_ configuration: DNSDeleteConfiguration) async throws
+    /// Starts `sudo container system dns …` behind a pseudo-terminal, so the
+    /// user can run the privileged change in the app and watch it happen rather
+    /// than copying it into Terminal.
+    ///
+    /// `sudo` refuses to prompt without a controlling terminal, which is exactly
+    /// what the pseudo-terminal supplies. The password is typed into the
+    /// embedded terminal and travels to `sudo` through the pty; the app does not
+    /// store it, echo it, or write it anywhere.
+    nonisolated func attachPrivileged(
+        arguments: [String],
+        terminalSize: TerminalSize
+    ) throws -> any InteractiveProcessSession
 }
 
 actor CLIDNSService: DNSManaging {
@@ -54,6 +66,40 @@ actor CLIDNSService: DNSManaging {
         try await runPrivileged(
             arguments: configuration.arguments,
             prompt: "Container GUI needs administrator access to remove the local DNS domain “\(configuration.domain.rawValue)” from /etc/resolver."
+        )
+    }
+
+    nonisolated func attachPrivileged(
+        arguments: [String],
+        terminalSize: TerminalSize
+    ) throws -> any InteractiveProcessSession {
+        let request = Self.privilegedRequest(
+            executableURL: executableURL,
+            arguments: arguments,
+            terminalSize: terminalSize
+        )
+        do {
+            return try PseudoTerminalSession(request: request, size: terminalSize)
+        } catch {
+            throw sanitizedDNSError(error)
+        }
+    }
+
+    /// `sudo` is invoked by absolute path with the container executable as its
+    /// first argument, so nothing is resolved through a `PATH` lookup and no
+    /// shell parses any of it — ADR 0001 still holds. The arguments are passed
+    /// as a vector, so a domain containing shell metacharacters is data rather
+    /// than syntax.
+    nonisolated static func privilegedRequest(
+        executableURL: URL,
+        arguments: [String],
+        terminalSize: TerminalSize
+    ) -> InteractiveSessionRequest {
+        InteractiveSessionRequest(
+            executableURL: URL(fileURLWithPath: "/usr/bin/sudo"),
+            arguments: [executableURL.path] + arguments,
+            environment: ProcessContainerCLI.defaultEnvironment(),
+            terminalSize: terminalSize
         )
     }
 

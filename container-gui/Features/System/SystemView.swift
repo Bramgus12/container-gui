@@ -124,6 +124,7 @@ private struct SystemDNSSection: View {
     @State private var addModel: AddLocalDomainModel?
     @State private var domainModel: SetServiceDomainModel?
     @State private var domainToRemove: String?
+    @State private var sudoCommand: PrivilegedCommandModel?
     @State private var showsResolverContents = false
 
     /// Restarts the service, then reloads DNS so the notice clears itself as
@@ -204,9 +205,13 @@ private struct SystemDNSSection: View {
         .sheet(item: $domainModel) { SetServiceDomainSheet(model: $0) }
         .alert("Remove Local Domain?", isPresented: Binding(get: { domainToRemove != nil }, set: { if !$0 { domainToRemove = nil } })) {
             Button("Remove", role: .destructive) { if let configuration = removeConfiguration { Task { await model.deleteDomain(configuration) } } }
+            Button("Run with sudo…") { if let configuration = removeConfiguration { sudoCommand = model.makeSudoCommand(delete: configuration) } }
             Button("Copy Command") { if let configuration = removeConfiguration { model.copyDeleteCommand(configuration) } }
             Button("Cancel", role: .cancel) {}
-        } message: { Text("macOS will ask for your administrator password before the resolver file is removed. Copy Command instead to run it in Terminal yourself.") }
+        } message: { Text("Remove asks macOS for your administrator password. Run with sudo runs the command in a terminal inside this window instead, where you type the password yourself. Copy Command hands it to Terminal.") }
+        .sheet(item: $sudoCommand) { command in
+            PrivilegedCommandSheet(model: command) { await model.refresh() }
+        }
     }
 }
 

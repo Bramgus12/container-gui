@@ -1,0 +1,30 @@
+[
+  {
+    "cpus": 4,
+    "id": "gui-fixture-probe",
+    "default": true,
+    "diskSize": 1169260544,
+    "memory": 9663676416,
+    "createdDate": "2026-08-30T19:54:05Z",
+    "status": "stopped"
+  },
+  {
+    "cpus": 8,
+    "id": "dev-box",
+    "default": false,
+    "diskSize": 2576980377,
+    "memory": 8589934592,
+    "createdDate": "2026-08-19T09:12:44Z",
+    "status": "running",
+    "ipAddress": "192.168.64.10"
+  },
+  {
+    "cpus": 2,
+    "id": "future-state",
+    "default": false,
+    "memory": 4294967296,
+    "createdDate": "2026-08-14T17:40:00Z",
+    "status": "provisioning",
+    "unrecognisedField": "ignored"
+  }
+]

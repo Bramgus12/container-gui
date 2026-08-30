@@ -1,0 +1,29 @@
+[
+  {
+    "cpus": 8,
+    "createdDate": "2026-08-19T09:12:44Z",
+    "diskSize": 2576980377,
+    "homeMount": "ro",
+    "id": "dev-box",
+    "image": {
+      "descriptor": {
+        "digest": "sha256:2222",
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "size": 9218
+      },
+      "reference": "docker.io/library/ubuntu:24.04"
+    },
+    "ipAddress": "192.168.64.10",
+    "memory": 8589934592,
+    "platform": {
+      "architecture": "arm64",
+      "os": "linux"
+    },
+    "status": "running",
+    "userSetup": {
+      "gid": 20,
+      "uid": 501,
+      "username": "bramgussekloo"
+    }
+  }
+]
