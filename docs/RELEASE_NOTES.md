@@ -58,6 +58,11 @@ container list — so until now they were invisible to the app entirely.
   inspect` does not report `virtualization` or `kernelPath`, so those rows
   appear only when the CLI supplies them; and no payload carries a
   live-versus-stored pair, so pending boot changes are tracked by the app.
+- Built from commit `e444343` on Apple silicon with macOS 27.0 and Apple
+  Container CLI `1.3.0` on 30 August 2026. Apple's notary service accepted both
+  the app and the disk image; `spctl --assess` reports `accepted` with
+  `source=Notarized Developer ID` for each, and the app still validates after
+  being copied out of the disk image.
 - The full unit and UI suites pass. The manual gates in
   `docs/RELEASE_CHECKLIST.md` — VoiceOver, the real smoke test, and the
   clean-Mac download test — have not been run for this release.
@@ -70,7 +75,7 @@ container list — so until now they were invisible to the app entirely.
 
 ## Download verification
 
-SHA-256: `PENDING`
+SHA-256: `7c7278fdd44d9233d1bc3f9df6e76be4d0f451f42c78f3aa3635f021a71cab1a`
 
 The disk image is signed with a Developer ID Application certificate and
 notarized by Apple. Verify an installed copy yourself with:
