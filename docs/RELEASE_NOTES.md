@@ -1,3 +1,101 @@
+# Container GUI 1.5.0
+
+Install or upgrade with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+```
+
+Container GUI 1.5.0 adds Machines, a destination for the long-lived Linux VMs
+`container machine` manages, and the terminal that was missing from the app.
+Machines never appear in Containers — the service filters them out of every
+container list — so until now they were invisible to the app entirely.
+
+## Changes
+
+- **Machines**, a new top-level destination between Containers and Images. The
+  table is `container machine list` column for column, so the two views cannot
+  disagree, and the sidebar names the default machine because that is what an
+  omitted machine ID resolves to.
+- Creates a machine with every `machine create` flag, pre-filled with what the
+  CLI would have computed — half your cores with a minimum of four, half your
+  RAM — so the sheet is submittable as soon as you name an image. The command
+  preview lists only what you actually changed.
+- Edits boot configuration as a **running-versus-after-restart pair** rather
+  than a form. `machine set` writes immediately but the machine keeps running on
+  its old values, so a plain form would be lying; the pair says which is which,
+  and the list marks a machine whose changes are still pending.
+- **Opens a shell inside a machine, in the app.** The pseudo-terminal plumbing
+  has been in the codebase for a while with nothing wired to it; it now drives a
+  real terminal emulator, so a login shell, a one-off command, resizing, and
+  Ctrl-C all work without leaving the window.
+- Reads both machine log files — the boot log and process output — in one pane,
+  with the same follow and tail controls the CLI has. The boot log is the
+  fastest way to see why a machine will not start.
+- Runs the privileged DNS commands in that same terminal as an alternative to
+  the macOS authorization dialog, so `sudo container system dns …` can be
+  watched rather than copied into Terminal. The macOS dialog is still what the
+  default buttons use, and the sheet says plainly that this route types the
+  password into the app's own terminal. See `docs/decisions/0002`.
+- Fixes a latent bug in the shared pseudo-terminal code: output was decoded one
+  4 KB read at a time, so any UTF-8 character split across a read boundary
+  became a replacement character. This also affects `container exec` output.
+
+## Compatibility and validation
+
+- macOS 26 or later on Apple-silicon Macs.
+- Apple Container CLI `0.12.0` or later and earlier than `2.0.0`. **Machines
+  needs `1.0.0` or later**, which is when `container machine` was added; below
+  that the destination is hidden rather than shown broken.
+- Building from source now needs the Metal Toolchain component
+  (`xcodebuild -downloadComponent MetalToolchain`) and, for command-line builds,
+  `-skipPackagePluginValidation`. Both come from SwiftTerm, the first
+  third-party dependency in the project. See the README.
+- Every machine command was checked against `container machine <command> --help`
+  from CLI `1.3.0`, and the decoding fixtures are captured verbatim from that
+  version's `machine list --format json` and `machine inspect`.
+- Two upstream gaps are worked around rather than papered over: `machine
+  inspect` does not report `virtualization` or `kernelPath`, so those rows
+  appear only when the CLI supplies them; and no payload carries a
+  live-versus-stored pair, so pending boot changes are tracked by the app.
+- The full unit and UI suites pass. The manual gates in
+  `docs/RELEASE_CHECKLIST.md` — VoiceOver, the real smoke test, and the
+  clean-Mac download test — have not been run for this release.
+- **The terminal has not been exercised against a booted machine.** Booting
+  fails on the development hardware with "Operation not supported by device", so
+  the shell's form, argument building, and failure paths are covered by tests
+  but its rendering against a live machine is not. The `sudo` DNS route has not
+  been run end to end either, because doing so means entering an administrator
+  password.
+
+## Download verification
+
+SHA-256: `PENDING`
+
+The disk image is signed with a Developer ID Application certificate and
+notarized by Apple. Verify an installed copy yourself with:
+
+```sh
+spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"
+```
+
+## Upgrade and rollback
+
+Re-run the install command above to upgrade in place. To roll back, pin a
+previous release, for example:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash -s -- --version v1.4.0
+```
+
+## Known limitations
+
+Interactive terminals are available for machines but not yet for containers:
+`container exec` still hands the interactive form to Terminal.app, even though
+the terminal view now exists and could serve it. The app does not yet manage
+registry authentication, build secrets or SSH forwarding, import, or kernel
+settings, or remote hosts.
+
 # Container GUI 1.4.0
 
 Install or upgrade with:
