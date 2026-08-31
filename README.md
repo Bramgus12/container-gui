@@ -313,6 +313,13 @@ formats have fixture and smoke-test coverage.
 | [Release checklist](docs/RELEASE_CHECKLIST.md) | Testing, accessibility, signing, and notarization gates |
 | [Architecture decision](docs/decisions/0001-cli-wrapper-and-distribution.md) | Why the app wraps the CLI and ships outside the Mac App Store |
 
+## License
+
+Container GUI is free software, licensed under the
+[GNU General Public License v3.0](LICENSE). You may use, study, share, and
+modify it; if you distribute the app or a modified version of it, you have to
+pass the same freedoms on and make your source available under the same terms.
+
 ---
 
 <div align="center">
