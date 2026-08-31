@@ -102,5 +102,42 @@ reports different dimensions. Capture it with the drop shadow left off —
 
 ## Deployment
 
-Not configured here on purpose. `bun run build` produces a standard TanStack
-Start build that Vercel detects and deploys without extra configuration.
+The site deploys to Vercel as **static files**, with no serverless function.
+
+`bun run build` produces two directories, and only one of them is deployed:
+
+- `dist/client` — the complete static site, including the prerendered
+  `index.html`. This is what ships.
+- `dist/server` — an SSR handler that prerendering uses to render the HTML and
+  is then finished with. A build-time tool, not a runtime artifact. There are no
+  server functions and no API routes in `src/`, so nothing needs to run per
+  request.
+
+This version of TanStack Start has no Vercel target — its plugin options are
+`dev`, `pages`, `prerender`, `sitemap` and `spa` — so it emits plain Vite output
+and leaves hosting to the host. Vercel's zero-config Vite preset serves `dist`,
+which contains no `index.html`, so without the configuration below **every URL
+returns Vercel's 404**. `vercel.json` overrides the output directory to
+`dist/client` and that is the whole fix.
+
+Two settings, one of which is not in this repo:
+
+| Setting                                        | Where                                | Value       |
+| ---------------------------------------------- | ------------------------------------ | ----------- |
+| Root Directory                                 | Vercel dashboard, Build & Deployment | `website`   |
+| Build command, output directory, cache headers | `vercel.json`                        | already set |
+
+Root Directory has to be set in the dashboard — `vercel.json` is read _from_ the
+root directory, so it cannot set it. The repository root has no `package.json`,
+so if it is left unset the build never runs and the result is the same 404 by a
+different route.
+
+The one header rule caches everything under `/assets/` for a year as immutable,
+which is safe because Vite content-hashes those filenames. The images at the
+root of `public/` are deliberately left on Vercel's defaults: `source` is
+path-to-regexp, not a regex, and Vercel documents no pattern for matching by
+file extension — `/assets/(.*)` is documented verbatim, an invented extension
+pattern would either fail the deploy or silently never match. Do not "fix" this
+by moving the images under `public/assets/` to pick up the existing rule, since
+they are not content-hashed and a year of `immutable` would strand a replaced
+screenshot in caches.
