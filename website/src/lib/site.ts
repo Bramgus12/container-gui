@@ -11,7 +11,7 @@
  * derives from it: the canonical tag, `og:url`, the sitemap, and the JSON-LD.
  * Change it here and nowhere else when the domain is settled.
  */
-export const SITE_URL = "https://containergui.app"
+export const SITE_URL = "https://container.gussekloo.com"
 
 export const REPO_URL = "https://github.com/Bramgus12/container-gui"
 export const RELEASES_URL = `${REPO_URL}/releases`
