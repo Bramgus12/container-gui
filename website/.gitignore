@@ -1,0 +1,23 @@
+node_modules
+.DS_Store
+dist
+dist-ssr
+*.local
+.env*
+.tanstack
+.wrangler
+.output
+.nitro
+.vercel
+.vinxi
+__unconfig*
+todos.json
+
+# typescript
+*.tsbuildinfo
+
+# Screenshot sources
+# Full-resolution 2x window captures, several megabytes each. Kept locally as
+# the input to `bun run images`; only the optimised output in public/ ships,
+# matching how design_system/ is handled at the repository root.
+screenshots/

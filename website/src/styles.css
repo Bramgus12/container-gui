@@ -1,0 +1,244 @@
+@import "tailwindcss";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist-mono";
+
+/*
+ * The design is monospace end to end — headings, body, everything — so
+ * `--font-sans` deliberately points at Geist Mono too. Nothing on the page
+ * should render in a proportional face.
+ */
+@theme inline {
+  --font-sans: "Geist Mono Variable", ui-monospace, SFMono-Regular, monospace;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, monospace;
+  --font-heading: var(--font-sans);
+
+  /* Design tokens beyond the shadcn set, named for the role they play. */
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover: var(--surface-hover);
+  --color-edge: var(--edge);
+  --color-edge-faint: var(--edge-faint);
+  --color-dim: var(--dim);
+  --color-dimmer: var(--dimmer);
+  --color-dimmest: var(--dimmest);
+  --color-amber: var(--amber);
+  --color-code: var(--code);
+  --color-link: var(--link);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 9px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
+}
+
+/*
+ * One appearance only. The design is built on near-black, and the app
+ * screenshot it centres on is a dark capture, so there is no light variant to
+ * fall back to.
+ */
+:root {
+  color-scheme: dark;
+
+  --background: #08090b;
+  --foreground: #f2f3f5;
+
+  --surface: #101216;
+  --surface-raised: #0d0f13;
+  --surface-hover: #0f1115;
+
+  --edge: #22262e;
+  --edge-faint: #16191e;
+  --border: #1a1d22;
+  --input: #22262e;
+
+  /*
+   * A four-step grey scale for secondary text, every step at or above the
+   * 4.5:1 WCAG AA threshold against the background.
+   *
+   * The design's two darkest greys (#5C6270 and #3E434C) measure 3.3:1 and
+   * 2.0:1 on #08090B, which is unreadable for a lot of people at the 11–12px
+   * these tones are used at. The scale below keeps the same ordering and very
+   * nearly the same tone, lifted just far enough to pass.
+   */
+  --muted-foreground: #9ba1ac; /* 7.7:1 */
+  --dim: #8a909e; /* 6.2:1 */
+  --dimmer: #828997; /* 5.7:1 */
+  --dimmest: #767d8b; /* 4.8:1 */
+  --code: #c9ced6; /* 12.6:1 */
+
+  --primary: #1c7bf5;
+  --primary-foreground: #08090b;
+  --ring: #1c7bf5;
+  --link: #5ca0ff;
+  --amber: #e8912a;
+
+  --card: #0d0f13;
+  --card-foreground: #f2f3f5;
+  --popover: #0d0f13;
+  --popover-foreground: #f2f3f5;
+  --secondary: #101216;
+  --secondary-foreground: #f2f3f5;
+  --muted: #101216;
+  --accent: #0f1115;
+  --accent-foreground: #f2f3f5;
+  --destructive: oklch(0.704 0.191 22.216);
+  --radius: 8px;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply font-sans;
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  /* Long unbroken commands must not push the page sideways on a phone. */
+  code,
+  kbd {
+    overflow-wrap: anywhere;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 35%, transparent);
+  }
+}
+
+@keyframes blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+
+.animate-marquee {
+  animation: marquee 34s linear infinite;
+}
+
+.animate-float {
+  animation: float 9s ease-in-out infinite;
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2.4s ease-in-out infinite;
+}
+
+/*
+ * Scroll-driven reveals, done in CSS rather than with an IntersectionObserver.
+ *
+ * A JavaScript observer has to hide the content first, which means the markup
+ * either ships invisible — bad for crawlers and for anyone without JS — or
+ * visibly flashes as it is hidden and re-shown. With `animation-timeline` the
+ * element is simply visible unless the browser supports scroll-driven
+ * animations, in which case it animates in as it enters the viewport.
+ */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-reveal] {
+      animation: reveal linear both;
+      animation-timeline: view();
+      /*
+       * Finishes within the entry range rather than part-way into `cover`, so
+       * anything fully on screen has necessarily reached the end state. A range
+       * that runs into `cover` can leave the last element on a short page
+       * parked at partial opacity, which is both a visual bug and a contrast
+       * failure.
+       */
+      animation-range: entry 0% entry 45%;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .animate-blink,
+  .animate-marquee,
+  .animate-float,
+  .animate-pulse-dot {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
