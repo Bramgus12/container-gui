@@ -9,7 +9,7 @@
  *
  *     bun run images
  */
-import { mkdir } from "node:fs/promises"
+import { access, mkdir } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import sharp from "sharp"
@@ -20,15 +20,32 @@ const publicDir = join(root, "public")
 /** Widths the `<picture>` offers. The page never displays it wider than 1200. */
 const SCREENSHOT_WIDTHS = [1200, 2400]
 
-/** The site's background, from design_system/Website.dc.html. */
-const CANVAS_DARK = "#08090B"
+/** The site's ground: the cool aluminium the whole page sits on. */
+const PAPER = "#E9EDF3"
 
 async function screenshots() {
-  // `trim` removes the transparent drop-shadow margin `screencapture` leaves
-  // around the window, so the site can apply its own frame in CSS.
-  const source = sharp(join(root, "screenshots", "containers-inspector.png"))
-    .trim({ threshold: 0 })
-    .withMetadata({ density: 72 })
+  const sourcePath = join(root, "screenshots", "containers-inspector.png")
+
+  // The source is git-ignored, so a fresh clone has the optimised output in
+  // `public/` but not the capture it came from. Skip rather than fail: the
+  // icons and the social card below are derived from committed files and are
+  // the parts most likely to need regenerating on their own.
+  try {
+    await access(sourcePath)
+  } catch {
+    console.warn(
+      `no ${sourcePath}; leaving the committed screenshots in public/ alone`
+    )
+    return null
+  }
+
+  // `trim` removes the fully transparent border `screencapture` leaves around
+  // the window. What it keeps is macOS's own drop shadow, which lives in the
+  // alpha channel and is what frames the window on the site's light ground —
+  // the page deliberately adds no border or shadow of its own.
+  const source = sharp(sourcePath).trim({ threshold: 0 }).withMetadata({
+    density: 72,
+  })
 
   const { width, height } = await source
     .clone()
@@ -72,11 +89,13 @@ async function icons() {
       .toFile(join(publicDir, `icon-${size}.png`))
   }
 
-  // Apple wants an opaque icon: a transparent one renders black on the home screen.
+  // Apple wants an opaque icon: a transparent one renders black on the home
+  // screen. Flattened onto the site's ground so the squircle's corners match
+  // the page rather than cutting a dark notch out of it.
   await icon
     .clone()
     .resize(180, 180)
-    .flatten({ background: CANVAS_DARK })
+    .flatten({ background: PAPER })
     .png({ compressionLevel: 9 })
     .toFile(join(publicDir, "apple-touch-icon.png"))
 
@@ -90,9 +109,15 @@ async function icons() {
 }
 
 /**
- * Open Graph card: the screenshot bleeding off the right edge of the app's own
- * dark canvas, with the icon and name on the left. 1200x630 is what every
- * unfurler crops to.
+ * Open Graph card: the same idea as the page — the app as the one dark object
+ * on a bright ground — with the window bleeding off the right and bottom
+ * edges. 1200x630 is what every unfurler crops to.
+ *
+ * Helvetica Neue rather than Archivo: librsvg resolves fonts through
+ * fontconfig, which only sees fonts installed on the machine, and installing
+ * one to render a build artefact is not a trade worth making. It is the
+ * closest system grotesque to the site's face, and the card carries two short
+ * lines of text precisely so the substitution barely shows.
  */
 async function openGraph() {
   const W = 1200
@@ -101,36 +126,29 @@ async function openGraph() {
   const shot = await sharp(
     join(publicDir, "container-gui-containers-inspector@2x.png")
   )
-    .resize({ width: 820 })
+    .resize({ width: 880 })
     .toBuffer()
 
   const icon = await sharp(join(root, "..", "docs", "app-icon.png"))
-    .resize(96, 96)
+    .resize(84, 84)
     .toBuffer()
 
-  // Menlo rather than Geist Mono: librsvg resolves fonts through fontconfig,
-  // which only sees fonts installed on the machine, and Menlo ships with every
-  // macOS. It is the closest system monospace to the site's face.
   const text = Buffer.from(`
     <svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
       <style>
-        .t { font-family: Menlo, ui-monospace, monospace; fill: #F2F3F5; }
-        .s { font-family: Menlo, ui-monospace, monospace; fill: #9BA1AC; }
-        .a { font-family: Menlo, ui-monospace, monospace; fill: #E8912A; }
+        .n { font-family: "Helvetica Neue", Helvetica, sans-serif; fill: #0B1220; }
+        .s { font-family: "Helvetica Neue", Helvetica, sans-serif; fill: #4F5A6B; }
       </style>
-      <text class="a" x="72" y="216" font-size="17" letter-spacing="2.4">MACOS 26 · APPLE SILICON</text>
-      <text class="t" x="72" y="286" font-size="46" font-weight="700">container-gui</text>
-      <text class="s" x="72" y="346" font-size="25">Every apple/container command,</text>
-      <text class="s" x="72" y="386" font-size="25">none of the typing.</text>
-      <text class="s" x="72" y="452" font-size="19" opacity="0.7">A native macOS app for Apple Container</text>
+      <text class="n" x="72" y="212" font-size="42" font-weight="700" letter-spacing="-1">Container GUI</text>
+      <text class="s" x="72" y="266" font-size="25">A window for Apple’s container runtime.</text>
     </svg>`)
 
   await sharp({
-    create: { width: W, height: H, channels: 4, background: CANVAS_DARK },
+    create: { width: W, height: H, channels: 4, background: PAPER },
   })
     .composite([
-      { input: shot, top: 130, left: 590 },
-      { input: icon, top: 96, left: 72 },
+      { input: shot, top: 300, left: 320 },
+      { input: icon, top: 74, left: 72 },
       { input: text, top: 0, left: 0 },
     ])
     .png({ compressionLevel: 9 })
@@ -138,10 +156,14 @@ async function openGraph() {
 }
 
 await mkdir(publicDir, { recursive: true })
-const { width, height } = await screenshots()
+const measured = await screenshots()
 await icons()
 await openGraph()
 
-console.log(
-  `\nDone. Use width="${SCREENSHOT_WIDTHS[0]}" height="${Math.round((height / width) * SCREENSHOT_WIDTHS[0])}" on the <img>.`
-)
+if (measured) {
+  console.log(
+    `\nDone. Use width="${SCREENSHOT_WIDTHS[0]}" height="${Math.round((measured.height / measured.width) * SCREENSHOT_WIDTHS[0])}" on the <img>.`
+  )
+} else {
+  console.log("\nDone: icons and the social card.")
+}

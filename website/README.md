@@ -1,8 +1,7 @@
 # Container GUI website
 
 The marketing site for Container GUI: one prerendered page, built with
-[TanStack Start](https://tanstack.com/start), Tailwind CSS v4, and
-[shadcn/ui](https://ui.shadcn.com).
+[TanStack Start](https://tanstack.com/start) and Tailwind CSS v4.
 
 Bun is the package manager and script runner for this project. Use `bun` and
 `bunx --bun`; do not use npm, pnpm, or npx, including in any snippet copied from
@@ -25,8 +24,10 @@ bun run dev
 | `bun run typecheck`               | `tsc --noEmit`                                                    |
 | `bun run lint` / `bun run format` | ESLint and Prettier                                               |
 
-Add a shadcn component with `bunx --bun shadcn@latest add <name>`. Keep the set
-small — every component is more JavaScript on a page whose job is to load fast.
+There is no component library. The page is one route with five components and
+no client-side dependency beyond React and the router — everything it draws,
+including the six sidebar glyphs, is written here. Keep it that way: every
+package is more JavaScript on a page whose job is to load fast.
 
 ## How it is built to be found
 
@@ -45,13 +46,15 @@ things are load-bearing and should not be undone casually:
   down.** The canonical tag, `og:url`, the JSON-LD, `robots.txt`, and
   `sitemap.xml` all derive from it — the last two are generated during `build`
   by `scripts/generate-seo-files.ts`.
-- **The hero terminal renders its first command server-side** and only then
-  starts animating, so the markup is never an empty box and hydration matches.
-- **Scroll reveals are CSS `animation-timeline: view()`**, not an
-  IntersectionObserver. An observer has to hide the content first, which means
-  shipping markup that is invisible to crawlers and to anyone without
-  JavaScript. Here the content is simply visible unless the browser supports
-  scroll-driven animations.
+- **Motion is one plain CSS animation on load**, never an IntersectionObserver
+  and never a per-section scroll reveal. An observer has to hide the content
+  first, which means shipping markup that is invisible to crawlers and to
+  anyone without JavaScript. Here `[data-enter]` animates from the moment the
+  stylesheet applies, so the only thing between an element and its final state
+  is a 0.75s animation that has already started.
+- **The split view renders all six panels**, five of them with `hidden`. The
+  prerendered HTML therefore contains every destination's copy whether or not
+  the crawler runs the script; only the selection is client state.
 
 ## The version number
 
@@ -72,17 +75,43 @@ which lifts the unauthenticated 60-per-hour rate limit.
 
 ## Design
 
-The layout, palette and typography come from `design_system/Website.dc.html` at
-the repository root. Two deliberate departures from it:
+The page has one idea: **the app is the only dark object on a bright page.**
+The ground is the cool aluminium of the app icon's own background, and every
+product surface — the window in the hero, the split view, the command block —
+sits on it as a dark macOS object. The page is built out of macOS interface
+parts rather than marketing cards, because the product's whole claim is that it
+is a real Mac app. Nothing on the page imitates a terminal; that is the thing
+the app replaces.
 
-- **The secondary greys are lifted.** The design's `#5C6270` and `#3E434C`
-  measure 3.3:1 and 2.0:1 against the background, well under WCAG AA, at the
-  11–12px they are used for. `src/styles.css` documents the replacements and
-  their measured ratios.
-- **Nothing claims the app uses a shell.** The design copy said the app "shells
-  out to" the container binary; it does not — it launches the executable
-  directly with discrete arguments, which is a stated safety property of the
-  app.
+Four decisions are load-bearing, and `src/styles.css` is the single place they
+are written down:
+
+- **Colour comes from the app icon.** `public/favicon.png` is a cyan-to-azure
+  hexagon on a pale blue-white ground; `--color-paper`, `--color-azure` and
+  `--color-cyan` are sampled from it. Azure is the only saturated colour on
+  paper, and cyan appears only on the dark surfaces. Every text token carries
+  its measured contrast ratio in a comment, and all of them clear WCAG AA at
+  the size they are used.
+- **One typeface, with the width axis carrying the hierarchy.** Archivo
+  Variable runs `wdth` 62–125, so headlines are set wide (113%) and heavy and
+  body sits at normal width — no second display face. This is why the
+  stylesheet imports `@fontsource-variable/archivo/standard.css` rather than
+  the package root: only that file ships both axes, and the default
+  weight-only file would flatten the whole scale without erroring.
+- **Geist Mono means machine.** Commands, image tags, versions and counts, and
+  nothing else. Never a decorative label.
+- **Radius means something.** 12px is a macOS window, 7px is a control, and
+  everything else has none. There is one shadow recipe, `.float`, used only on
+  the split-view panel; the hero screenshot has no CSS frame at all, because
+  macOS's own window shadow is already in the capture's alpha channel.
+
+Two things the page deliberately does not claim:
+
+- **Nothing says the app uses a shell.** It launches the executable directly
+  with discrete arguments, which is a stated safety property, and the command
+  section says so in as many words.
+- **Coverage is described as partial**, because it is. The split view says so
+  above the fold of that section rather than in a footnote.
 
 ## Images
 
@@ -90,15 +119,22 @@ the repository root. Two deliberate departures from it:
 `bun run images` from two sources:
 
 - `screenshots/containers-inspector.png` — a 2x window capture of the app.
-  Multi-megabyte, so it is git-ignored and kept locally, the same way
-  `design_system/` is at the repository root.
+  Multi-megabyte, so it is git-ignored and kept locally rather than carried in
+  the repository.
 - `../docs/app-icon.png` — the app icon, for the favicons and the Open Graph
   card.
 
 To swap in a new screenshot, replace that file, run `bun run images`, and update
 `SCREENSHOT.width` / `SCREENSHOT.height` in `src/lib/site.ts` if the script
-reports different dimensions. Capture it with the drop shadow left off —
-`screencapture -o -w` — since the page applies its own frame.
+reports different dimensions. Capture it **with** the window shadow: the page
+applies no border and no CSS shadow of its own, and the hero figure is widened
+by the shadow's share of the image (about 2.75% per side) so the window's edges
+line up with the text column. A capture without one would sit on the paper with
+nothing lifting it off.
+
+Without `screenshots/`, `bun run images` skips that step with a warning and
+still regenerates the icons and the social card, both of which come from
+committed files.
 
 ## Deployment
 

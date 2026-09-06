@@ -4,8 +4,8 @@
   "description": "A native macOS app for Apple Container.",
   "start_url": "/",
   "display": "browser",
-  "background_color": "#08090b",
-  "theme_color": "#08090b",
+  "background_color": "#e9edf3",
+  "theme_color": "#e9edf3",
   "icons": [
     {
       "src": "/icon-192.png",

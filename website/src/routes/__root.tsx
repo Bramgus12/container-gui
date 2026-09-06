@@ -12,11 +12,12 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: TITLE },
       { name: "description", content: DESCRIPTION },
-      // The design is dark only, so the browser's own UI — scrollbars, form
+      // The page is light only: the app is the dark object on it, and there
+      // is no dark variant to fall back to. Browser chrome — scrollbars, form
       // controls, the mobile address bar — is told to match rather than
       // following the reader's system setting.
-      { name: "color-scheme", content: "dark" },
-      { name: "theme-color", content: "#08090b" },
+      { name: "color-scheme", content: "light" },
+      { name: "theme-color", content: "#e9edf3" },
       { name: "apple-mobile-web-app-title", content: APP_NAME },
 
       { property: "og:type", content: "website" },
@@ -56,10 +57,13 @@ export const Route = createRootRoute({
   }),
   notFoundComponent: () => (
     <main className="mx-auto flex min-h-svh max-w-2xl flex-col justify-center gap-4 px-6">
-      <h1 className="text-3xl font-semibold tracking-tight">Page not found</h1>
-      <p className="text-muted-foreground">
+      <h1 className="t-heading text-[2rem]">Page not found</h1>
+      <p className="text-[16px] leading-[1.6] text-slate">
         That page does not exist.{" "}
-        <a className="text-primary underline underline-offset-4" href="/">
+        <a
+          className="text-azure underline decoration-azure/35 underline-offset-4"
+          href="/"
+        >
           Go to the {APP_NAME} home page
         </a>
         .

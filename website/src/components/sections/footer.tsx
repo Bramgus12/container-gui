@@ -1,42 +1,45 @@
-import { LICENSE_URL, TROUBLESHOOTING_URL, WORDMARK } from "@/lib/site"
+import {
+  APP_NAME,
+  LICENSE_URL,
+  REPO_URL,
+  TROUBLESHOOTING_URL,
+} from "@/lib/site"
+
+const LINKS = [
+  { label: "Source", href: REPO_URL },
+  { label: "Troubleshooting", href: TROUBLESHOOTING_URL },
+  { label: "GPL-3.0", href: LICENSE_URL },
+]
 
 export function Footer() {
   return (
-    <footer className="mx-auto mt-[110px] max-w-[1180px] px-6 sm:px-8">
-      <div className="flex flex-wrap items-center gap-4 border-t border-edge-faint pt-[34px] pb-14 text-[11px] text-dimmer">
-        <img
-          src="/favicon.png"
-          alt=""
-          width={18}
-          height={18}
-          loading="lazy"
-          decoding="async"
-          className="size-[18px] rounded-[4px] opacity-70"
-        />
-        <span>
-          {WORDMARK} — an unofficial GUI for Apple's container runtime
+    <footer className="mx-auto mt-28 max-w-[1160px] px-6 sm:mt-36 sm:px-8">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-rule py-8 text-[13px] text-mute">
+        <span className="flex items-center gap-2.5">
+          <img
+            src="/favicon.png"
+            alt=""
+            width={20}
+            height={20}
+            loading="lazy"
+            decoding="async"
+            className="size-5 rounded-[5px]"
+          />
+          {APP_NAME}
         </span>
-        <span className="flex items-center gap-4">
-          <a
-            className="transition-colors hover:text-foreground"
-            href={LICENSE_URL}
-            target="_blank"
-            rel="noreferrer"
-          >
-            GPL-3.0
-          </a>
-          <a
-            className="transition-colors hover:text-foreground"
-            href={TROUBLESHOOTING_URL}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Troubleshooting
-          </a>
-        </span>
-        <span className="w-full sm:ml-auto sm:w-auto">
-          Not affiliated with Apple Inc.
-        </span>
+        <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-3">
+          {LINKS.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              target="_blank"
+              rel="noreferrer"
+              className="transition-colors hover:text-ink"
+            >
+              {link.label}
+            </a>
+          ))}
+        </nav>
       </div>
     </footer>
   )

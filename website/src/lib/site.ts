@@ -20,8 +20,6 @@ export const TROUBLESHOOTING_URL = `${REPO_URL}/blob/main/docs/TROUBLESHOOTING.m
 export const APPLE_CONTAINER_URL = "https://github.com/apple/container"
 
 export const APP_NAME = "Container GUI"
-/** The lowercase wordmark the design uses in the header and the footer. */
-export const WORDMARK = "container-gui"
 
 /**
  * The latest published release, refreshed from the GitHub releases API at the
@@ -34,13 +32,17 @@ export { APP_VERSION } from "./version"
  * The h1, as plain text, for the social-card alt text.
  *
  * The hero renders the same words as markup rather than from this constant,
- * because "apple/container" needs a nowrap span to stop the browser breaking
- * the line at the slash. Keep the two in step.
+ * because the line has to break in a particular place at display size. Keep
+ * the two in step.
  */
-export const HEADLINE = "Every apple/container command, none of the typing."
+export const HEADLINE = "A window for Apple's container runtime."
 
 export const DESCRIPTION =
-  "Container GUI is a free, open-source native macOS app for Apple's container CLI. Run containers, build images, follow logs and manage Linux machines without the terminal."
+  "Container GUI is a free, open-source native macOS app for Apple's container CLI. Run containers, build and pull images, follow logs and live stats, and manage Linux machines without the terminal."
+
+/** The hero deck, directly under the headline. */
+export const DECK =
+  "A native macOS app for the container CLI. It runs the same binary already on your Mac and gives it lists, forms, inspectors and live logs — with the exact command on screen before anything runs."
 
 export const SCREENSHOT = {
   /** Base name shared by every derivative in `public/`. */
@@ -50,112 +52,109 @@ export const SCREENSHOT = {
   alt: "Container GUI on macOS showing the Containers list with the inspector open on a running container, with live memory, CPU, network and block I/O statistics and streaming logs.",
 } as const
 
-/** Cycled through by the typing animation in the hero terminal. */
-export const TYPED_COMMANDS = [
-  "container ls --all",
-  "container run -d -p 8080:80 nginx:1.27",
-  "container machine create alpine:3.22",
-  "container system dns create test",
-  "container logs -f --boot alpine-3.22",
-] as const
-
-/** The scrolling band under the hero. */
-export const MARQUEE_COMMANDS = [
-  "container run",
-  "container ls",
-  "container logs",
-  "container exec",
-  "container build",
-  "container images pull",
-  "container volume create",
-  "container network ls",
-  "container machine create",
-  "container machine set",
-  "container system dns create",
-  "container inspect",
-] as const
-
-export type Principle = {
-  index: string
-  title: string
-  body: string
-}
-
-export const PRINCIPLES: Array<Principle> = [
-  {
-    index: "01",
-    title: "Same binary",
-    body: "No daemon of its own, no reimplementation. The app runs the container binary already on your Mac — directly, never through a shell — and parses what comes back.",
-  },
-  {
-    index: "02",
-    title: "Command receipts",
-    body: "Every sheet shows the exact invocation it will run, in a copyable line at the bottom. Learn the CLI by using the GUI, or paste it into a script.",
-  },
-  {
-    index: "03",
-    title: "Nothing hidden",
-    body: "Machines, DNS domains, kernel paths, boot config that only applies after restart. The awkward parts of the runtime get a surface instead of a footnote.",
-  },
+/**
+ * The hero's requirements plate: the facts a reader needs before they click
+ * download, laid out the way the app's own inspector lays out a key and a
+ * value. Data, not decoration — which is why there is no eyebrow above the
+ * headline saying the same things in tracked capitals.
+ */
+export const REQUIREMENTS: Array<{ label: string; value: string }> = [
+  { label: "macOS", value: "26 or later" },
+  { label: "Chip", value: "Apple silicon" },
+  { label: "container CLI", value: "0.12.3 to 1.x" },
+  { label: "License", value: "GPL-3.0" },
 ]
 
-export type Destination = {
-  index: string
+export type Screen = {
+  /** Matches the app's own sidebar labels. */
   name: string
+  /** What the app's sidebar shows next to the label; `null` where it shows none. */
+  count: string | null
   body: string
-  commands: string
+  /** The subcommands this screen wraps, as the CLI spells them. */
+  commands: Array<string>
+  /** What the app's status bar reports having run for this screen. */
+  status: string
 }
 
-export const DESTINATIONS: Array<Destination> = [
+export const SCREENS: Array<Screen> = [
   {
-    index: "01",
     name: "Containers",
-    body: "Run, stop, exec and inspect. Live logs and stats per container, state filters, and a run sheet that assembles ports, mounts, env and networks.",
-    commands: "run · ls · logs",
+    count: "2",
+    body: "Run, stop, signal and inspect. Live logs and per-container CPU, memory, network and block I/O, state filters, and a run sheet that assembles ports, mounts, environment and networks for you.",
+    commands: ["run", "ls", "logs -f", "exec", "inspect"],
+    status: "container ls --all",
   },
   {
-    index: "02",
     name: "Machines",
-    body: "The VMs the CLI filters out of every container list. Default selection, boot configuration split into running vs. after-restart, boot and stdio logs.",
-    commands: "machine *",
+    count: "1",
+    body: "The Linux VMs the CLI leaves out of every container list. Choose the default, open a real login shell, and edit boot configuration as a running-versus-after-restart pair, because the CLI only applies those changes on the next boot.",
+    commands: ["machine create", "machine ls", "machine set"],
+    status: "container machine ls",
   },
   {
-    index: "03",
     name: "Images",
-    body: "Pull with progress per layer, build from a Dockerfile with build args and platform, tag and prune. Digests stay visible.",
-    commands: "images · build",
+    count: "4",
+    body: "Pull with progress per layer, build from a Dockerfile with build args and platform, then tag, push, save and load. Digests stay visible, and a delete names what still depends on the image before it runs.",
+    commands: ["images pull", "build", "images push"],
+    status: "container images ls",
   },
   {
-    index: "04",
     name: "Volumes",
-    body: "Create, inspect and delete, with the containers currently mounting each one listed before you remove it.",
-    commands: "volume *",
+    count: "0",
+    body: "Create, inspect and delete persistent volumes, with the containers currently mounting one listed before you remove it.",
+    commands: ["volume create", "volume ls", "volume rm"],
+    status: "container volume ls",
   },
   {
-    index: "05",
     name: "Networks",
-    body: "Subnets, attached containers and addresses, in the one place the CLI makes you cross-reference by hand.",
-    commands: "network *",
+    count: "2",
+    body: "Subnets, attached containers and addresses in one place, instead of cross-referencing two commands by hand. Create, inspect, delete and prune.",
+    commands: ["network create", "network ls", "network inspect"],
+    status: "container network ls",
   },
   {
-    index: "06",
     name: "System",
-    body: "Service status, builder resources, local DNS domains and the registry defaults — plus disk housekeeping with reclaimable space called out.",
-    commands: "system · dns",
+    count: null,
+    body: "Service, builder and DNS status with the controls to start and stop each one, local resolver domains written for you, registry logins, disk housekeeping with reclaimable space called out, and a redacted support report.",
+    commands: ["system start", "system dns create", "registry login"],
+    status: "container system status",
   },
 ]
 
 /**
- * The command-receipt sample, as tokens so the highlighting is markup rather
- * than a pre-coloured image.
+ * The run sheet as the reader would have filled it in.
+ *
+ * Every field here has to be traceable in the command beside it — that pairing
+ * is the whole point of the section, so the two are edited together.
  */
-export const COMMAND_RECEIPT: Array<
+export const RUN_SHEET: Array<{
+  label: string
+  value: string
+  /** Booleans render as the app's switch rather than as the word "Yes". */
+  kind?: "switch"
+}> = [
+  { label: "Name", value: "nginx-prod" },
+  { label: "Image", value: "nginx:1.27" },
+  { label: "Publish", value: "8080:80, 8443:443" },
+  { label: "Mount", value: "site-content \u2192 /usr/share/nginx/html" },
+  { label: "Read only", value: "On", kind: "switch" },
+  { label: "Env file", value: ".env.local" },
+  { label: "Detached", value: "On", kind: "switch" },
+]
+
+/**
+ * The command that sheet produces, as tokens so the highlighting is markup
+ * rather than a pre-coloured image, and so the plain text stays copyable.
+ */
+export const RUN_COMMAND: Array<
   Array<{ text: string; tone?: "cmd" | "flag" }>
 > = [
   [
     { text: "container", tone: "cmd" },
     { text: " run " },
     { text: "-d", tone: "flag" },
+    { text: " \\" },
   ],
   [{ text: "--name", tone: "flag" }, { text: " nginx-prod \\" }],
   [
@@ -171,3 +170,8 @@ export const COMMAND_RECEIPT: Array<
   [{ text: "--env-file", tone: "flag" }, { text: " .env.local \\" }],
   [{ text: "nginx:1.27" }],
 ]
+
+/** The same command as one string, for the copy button. */
+export const RUN_COMMAND_TEXT = RUN_COMMAND.map((line, index) =>
+  (index === 0 ? "" : "  ").concat(line.map((token) => token.text).join(""))
+).join("\n")

@@ -1,12 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router"
 
-import { CommandReceipt } from "@/components/sections/command-receipt"
-import { Destinations } from "@/components/sections/destinations"
+import { Command } from "@/components/sections/command"
+import { Covers } from "@/components/sections/covers"
 import { Footer } from "@/components/sections/footer"
 import { Hero } from "@/components/sections/hero"
 import { Install } from "@/components/sections/install"
-import { Marquee } from "@/components/sections/marquee"
-import { Principles } from "@/components/sections/principles"
 import { SiteHeader } from "@/components/site-header"
 import {
   APP_NAME,
@@ -84,12 +82,10 @@ function Home() {
         }}
       />
       <SiteHeader />
-      <main className="overflow-hidden">
+      <main>
         <Hero />
-        <Marquee />
-        <Principles />
-        <Destinations />
-        <CommandReceipt />
+        <Covers />
+        <Command />
         <Install />
       </main>
       <Footer />

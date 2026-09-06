@@ -1,53 +1,67 @@
-import { APP_VERSION, REPO_URL, WORDMARK } from "@/lib/site"
+import { GithubIcon } from "@/components/github-icon"
+import { APP_NAME, APP_VERSION, RELEASES_URL, REPO_URL } from "@/lib/site"
 
 const NAV = [
-  { label: "what", href: "#what" },
-  { label: "surface", href: "#surface" },
-  { label: "install", href: "#install" },
+  { label: "What it covers", href: "#covers" },
+  { label: "How it works", href: "#command" },
 ]
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/70 backdrop-blur-[14px]">
-      <div className="mx-auto flex h-[58px] max-w-[1180px] items-center gap-3.5 px-6 sm:px-8">
-        <a href="/" className="flex items-center gap-3.5">
+    <header className="sticky top-0 z-50 border-b border-rule bg-paper/85 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-[1160px] items-center gap-3 px-6 sm:px-8">
+        <a href="/" className="flex shrink-0 items-center gap-2.5">
           <img
             src="/favicon.png"
             alt=""
-            width={22}
-            height={22}
-            className="size-[22px] rounded-[5px]"
+            width={26}
+            height={26}
+            className="size-[26px] rounded-[6px]"
           />
-          <span className="text-[13px] font-semibold tracking-[-0.01em]">
-            {WORDMARK}
+          <span className="t-sub text-[15px] whitespace-nowrap">
+            {APP_NAME}
           </span>
         </a>
         {/* One interpolation rather than `v{APP_VERSION}`, which React would
             split into two text nodes separated by a comment marker. */}
-        <span className="text-[11px] text-dimmer">{`v${APP_VERSION}`}</span>
+        {/* The version is a detail, not a headline: it goes as soon as the
+            header has to fight for room. */}
+        <span className="hidden rounded-[5px] bg-ink/6 px-1.5 py-0.5 font-mono text-[11px] text-mute min-[420px]:block">
+          {APP_VERSION}
+        </span>
 
-        <div className="ml-auto flex items-center gap-5 text-xs text-dim sm:gap-[26px]">
-          <nav aria-label="Main" className="hidden sm:block">
-            <ul className="flex items-center gap-[26px]">
-              {NAV.map((item) => (
-                <li key={item.href}>
-                  <a
-                    className="transition-colors hover:text-foreground"
-                    href={item.href}
-                  >
-                    {item.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
+        <nav aria-label="Main" className="ml-auto hidden md:block">
+          <ul className="t-ui flex items-center gap-7 text-[14px] text-slate">
+            {NAV.map((item) => (
+              <li key={item.href}>
+                <a
+                  className="transition-colors hover:text-ink"
+                  href={item.href}
+                >
+                  {item.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="ml-auto flex items-center gap-2 md:ml-7">
           <a
             href={REPO_URL}
             target="_blank"
             rel="noreferrer"
-            className="rounded-[5px] border border-[#2a2e36] px-3 py-1.5 text-foreground transition-colors hover:border-dimmer"
+            aria-label={`${APP_NAME} on GitHub`}
+            className="grid size-9 place-items-center rounded-control text-slate transition-colors hover:bg-ink/6 hover:text-ink"
           >
-            GitHub ↗
+            <GithubIcon className="size-[17px]" />
+          </a>
+          <a
+            href={RELEASES_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="t-ui rounded-control bg-azure px-3.5 py-2 text-[14px] text-white transition-colors hover:bg-[#0951c2]"
+          >
+            Download
           </a>
         </div>
       </div>
