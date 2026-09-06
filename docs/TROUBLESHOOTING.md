@@ -135,3 +135,83 @@ Confirm the service is healthy in System, then retry the Networks screen. If
 cached rows remain visible, the error banner describes the most recent refresh
 failure without discarding the last successful inventory. Copy sanitized
 diagnostics from System when reporting persistent failures.
+
+## Registry login fails
+
+Check the **Server** field first: it takes a host, optionally with a port —
+`ghcr.io`, `localhost:5000` — and not a URL. A pasted `https://ghcr.io` is
+rejected in the sheet before it reaches the CLI, and the transport is chosen
+with the **Scheme** control instead.
+
+If the server and user name are right, the failure is the registry's answer,
+not the app's. Confirm the credential is the one that registry expects: many
+require a personal access token rather than an account password, and some need
+a specific user name alongside a token.
+
+Container GUI never stores the password. It is written to the command's
+standard input and released, so a failed login leaves nothing to clear, and
+retrying means typing it again.
+
+## Automatic, HTTPS, or HTTP for a registry
+
+**Automatic** sends no `--scheme` flag and lets the CLI apply its own default.
+This is deliberate: Apple Container 0.12–1.0 accepted `auto` and defaulted to
+it, while 1.3.1 accepts only `http` and `https` and defaults to `https`. Sending
+`auto` would fail outright on current releases, so the app never sends it.
+
+Choose **HTTPS** to require an encrypted connection. Choose **HTTP** only for a
+registry on a network you control: the user name, the password, and the image
+layers all travel in the clear, and the sheet says so before you submit.
+
+## A push was cancelled part-way
+
+Cancelling stops the local process. It does not roll the remote registry back,
+and Container GUI does not claim that it does. A cancelled push may have
+uploaded some layers, and may or may not have updated the tag. Check the
+registry itself before pushing again.
+
+The same caution applies to a cancelled **Load**: some images from the archive
+may already have been imported, which is why the image list refreshes after a
+cancellation as well as after a success.
+
+## An image archive cannot be saved or loaded
+
+**Save** needs an absolute path and replaces any existing file there. Use
+**Choose…** to pick the destination if the path is being rejected; the field
+requires a full path rather than a name relative to your home folder.
+
+**Load** reads an OCI-compatible tar archive written by `container image save`.
+It is not a Docker `docker save` archive and not a container filesystem export.
+The **Load archives with invalid member files** option maps to the CLI's
+`--force`, which accepts an archive whose members do not all validate — it does
+not bypass other import failures.
+
+## Images will not delete in bulk
+
+Bulk deletion never removes containers. An image a container still uses is
+listed as blocked in the confirmation and preserved by the CLI, so the delete
+reports a partial failure rather than cascading into container deletion.
+
+Delete those containers first, or use the single-image **Delete** action, which
+plans the dependent-container cleanup and asks before doing it.
+
+**Ignore targets that are already missing** is the CLI's `--force`, and it only
+suppresses not-found errors. There is no force-remove-in-use-images option in
+the CLI and none in the app.
+
+## Pruning removed more or less than expected
+
+The candidate count in the prune sheet is an estimate from the image and
+container lists the app can see. Reachability is the CLI's decision, so the
+result can differ. **Dangling images only** maps to `container image prune`;
+**All images no container uses** maps to `container image prune --all` and will
+remove tagged images too. System → **Reclaim** remains the combined image and
+volume shortcut.
+
+## Registry credentials in diagnostics
+
+Passwords and tokens are never written to a command, a command preview, the
+failure log, copied diagnostics, or an error message — the secret reaches the
+CLI only through the child process's standard input. If you believe one has
+appeared in an artifact, that is a bug worth reporting with the artifact
+attached.

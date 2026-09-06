@@ -638,6 +638,181 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["destination.machines"].exists)
     }
 
+    // MARK: - Registries and image operations
+
+    func testRegistryLoginAndLogoutThroughTheFakeCLI() {
+        let app = launch(scenario: "ready")
+        let destination = app.descendants(matching: .any)["destination.registries"]
+        XCTAssertTrue(destination.waitForExistence(timeout: 3))
+        destination.click()
+
+        // The fixture starts with one sentinel host.
+        XCTAssertTrue(app.staticTexts["registry.example.test"].waitForExistence(timeout: 3))
+
+        app.buttons["registries.login"].click()
+        let sheet = app.sheets.firstMatch
+        let server = sheet.textFields["registries.login.server"]
+        XCTAssertTrue(server.waitForExistence(timeout: 3))
+
+        // Submit stays disabled until server, user name and a password are all
+        // present, so a login can never be attempted with a missing secret.
+        XCTAssertFalse(sheet.buttons["registries.login.submit"].isEnabled)
+
+        server.click()
+        server.typeText("registry.two.test")
+        let username = sheet.textFields["registries.login.username"]
+        username.click()
+        username.typeText("ci-user")
+        let password = sheet.secureTextFields["registries.login.password"]
+        XCTAssertTrue(password.exists, "The password field must be a secure field.")
+        password.click()
+        password.typeText("ui-test-token")
+
+        // The command strip names --password-stdin and never the secret.
+        let preview = sheet.descendants(matching: .any)["registries.login.preview"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 3))
+        assertNoSecret("ui-test-token", in: app)
+
+        XCTAssertTrue(sheet.buttons["registries.login.submit"].isEnabled)
+        sheet.buttons["registries.login.submit"].click()
+
+        XCTAssertTrue(app.staticTexts["registry.two.test"].waitForExistence(timeout: 5))
+        assertNoSecret("ui-test-token", in: app)
+
+        // Logging out names the host and needs an explicit confirmation.
+        app.staticTexts["registry.two.test"].click()
+        app.buttons["registries.logout"].click()
+        XCTAssertTrue(app.buttons["registries.confirmLogout"].waitForExistence(timeout: 3))
+        app.buttons["registries.confirmLogout"].click()
+
+        XCTAssertTrue(
+            waitUntil(timeout: 5) { !app.staticTexts["registry.two.test"].exists }
+        )
+    }
+
+    func testRegistryLoginSheetWarnsAboutUnencryptedHTTP() {
+        let app = launch(scenario: "ready")
+        app.descendants(matching: .any)["destination.registries"].click()
+        XCTAssertTrue(app.buttons["registries.login"].waitForExistence(timeout: 3))
+        app.buttons["registries.login"].click()
+
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.textFields["registries.login.server"].waitForExistence(timeout: 3))
+        sheet.buttons["Transport"].click()
+
+        XCTAssertTrue(sheet.radioButtons["HTTP"].waitForExistence(timeout: 3))
+        sheet.radioButtons["HTTP"].click()
+
+        XCTAssertTrue(
+            sheet.descendants(matching: .any)["registries.login.httpWarning"]
+                .waitForExistence(timeout: 3),
+            "Choosing HTTP must say that credentials travel in the clear."
+        )
+        sheet.buttons["registries.login.cancel"].click()
+    }
+
+    func testImageActionsMenuExposesTheFullImageSurface() {
+        let app = launch(scenario: "ready")
+        app.descendants(matching: .any)["destination.images"].click()
+        let menu = app.descendants(matching: .any)["images.moreActions"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 3))
+        menu.click()
+
+        for title in [
+            "Tag Selected Image…",
+            "Push Selected Image…",
+            "Save Images…",
+            "Load Archive…",
+            "Delete Images…",
+            "Prune Images…",
+        ] {
+            XCTAssertTrue(
+                app.menuItems[title].waitForExistence(timeout: 3),
+                "\(title) should be reachable from the image actions menu."
+            )
+        }
+        app.typeKey(.escape, modifierFlags: [])
+    }
+
+    func testPruneSheetOffersBothScopesAndNamesTheCommand() {
+        let app = launch(scenario: "ready")
+        app.descendants(matching: .any)["destination.images"].click()
+        let menu = app.descendants(matching: .any)["images.moreActions"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 3))
+        menu.click()
+        app.menuItems["Prune Images…"].click()
+
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(
+            sheet.descendants(matching: .any)["images.prune.scope"].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(sheet.radioButtons["Dangling images only"].exists)
+        XCTAssertTrue(sheet.radioButtons["All images no container uses"].exists)
+        XCTAssertTrue(
+            sheet.descendants(matching: .any)["images.prune.estimate"].exists,
+            "The prune sheet must label its candidate count as an estimate."
+        )
+        sheet.buttons["images.prune.cancel"].click()
+    }
+
+    func testBulkDeleteRequiresAReviewBeforeItCanConfirm() {
+        let app = launch(scenario: "ready")
+        app.descendants(matching: .any)["destination.images"].click()
+        let menu = app.descendants(matching: .any)["images.moreActions"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 3))
+        menu.click()
+        app.menuItems["Delete Images…"].click()
+
+        let sheet = app.sheets.firstMatch
+        let confirm = sheet.buttons["images.bulkDelete.confirm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+        XCTAssertFalse(
+            confirm.isEnabled,
+            "Confirm must stay disabled until a fresh snapshot has been reviewed."
+        )
+        sheet.buttons["images.bulkDelete.cancel"].click()
+    }
+
+    func testPullSheetOffersSchemeAndPlatformOptions() {
+        let app = launch(scenario: "ready")
+        app.descendants(matching: .any)["destination.images"].click()
+        XCTAssertTrue(app.buttons["images.pull"].waitForExistence(timeout: 3))
+        app.buttons["images.pull"].click()
+
+        let sheet = app.sheets.firstMatch
+        let reference = sheet.textFields["images.pull.reference"]
+        XCTAssertTrue(reference.waitForExistence(timeout: 3))
+        reference.click()
+        reference.typeText("alpine:3.21")
+
+        sheet.buttons["Options"].click()
+        XCTAssertTrue(
+            sheet.textFields["images.pull.platform"].waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(sheet.textFields["images.pull.os"].exists)
+        XCTAssertTrue(sheet.textFields["images.pull.arch"].exists)
+        // The fixture reports CLI 1.0.0, which is where the flag arrived.
+        XCTAssertTrue(sheet.textFields["images.pull.concurrency"].exists)
+
+        sheet.buttons["images.pull.cancel"].click()
+    }
+
+    /// Fails if `secret` appears anywhere in the app's accessibility tree.
+    private func assertNoSecret(
+        _ secret: String,
+        in app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let hierarchy = app.debugDescription
+        XCTAssertFalse(
+            hierarchy.contains(secret),
+            "The secret must not appear anywhere in the UI hierarchy.",
+            file: file,
+            line: line
+        )
+    }
+
     private func launch(scenario: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [

@@ -66,11 +66,15 @@ final class ContainerCommandTests: XCTestCase {
             ["image", "inspect", reference.rawValue]
         )
         XCTAssertEqual(
-            ContainerCommand.pullImage(reference: reference).arguments,
+            ContainerCommand.pullImage(
+                configuration: try ImagePullConfiguration(reference: reference.rawValue)
+            ).arguments,
             ["image", "pull", "--progress", "plain", reference.rawValue]
         )
         XCTAssertEqual(
-            ContainerCommand.deleteImage(reference: reference).arguments,
+            ContainerCommand.deleteImages(
+                configuration: try ImageDeleteConfiguration(references: [reference.rawValue])
+            ).arguments,
             ["image", "delete", reference.rawValue]
         )
         XCTAssertEqual(ContainerCommand.pruneImages(all: true).arguments, ["image", "prune", "--all"])

@@ -21,6 +21,21 @@ actor ProcessContainerCLI: ContainerCLI {
     }
 
     func run(_ command: ContainerCommand) async throws -> CommandResult {
+        try await run(command, standardInput: nil)
+    }
+
+    /// The `standardInput` payload is written to the child and the pipe is then
+    /// closed, so a `--password-stdin` command sees its secret and an EOF.
+    ///
+    /// The payload is threaded through `ProcessRequest` and nowhere else: the
+    /// invocation string is built from `command.arguments` alone, and neither
+    /// `CommandResult` nor the thrown `CLIError` ever sees it. That is what
+    /// keeps the secret out of the command preview, the failure log, and every
+    /// diagnostic built from them.
+    func run(
+        _ command: ContainerCommand,
+        standardInput: Data?
+    ) async throws -> CommandResult {
         do {
             try validateExecutable()
 
@@ -32,7 +47,8 @@ actor ProcessContainerCLI: ContainerCLI {
                 invocation: Self.displayInvocation(
                     executableURL: executableURL,
                     arguments: command.arguments
-                )
+                ),
+                standardInput: standardInput
             )
 
             let result: CommandResult
@@ -109,7 +125,8 @@ actor ProcessContainerCLI: ContainerCLI {
             invocation: Self.displayInvocation(
                 executableURL: executableURL,
                 arguments: command.arguments
-            )
+            ),
+            standardInput: nil
         )
     }
 
@@ -240,10 +257,14 @@ actor ProcessContainerCLI: ContainerCLI {
         let clock = ContinuousClock()
         let start = clock.now
 
+        // A command with no payload keeps the null device it always had, so
+        // nothing but registry login can block on a parent that never writes.
+        let standardInput: Pipe? = request.standardInput == nil ? nil : Pipe()
+
         process.executableURL = request.executableURL
         process.arguments = request.arguments
         process.environment = request.environment
-        process.standardInput = FileHandle.nullDevice
+        process.standardInput = standardInput ?? FileHandle.nullDevice
         process.standardOutput = standardOutput
         process.standardError = standardError
 
@@ -287,9 +308,13 @@ actor ProcessContainerCLI: ContainerCLI {
 
                     do {
                         try session.launch()
+                        if let standardInput, let payload = request.standardInput {
+                            Self.write(payload, to: standardInput, on: drainQueue)
+                        }
                     } catch {
                         standardOutput.fileHandleForReading.readabilityHandler = nil
                         standardError.fileHandleForReading.readabilityHandler = nil
+                        try? standardInput?.fileHandleForWriting.close()
                         continuation.resume(
                             throwing: CLIError.launchFailed(message: error.localizedDescription)
                         )
@@ -301,6 +326,9 @@ actor ProcessContainerCLI: ContainerCLI {
         } catch {
             standardOutput.fileHandleForReading.readabilityHandler = nil
             standardError.fileHandleForReading.readabilityHandler = nil
+            // Cancellation and timeout both land here; closing the write end
+            // releases a child that is still waiting to read.
+            try? standardInput?.fileHandleForWriting.close()
             throw error
         }
 
@@ -318,6 +346,26 @@ actor ProcessContainerCLI: ContainerCLI {
             duration: start.duration(to: clock.now),
             invocation: request.invocation
         )
+    }
+
+    /// Hands the payload to the child and closes the pipe so it reads an EOF.
+    ///
+    /// Off the calling thread because a payload larger than the pipe buffer
+    /// would otherwise block until the child drains it, and the child cannot
+    /// drain anything while we are still inside its launch. `F_SETNOSIGPIPE`
+    /// turns a write to a child that already exited into an `EPIPE` error
+    /// rather than a signal that would take the app down with it.
+    private static func write(
+        _ payload: Data,
+        to pipe: Pipe,
+        on queue: DispatchQueue
+    ) {
+        let handle = pipe.fileHandleForWriting
+        _ = fcntl(handle.fileDescriptor, F_SETNOSIGPIPE, 1)
+        queue.async {
+            try? handle.write(contentsOf: payload)
+            try? handle.close()
+        }
     }
 
     static func defaultEnvironment() -> [String: String] {
@@ -398,6 +446,9 @@ nonisolated private struct ProcessRequest: Sendable {
     let environment: [String: String]
     let outputLimit: Int
     let invocation: String
+    /// Written to the child's stdin, then closed. Never derived from, or folded
+    /// back into, `invocation` — see `run(_:standardInput:)`.
+    let standardInput: Data?
 }
 
 nonisolated private final class ProcessSession: @unchecked Sendable {

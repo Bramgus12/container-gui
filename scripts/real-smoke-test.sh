@@ -13,6 +13,11 @@ resource="container-gui-smoke-$(date +%Y%m%d%H%M%S)-$$"
 delete_pulled_image=0
 container_was_created=0
 network_was_created=0
+# The archive round-trip works on a throwaway tag of the image that is already
+# being pulled, so it never prunes and never touches an unrelated image.
+smoke_tag="container-gui-smoke:${resource##*-}"
+tag_was_created=0
+archive_path=""
 
 if [[ ! -x "$cli" ]]; then
     print -u2 "Apple Container executable is not executable: $cli"
@@ -28,6 +33,12 @@ cleanup() {
     fi
     if (( network_was_created )); then
         "$cli" network delete "$resource" >/dev/null 2>&1
+    fi
+    if (( tag_was_created )); then
+        "$cli" image delete "$smoke_tag" >/dev/null 2>&1
+    fi
+    if [[ -n "$archive_path" ]]; then
+        rm -f "$archive_path"
     fi
     if (( delete_pulled_image )); then
         "$cli" image delete "$image" >/dev/null 2>&1
@@ -60,10 +71,42 @@ container_was_created=0
 "$cli" network delete "$resource"
 network_was_created=0
 
+# Image archive round-trip: tag, save, remove only that tag, load it back, and
+# confirm the tag returns. Nothing here prunes, and no image other than the
+# throwaway tag is ever deleted.
+archive_path="$(mktemp -t container-gui-smoke).tar"
+"$cli" image tag "$image" "$smoke_tag"
+tag_was_created=1
+"$cli" image save --output "$archive_path" "$smoke_tag"
+if [[ ! -s "$archive_path" ]]; then
+    print -u2 "image save produced no archive at $archive_path"
+    exit 1
+fi
+"$cli" image delete "$smoke_tag"
+tag_was_created=0
+if "$cli" image list --format json | grep -q "$smoke_tag"; then
+    print -u2 "image delete left $smoke_tag behind"
+    exit 1
+fi
+"$cli" image load --input "$archive_path"
+tag_was_created=1
+if ! "$cli" image list --format json | grep -q "$smoke_tag"; then
+    print -u2 "image load did not restore $smoke_tag"
+    exit 1
+fi
+"$cli" image delete "$smoke_tag"
+tag_was_created=0
+rm -f "$archive_path"
+archive_path=""
+
+# Registry login, logout and push are deliberately absent: they mutate stored
+# credentials or a remote registry and need a separately configured disposable
+# registry. See the registry section of docs/RELEASE_CHECKLIST.md.
+
 if (( delete_pulled_image )); then
     "$cli" image delete "$image"
     delete_pulled_image=0
 fi
 
 trap - EXIT INT TERM
-print "Real CLI smoke test passed for container and network $resource using $image."
+print "Real CLI smoke test passed for container, network and image archive round-trip $resource using $image."

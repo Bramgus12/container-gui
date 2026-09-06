@@ -10,8 +10,11 @@ hardware, CLI version, app commit, tester, and date in the release notes.
   signing and disables Hardened Runtime only for the test host so its XCTest
   bundles can load without a Team ID; release archives remain hardened.
 - Confirm onboarding and lifecycle UI tests pass with the fake CLI.
-- Run `scripts/real-smoke-test.sh` on clean Apple-silicon Macs with CLI `0.12.0`
+- Run `scripts/real-smoke-test.sh` on clean Apple-silicon Macs with CLI `0.12.3`
   and the current supported CLI release.
+- Run the opt-in registry checklist in `docs/RELEASE_CHECKLIST.md` §Registry
+  against a disposable registry. Never run it against a registry whose login
+  you cannot restore.
 - Repeat the real smoke test with slow or unavailable networking and confirm
   cancellation leaves no test container behind.
 - Run static analysis and build with warnings treated as errors.
@@ -26,6 +29,32 @@ hardware, CLI version, app commit, tester, and date in the release notes.
   accepts or rejects the exact version clearly.
 - Never add a supported CLI version without representative container, image,
   version, status, inspect, and stats fixtures.
+
+## Registry
+
+Opt-in, run manually against a **disposable** registry only. These steps mutate
+stored credentials or a remote repository, so they are deliberately absent from
+`scripts/real-smoke-test.sh`.
+
+- Do not start unless you can restore whatever login the machine already holds.
+  `container registry list --quiet` first, and note what is there. Logging in to
+  a host that already has a login overwrites it with no way back.
+- Use a repository and tag that exist for this test alone, on a registry you
+  control. Never push to a shared or production repository.
+- Log in from the Registries screen with an explicit user name and a token, and
+  confirm the host appears in the list. Confirm the command strip ends in
+  `--password-stdin` and shows no password and no placeholder for one.
+- Repeat the login with the scheme set to HTTP and confirm the sheet shows the
+  unencrypted-transport warning and still emits `--scheme http`, not `auto`.
+- Tag a throwaway image for that registry, push it, and confirm the push is
+  cancellable. After a cancelled push, verify the remote state yourself — the
+  app reports an interrupted push and does not claim a rollback.
+- Log out and confirm the host leaves the list and that a subsequent private
+  pull fails as expected.
+- Restore the machine's original logins.
+- Search the copied diagnostics, the failure log, the command previews, any
+  screenshots taken, and the UI hierarchy for the seeded token. It must appear
+  in none of them.
 
 ## Accessibility and safety
 

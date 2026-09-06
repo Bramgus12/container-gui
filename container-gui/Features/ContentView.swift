@@ -427,6 +427,12 @@ private struct MainNavigationView: View {
                 }
             case .images:
                 ImageListView(model: model)
+            case .registries:
+                if let registryModel = model.registryModel {
+                    RegistriesView(model: registryModel)
+                } else {
+                    ProgressView("Loading registries…")
+                }
             case .volumes:
                 if let volumeModel = model.volumeModel {
                     VolumesView(model: volumeModel, inventoryIndex: model.inventoryIndex)

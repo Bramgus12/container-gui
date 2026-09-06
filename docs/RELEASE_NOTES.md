@@ -1,3 +1,74 @@
+# Container GUI 1.6.0
+
+Install or upgrade with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+```
+
+Container GUI 1.6.0 completes the image and registry workflow. Until now the app
+could pull an image and delete one; it could not tag, push, save, load, delete
+in bulk, prune deliberately, or log in to a registry at all — all of which meant
+dropping into Terminal.
+
+## Changes
+
+- **Registries**, a new destination after Images. It lists the hosts the CLI is
+  logged in to, logs in with a server, user name and token, and logs out after a
+  confirmation that names the host.
+- **The password never becomes an argument.** It is written to the command's
+  standard input and released; it is absent from the command, the command
+  preview, the failure log, copied diagnostics and every error message, and
+  `ContainerCommand` has no case that can carry one. The login sheet's command
+  strip ends in `--password-stdin` and shows no placeholder, because a
+  placeholder would imply the secret is part of the command.
+- **Tag, push, save and load**, each with the platform and transport controls
+  the CLI has, each cancellable, each showing the exact command before it runs.
+  Save writes an OCI-compatible tar archive and offers Reveal in Finder; load
+  reads one back.
+- **Pull grew an Options page**: scheme, platform or OS/architecture, and a
+  download-concurrency limit.
+- **Deliberate destruction.** Delete several named images or all of them, and
+  prune either dangling images or everything no container uses. Bulk deletion
+  re-reads images and containers before it will confirm, and a snapshot that
+  changed sends you back to review rather than running a scope you never saw.
+  It never deletes containers: an in-use image is listed as blocked and left to
+  the CLI to preserve. Single-image deletion keeps its dependency-aware cleanup
+  exactly as it was.
+- **One transfer at a time**, owned by the Images screen rather than by a view,
+  so navigating away mid-pull no longer orphans the child process. A cancelled
+  load or delete still refreshes the inventory, because a partly applied
+  mutation is still a mutation.
+
+## Compatibility
+
+- **The supported CLI range is now 0.12.3–<2.0**, raised from 0.12.0. 0.12.3 is
+  the first release carrying Apple's registry-related HTTP-downgrade fixes, and
+  the network paths this release exposes are the ones those fixes affect. The
+  0.12.0 JSON fixtures stay as decoder regression coverage.
+- **`--scheme auto` is never sent.** 0.12–1.0 accept `http`, `https` and `auto`
+  and default to `auto`; 1.3.1 accepts only `http` and `https` and defaults to
+  `https`. The app's **Automatic** choice therefore omits the flag entirely,
+  which is correct on every supported release. An explicit HTTPS or HTTP is sent
+  verbatim, and choosing HTTP says plainly that credentials and layers travel in
+  the clear.
+- **`--max-concurrent-downloads` is gated at CLI 1.0.0**, where it was
+  introduced. Below that the field is absent from the pull sheet rather than
+  disabled — an option that cannot work is better not offered.
+- Observed CLI surfaces are recorded in `docs/CLI_IMAGE_REGISTRY_BASELINE.md`.
+
+## Known limitations
+
+- Remote registry browsing is not offered because the CLI has no catalog,
+  repository, or tag listing command.
+- A cancelled push is reported as interrupted, not rolled back. The app does not
+  claim to know the remote's state; verify the registry yourself.
+- The prune sheet's candidate count is an estimate from what the app can see.
+  Reachability is the CLI's decision, so the result can differ.
+- Registry login, logout, and push stay out of `scripts/real-smoke-test.sh`:
+  they mutate stored credentials or a remote registry. The release checklist has
+  an opt-in section for them against a disposable registry.
+
 # Container GUI 1.5.0
 
 Install or upgrade with:

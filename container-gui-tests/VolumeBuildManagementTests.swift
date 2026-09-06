@@ -245,10 +245,6 @@ private actor BuiltImageService: ImageManaging {
     func inspectImage(reference: String) throws -> ImageInspection {
         throw CLIError.invalidOutput(description: "unused")
     }
-    nonisolated func pullImage(reference: String) -> AsyncThrowingStream<ProcessEvent, Error> {
-        AsyncThrowingStream { $0.finish() }
-    }
-    func deleteImage(reference: String) {}
     func currentListCount() -> Int { listCount }
 }
 

@@ -336,7 +336,12 @@ final class PreflightServiceTests: XCTestCase {
             minor: 2,
             patch: 3
         ))
-        XCTAssertTrue(SupportedCLIVersions.current.contains(try SemanticVersion("0.12.0")))
+        // The minimum moved to 0.12.3 with the registry workflows: 0.12.3 is the
+        // first release carrying Apple's registry HTTP-downgrade fixes.
+        XCTAssertFalse(SupportedCLIVersions.current.contains(try SemanticVersion("0.12.0")))
+        XCTAssertFalse(SupportedCLIVersions.current.contains(try SemanticVersion("0.12.2")))
+        XCTAssertTrue(SupportedCLIVersions.current.contains(try SemanticVersion("0.12.3")))
+        XCTAssertTrue(SupportedCLIVersions.current.contains(try SemanticVersion("1.3.1")))
         XCTAssertFalse(SupportedCLIVersions.current.contains(try SemanticVersion("2.0.0")))
         XCTAssertThrowsError(try SemanticVersion("not-a-version"))
     }
