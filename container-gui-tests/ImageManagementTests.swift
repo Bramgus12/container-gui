@@ -84,19 +84,18 @@ final class ImageManagementTests: XCTestCase {
             ]
         )
         let model = AppModel(setup: SetupModel(), imageService: service)
-        var events: [ProcessEvent] = []
+        let configuration = try ImagePullConfiguration(reference: "alpine:3.21")
 
-        try await model.pullImage(reference: "alpine:3.21") {
-            events.append($0)
-        }
-        let listCallCount = await service.listCallCount
+        model.startImageOperation(.pull(configuration))
+        try await waitForOperation(model)
 
-        XCTAssertEqual(events.count, 3)
+        XCTAssertEqual(model.imageOperations.activity?.state, .succeeded)
         XCTAssertEqual(model.images.map(\.reference), ["alpine:3.21"])
-        XCTAssertEqual(listCallCount, 1)
+        let pulls = await service.pullConfigurations
+        XCTAssertEqual(pulls, [configuration])
     }
 
-    func testPullModelParsesProgressAndFallsBackToLatestLine() async {
+    func testPullActivityParsesProgressAndFallsBackToLatestLine() async throws {
         let service = ImageServiceStub(
             images: [makeImage(reference: "alpine:3.21")],
             pullEvents: [
@@ -104,18 +103,17 @@ final class ImageManagementTests: XCTestCase {
                 .terminated(exitCode: 0),
             ]
         )
-        let appModel = AppModel(setup: SetupModel(), imageService: service)
-        let pullModel = ImagePullModel()
-        pullModel.reference = "alpine:3.21"
+        let model = AppModel(setup: SetupModel(), imageService: service)
 
-        await pullModel.pull(using: appModel)
+        model.startImageOperation(.pull(try ImagePullConfiguration(reference: "alpine:3.21")))
+        try await waitForOperation(model)
 
-        XCTAssertEqual(pullModel.progressLabel, "unpacking layers 3/7")
-        XCTAssertEqual(pullModel.progressFraction ?? 0, 3.0 / 7.0, accuracy: 0.001)
-        XCTAssertTrue(pullModel.didFinish)
+        let activity = try XCTUnwrap(model.imageOperations.activity)
+        XCTAssertEqual(activity.label, "unpacking layers 3/7")
+        XCTAssertEqual(activity.state, .succeeded)
     }
 
-    func testPullNonzeroExitSurfacesProgressError() async {
+    func testPullNonzeroExitSurfacesSanitizedFailure() async throws {
         let service = ImageServiceStub(
             pullEvents: [
                 .standardError("registry denied the request"),
@@ -124,18 +122,165 @@ final class ImageManagementTests: XCTestCase {
         )
         let model = AppModel(setup: SetupModel(), imageService: service)
 
-        do {
-            try await model.pullImage(reference: "private.example/app:1") { _ in }
-            XCTFail("Expected pull failure")
-        } catch let error as CLIError {
-            guard case .nonZeroExit(_, let exitCode, let standardError, _) = error else {
-                return XCTFail("Unexpected CLI error: \(error)")
-            }
-            XCTAssertEqual(exitCode, 19)
-            XCTAssertEqual(standardError, "registry denied the request")
-        } catch {
-            XCTFail("Unexpected error: \(error)")
+        model.startImageOperation(
+            .pull(try ImagePullConfiguration(reference: "private.example/app:1"))
+        )
+        try await waitForOperation(model)
+
+        let activity = try XCTUnwrap(model.imageOperations.activity)
+        guard case .failed(let message) = activity.state else {
+            return XCTFail("Expected a failed pull, got \(activity.state)")
         }
+        XCTAssertTrue(message.contains("19"), message)
+        XCTAssertTrue(message.contains("registry denied the request"), message)
+    }
+
+    func testOnlyOneImageOperationRunsAtATime() async throws {
+        let service = ImageServiceStub(images: [makeImage(reference: "alpine:3.21")])
+        let model = AppModel(setup: SetupModel(), imageService: service)
+
+        let first = model.startImageOperation(
+            .pull(try ImagePullConfiguration(reference: "alpine:3.21"))
+        )
+        let second = model.startImageOperation(
+            .pull(try ImagePullConfiguration(reference: "busybox:1"))
+        )
+
+        XCTAssertTrue(first)
+        XCTAssertFalse(second, "A second operation must not start while one is running.")
+        try await waitForOperation(model)
+    }
+
+    func testPushAndSaveDoNotRefreshTheLocalImageList() async throws {
+        let service = ImageServiceStub(images: [makeImage(reference: "alpine:3.21")])
+        let model = AppModel(setup: SetupModel(), imageService: service)
+        await model.refreshImages()
+        let baseline = await service.listCallCount
+
+        model.startImageOperation(
+            .push(try ImagePushConfiguration(reference: "ghcr.io/example/app:1"))
+        )
+        try await waitForOperation(model)
+
+        let afterPush = await service.listCallCount
+        XCTAssertEqual(afterPush, baseline, "Push does not mutate the local inventory.")
+
+        model.imageOperations.dismiss()
+        model.startImageOperation(
+            .save(try ImageSaveConfiguration(
+                references: ["alpine:3.21"],
+                output: "/tmp/images.tar"
+            ))
+        )
+        try await waitForOperation(model)
+
+        let afterSave = await service.listCallCount
+        XCTAssertEqual(afterSave, baseline, "Save does not mutate the local inventory.")
+    }
+
+    func testLoadRefreshesImagesBecauseItMutatesTheInventory() async throws {
+        let service = ImageServiceStub(images: [makeImage(reference: "alpine:3.21")])
+        let model = AppModel(setup: SetupModel(), imageService: service)
+        await model.refreshImages()
+        let baseline = await service.listCallCount
+
+        model.startImageOperation(
+            .load(try ImageLoadConfiguration(input: "/tmp/images.tar"))
+        )
+        try await waitForOperation(model)
+
+        let afterLoad = await service.listCallCount
+        XCTAssertGreaterThan(afterLoad, baseline)
+    }
+
+    func testTagAddsTheTargetAndSelectsIt() async throws {
+        let service = ImageServiceStub(images: [makeImage(reference: "alpine:3.21")])
+        let model = AppModel(setup: SetupModel(), imageService: service)
+        await model.refreshImages()
+
+        let configuration = try ImageTagConfiguration(
+            source: "alpine:3.21",
+            target: "ghcr.io/example/alpine:3.21"
+        )
+        let failure = await model.tagImage(configuration)
+
+        XCTAssertNil(failure)
+        let tags = await service.tagConfigurations
+        XCTAssertEqual(tags, [configuration])
+        XCTAssertEqual(model.selectedImageID, "ghcr.io/example/alpine:3.21")
+    }
+
+    func testBulkDeleteSendsOneConfigurationForEverySelectedImage() async throws {
+        let service = ImageServiceStub(images: [
+            makeImage(reference: "alpine:3.21"),
+            makeImage(reference: "busybox:1"),
+        ])
+        let model = AppModel(setup: SetupModel(), imageService: service)
+        await model.refreshImages()
+
+        let configuration = try ImageDeleteConfiguration(
+            references: ["alpine:3.21", "busybox:1"]
+        )
+        model.startImageOperation(.delete(configuration))
+        try await waitForOperation(model)
+
+        let configurations = await service.deleteConfigurations
+        XCTAssertEqual(configurations, [configuration])
+        XCTAssertTrue(model.images.isEmpty)
+    }
+
+    func testPruneForwardsTheChosenScope() async throws {
+        let service = ImageServiceStub(images: [makeImage(reference: "alpine:3.21")])
+        let model = AppModel(setup: SetupModel(), imageService: service)
+
+        model.startImageOperation(.prune(all: true))
+        try await waitForOperation(model)
+
+        let flags = await service.pruneAllFlags
+        XCTAssertEqual(flags, [true])
+    }
+
+    /// Regression: `isBusy` tracks the task, and the task retires itself by
+    /// comparing a run token. Comparing the *activity* instead would leave the
+    /// handle behind — and the screen permanently busy — whenever the user
+    /// dismissed the finished row before reconciliation had returned.
+    func testDismissingAFinishedOperationDoesNotWedgeTheScreenBusy() async throws {
+        let service = ImageServiceStub(images: [makeImage(reference: "alpine:3.21")])
+        let model = AppModel(setup: SetupModel(), imageService: service)
+
+        model.startImageOperation(.prune(all: false))
+        try await waitForOperation(model)
+        model.imageOperations.dismiss()
+
+        XCTAssertNil(model.imageOperations.activity)
+        XCTAssertFalse(
+            model.imageOperations.isBusy,
+            "A dismissed, finished operation must leave the screen able to start another."
+        )
+        XCTAssertTrue(
+            model.startImageOperation(.prune(all: true)),
+            "A second operation must be startable after the first was dismissed."
+        )
+        try await waitForOperation(model)
+    }
+
+    /// The activity finishes on its own task, so the tests wait on its state
+    /// rather than on the call that started it.
+    private func waitForOperation(
+        _ model: AppModel,
+        timeout: Duration = .seconds(5)
+    ) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while clock.now < deadline {
+            if let state = model.imageOperations.activity?.state, state != .running {
+                // Reconciliation runs after the state flips, so let it land.
+                try await Task.sleep(for: .milliseconds(20))
+                return
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("The image operation did not finish within \(timeout).")
     }
 
     func testDeletionPlanFindsOnlyContainersUsingSelectedReference() async throws {
@@ -510,6 +655,13 @@ private actor ImageServiceStub: ImageManaging {
     private let deletionError: CLIError?
     private(set) var listCallCount = 0
     private(set) var deletedReferences: [String] = []
+    private(set) var deleteConfigurations: [ImageDeleteConfiguration] = []
+    private(set) var tagConfigurations: [ImageTagConfiguration] = []
+    private(set) var pullConfigurations: [ImagePullConfiguration] = []
+    private(set) var pushConfigurations: [ImagePushConfiguration] = []
+    private(set) var saveConfigurations: [ImageSaveConfiguration] = []
+    private(set) var loadConfigurations: [ImageLoadConfiguration] = []
+    private(set) var pruneAllFlags: [Bool] = []
 
     init(
         images: [ImageSummary] = [],
@@ -533,12 +685,12 @@ private actor ImageServiceStub: ImageManaging {
     }
 
     nonisolated func pullImage(
-        reference: String
+        _ configuration: ImagePullConfiguration
     ) -> AsyncThrowingStream<ProcessEvent, Error> {
         AsyncThrowingStream { continuation in
             Task {
-                let events = self.pullEvents
-                for event in events {
+                await self.recordPull(configuration)
+                for event in await self.pullEventList {
                     continuation.yield(event)
                 }
                 continuation.finish()
@@ -546,18 +698,138 @@ private actor ImageServiceStub: ImageManaging {
         }
     }
 
-    func deleteImage(reference: String) throws {
-        deletedReferences.append(reference)
-        if let deletionError {
-            throw deletionError
+    nonisolated func pushImage(
+        _ configuration: ImagePushConfiguration
+    ) -> AsyncThrowingStream<ProcessEvent, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                await self.recordPush(configuration)
+                continuation.yield(.terminated(exitCode: 0))
+                continuation.finish()
+            }
         }
-        imagesResult.removeAll { image in
-            image.reference == reference || image.digest == reference
+    }
+
+    func tagImage(_ configuration: ImageTagConfiguration) throws {
+        tagConfigurations.append(configuration)
+        if let deletionError { throw deletionError }
+        if let source = imagesResult.first(where: {
+            $0.reference == configuration.source.rawValue
+        }) {
+            imagesResult.append(source.renamed(to: configuration.target.rawValue))
+        }
+    }
+
+    nonisolated func saveImages(
+        _ configuration: ImageSaveConfiguration
+    ) -> AsyncThrowingStream<ProcessEvent, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                await self.recordSave(configuration)
+                continuation.yield(.terminated(exitCode: 0))
+                continuation.finish()
+            }
+        }
+    }
+
+    nonisolated func loadImages(
+        _ configuration: ImageLoadConfiguration
+    ) -> AsyncThrowingStream<ProcessEvent, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                await self.recordLoad(configuration)
+                continuation.yield(.terminated(exitCode: 0))
+                continuation.finish()
+            }
+        }
+    }
+
+    nonisolated func deleteImages(
+        _ configuration: ImageDeleteConfiguration
+    ) -> AsyncThrowingStream<ProcessEvent, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    try await self.applyDelete(configuration)
+                    continuation.yield(.terminated(exitCode: 0))
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
+    nonisolated func pruneImages(all: Bool) -> AsyncThrowingStream<ProcessEvent, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                await self.recordPrune(all)
+                continuation.yield(.terminated(exitCode: 0))
+                continuation.finish()
+            }
         }
     }
 
     func setImages(_ images: [ImageSummary]) {
         imagesResult = images
+    }
+
+    private var pullEventList: [ProcessEvent] { pullEvents }
+
+    private func recordPull(_ configuration: ImagePullConfiguration) {
+        pullConfigurations.append(configuration)
+    }
+
+    private func recordPush(_ configuration: ImagePushConfiguration) {
+        pushConfigurations.append(configuration)
+    }
+
+    private func recordSave(_ configuration: ImageSaveConfiguration) {
+        saveConfigurations.append(configuration)
+    }
+
+    private func recordLoad(_ configuration: ImageLoadConfiguration) {
+        loadConfigurations.append(configuration)
+    }
+
+    private func recordPrune(_ all: Bool) {
+        pruneAllFlags.append(all)
+    }
+
+    private func applyDelete(_ configuration: ImageDeleteConfiguration) throws {
+        deleteConfigurations.append(configuration)
+        deletedReferences.append(contentsOf: configuration.references.map(\.rawValue))
+        if let deletionError {
+            throw deletionError
+        }
+        if configuration.all {
+            imagesResult.removeAll()
+            return
+        }
+        for reference in configuration.references.map(\.rawValue) {
+            imagesResult.removeAll { image in
+                image.reference == reference || image.digest == reference
+            }
+        }
+    }
+}
+
+extension ImageSummary {
+    /// The same image under a second name, which is what `image tag` produces.
+    fileprivate func renamed(to reference: String) -> ImageSummary {
+        let digestField = digest.map { #", "digest": "\#($0)""# } ?? ""
+        let data = Data(
+            """
+            [{
+              "reference": "\(reference)"\(digestField),
+              "platform": { "os": "linux", "architecture": "arm64" }
+            }]
+            """.utf8
+        )
+        return try! JSONDecoder()
+            .decode([ImageDTO].self, from: data)
+            .compactMap(ImageSummary.init(dto:))
+            .first!
     }
 }
 

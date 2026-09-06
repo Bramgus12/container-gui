@@ -45,8 +45,13 @@ nonisolated enum PlatformIssue: Equatable, Sendable {
 }
 
 nonisolated struct SupportedCLIVersions: Equatable, Sendable {
+    /// Raised from 0.12.0 to 0.12.3 alongside the registry workflows: 0.12.3
+    /// carries Apple's registry-related HTTP-downgrade fixes, and the network
+    /// paths the GUI now exposes are the ones those fixes affect. The 0.12.0
+    /// JSON fixtures stay as decoder regression coverage — this bounds what the
+    /// app will talk to, not what its decoders must tolerate.
     static let current = SupportedCLIVersions(
-        minimum: SemanticVersion(major: 0, minor: 12, patch: 0),
+        minimum: SemanticVersion(major: 0, minor: 12, patch: 3),
         maximumExclusive: SemanticVersion(major: 2, minor: 0, patch: 0)
     )
 

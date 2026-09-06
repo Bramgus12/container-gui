@@ -211,6 +211,148 @@ final class ProcessContainerCLITests: XCTestCase {
         }
     }
 
+    // MARK: - Standard input
+
+    /// The sentinel is deliberately awkward: spaces, quotes, a leading dash and
+    /// non-ASCII all have to survive as data rather than being re-read as
+    /// arguments or mangled in transit.
+    private static let sentinelPassword = #"-not-a-flag 'quoted" pa$$ wörd"#
+
+    private func loginCommand() throws -> ContainerCommand {
+        .loginRegistry(
+            configuration: try RegistryLoginConfiguration(
+                server: "registry.example.test",
+                username: "ci-user",
+                scheme: .https
+            )
+        )
+    }
+
+    func testStandardInputReachesTheChildFollowedByEndOfFile() async throws {
+        let cli = makeCLI(scenario: "stdin-echo")
+        var payload = Data(Self.sentinelPassword.utf8)
+        payload.append(0x0A)
+
+        let result = try await cli.run(try loginCommand(), standardInput: payload)
+
+        // The fixture's `cat` only returns on EOF, so reaching a zero exit with
+        // the full payload echoed proves both delivery and the closed pipe.
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(
+            result.standardOutput.contains("stdin:" + Self.sentinelPassword),
+            result.standardOutput
+        )
+    }
+
+    func testStandardInputIsDataRatherThanAnArgument() async throws {
+        let cli = makeCLI(scenario: "stdin-echo")
+        var payload = Data(Self.sentinelPassword.utf8)
+        payload.append(0x0A)
+
+        let result = try await cli.run(try loginCommand(), standardInput: payload)
+
+        let arguments = result.standardOutput
+            .split(separator: "\n")
+            .first { $0.hasPrefix("args:") }
+            .map(String.init) ?? ""
+        XCTAssertTrue(arguments.contains("--password-stdin"), arguments)
+        XCTAssertFalse(
+            arguments.contains(Self.sentinelPassword),
+            "The password must never reach the child's argument vector."
+        )
+    }
+
+    func testInvocationNeverCarriesTheStandardInputPayload() async throws {
+        let cli = makeCLI(scenario: "stdin-echo")
+        var payload = Data(Self.sentinelPassword.utf8)
+        payload.append(0x0A)
+
+        let result = try await cli.run(try loginCommand(), standardInput: payload)
+
+        XCTAssertFalse(result.invocation.contains(Self.sentinelPassword), result.invocation)
+        XCTAssertTrue(result.invocation.contains("--password-stdin"), result.invocation)
+    }
+
+    func testFailedLoginErrorNeverCarriesTheStandardInputPayload() async throws {
+        let cli = makeCLI(scenario: "stdin-failure")
+        var payload = Data(Self.sentinelPassword.utf8)
+        payload.append(0x0A)
+
+        do {
+            _ = try await cli.run(try loginCommand(), standardInput: payload)
+            XCTFail("Expected a nonzero exit")
+        } catch let error as CLIError {
+            guard case .nonZeroExit(let invocation, let exitCode, let standardError, _) = error else {
+                return XCTFail("Unexpected CLI error: \(error)")
+            }
+            XCTAssertEqual(exitCode, 13)
+            XCTAssertFalse(invocation.contains(Self.sentinelPassword), invocation)
+            XCTAssertFalse(standardError.contains(Self.sentinelPassword), standardError)
+            XCTAssertFalse(
+                (error.errorDescription ?? "").contains(Self.sentinelPassword),
+                "The localized description must not carry the secret either."
+            )
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testTimeoutTerminatesAChildThatReadStandardInput() async throws {
+        let cli = makeCLI(scenario: "stdin-hang", timeout: .milliseconds(200))
+        var payload = Data(Self.sentinelPassword.utf8)
+        payload.append(0x0A)
+
+        do {
+            _ = try await cli.run(try loginCommand(), standardInput: payload)
+            XCTFail("Expected a timeout")
+        } catch let error as CLIError {
+            XCTAssertEqual(error, .timedOut)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testCancellationTerminatesAChildThatReadStandardInput() async throws {
+        let cli = makeCLI(scenario: "stdin-hang", timeout: nil)
+        var payload = Data(Self.sentinelPassword.utf8)
+        payload.append(0x0A)
+        let command = try loginCommand()
+        let task = Task {
+            try await cli.run(command, standardInput: payload)
+        }
+
+        try? await Task.sleep(for: .milliseconds(150))
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation")
+        } catch let error as CLIError {
+            XCTAssertEqual(error, .cancelled)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testStubsRefuseAStandardInputPayloadRatherThanDroppingIt() async {
+        // The protocol default must not silently run the command without the
+        // payload — a login that quietly lost its password would look like a
+        // wrong-credentials failure.
+        let cli: any ContainerCLI = StandardInputUnawareCLI()
+
+        do {
+            _ = try await cli.run(.listRegistries, standardInput: Data("secret".utf8))
+            XCTFail("Expected the default implementation to refuse a payload")
+        } catch let error as CLIError {
+            guard case .launchFailed(let message) = error else {
+                return XCTFail("Unexpected CLI error: \(error)")
+            }
+            XCTAssertTrue(message.contains("standard input"), message)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
     private var fixtureURL: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -246,5 +388,23 @@ final class ProcessContainerCLITests: XCTestCase {
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
+    }
+}
+
+private struct StandardInputUnawareCLI: ContainerCLI {
+    func run(_ command: ContainerCommand) async throws -> CommandResult {
+        CommandResult(
+            standardOutput: "",
+            standardError: "",
+            exitCode: 0,
+            duration: .zero,
+            invocation: "stub"
+        )
+    }
+
+    nonisolated func stream(
+        _ command: ContainerCommand
+    ) -> AsyncThrowingStream<ProcessEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
     }
 }

@@ -27,9 +27,17 @@ nonisolated enum ContainerCommand: Equatable, Sendable {
 
     case listImages
     case inspectImage(reference: ImageReference)
-    case pullImage(reference: ImageReference)
-    case deleteImage(reference: ImageReference)
+    case pullImage(configuration: ImagePullConfiguration)
+    case pushImage(configuration: ImagePushConfiguration)
+    case tagImage(configuration: ImageTagConfiguration)
+    case saveImages(configuration: ImageSaveConfiguration)
+    case loadImages(configuration: ImageLoadConfiguration)
+    case deleteImages(configuration: ImageDeleteConfiguration)
     case pruneImages(all: Bool)
+
+    case listRegistries
+    case loginRegistry(configuration: RegistryLoginConfiguration)
+    case logoutRegistry(host: RegistryHost)
 
     case listNetworks
     case inspectNetwork(name: NetworkName)
@@ -116,12 +124,27 @@ nonisolated enum ContainerCommand: Equatable, Sendable {
             ["image", "list", "--verbose", "--format", "json"]
         case .inspectImage(let reference):
             ["image", "inspect", reference.rawValue]
-        case .pullImage(let reference):
-            ["image", "pull", "--progress", "plain", reference.rawValue]
-        case .deleteImage(let reference):
-            ["image", "delete", reference.rawValue]
+        case .pullImage(let configuration):
+            configuration.arguments
+        case .pushImage(let configuration):
+            configuration.arguments
+        case .tagImage(let configuration):
+            configuration.arguments
+        case .saveImages(let configuration):
+            configuration.arguments
+        case .loadImages(let configuration):
+            configuration.arguments
+        case .deleteImages(let configuration):
+            configuration.arguments
         case .pruneImages(let all):
             ["image", "prune"] + (all ? ["--all"] : [])
+
+        case .listRegistries:
+            ["registry", "list", "--quiet"]
+        case .loginRegistry(let configuration):
+            configuration.arguments
+        case .logoutRegistry(let host):
+            ["registry", "logout", host.rawValue]
 
         case .listNetworks:
             ["network", "list", "--format", "json"]

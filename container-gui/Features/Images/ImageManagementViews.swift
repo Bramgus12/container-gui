@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -5,28 +6,20 @@ struct ImageListView: View {
     @Bindable var model: AppModel
     @State private var pendingDeletion: ImageDeletionPlan?
     @State private var pullModel: ImagePullModel?
-    @State private var activePullModel: ImagePullModel?
-    @State private var activePullTask: Task<Void, Never>?
+    @State private var tagModel: ImageTagModel?
+    @State private var pushModel: ImagePushModel?
+    @State private var saveModel: ImageSaveModel?
+    @State private var loadModel: ImageLoadModel?
+    @State private var bulkDeleteModel: ImageBulkDeleteModel?
+    @State private var pruneModel: ImagePruneModel?
     @State private var buildModel: ImageBuildModel?
     @State private var runContainerModel: RunContainerModel?
+    /// Set when a save finishes, so Reveal in Finder points at the archive the
+    /// operation actually wrote rather than at whatever the form holds now.
+    @State private var savedArchiveURL: URL?
 
     var body: some View {
-        VStack(spacing: 0) {
-            ImageScreenHeader(count: model.images.count, totalSize: model.images.compactMap(\.size).reduce(0, &+))
-            if let activePullModel {
-                ImagePullProgressRow(model: activePullModel) {
-                    activePullTask?.cancel()
-                } dismiss: {
-                    self.activePullModel = nil
-                    activePullTask = nil
-                }
-            }
-            table
-            ImageListFooter(
-                unused: model.unusedImages,
-                showsUnusedOnly: $model.showsUnusedImagesOnly
-            )
-        }
+        content
             .background(Color.dsCanvas)
             .navigationTitle("Images")
             .searchable(
@@ -34,70 +27,11 @@ struct ImageListView: View {
                 placement: .toolbar,
                 prompt: "Search images"
             )
-            .toolbar {
-                ToolbarItem {
-                    Button {
-                        buildModel = ImageBuildModel()
-                    } label: {
-                        Label("Build Image", systemImage: "hammer")
-                    }
-                    .accessibilityIdentifier("images.build")
-                }
-
-                ToolbarItem {
-                    Button {
-                        pullModel = ImagePullModel()
-                    } label: {
-                        Label("Pull Image", systemImage: "arrow.down.circle")
-                    }
-                    .accessibilityIdentifier("images.pull")
-                }
-
-                ToolbarItem {
-                    Button {
-                        guard let selectedImage = model.selectedImage else { return }
-                        runContainerModel = RunContainerModel(
-                            image: selectedImage.reference,
-                            networkModel: model.networkModel,
-                            volumeModel: model.volumeModel
-                        )
-                    } label: {
-                        Label("Run Image", systemImage: "play.fill")
-                    }
-                    .disabled(model.selectedImage == nil)
-                    .accessibilityIdentifier("images.run")
-                }
-
-                ToolbarItem {
-                    Button {
-                        Task { await model.refreshImages() }
-                    } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
-                    }
-                    .keyboardShortcut("r", modifiers: .command)
-                    .disabled(model.imageListState == .loading)
-                    .accessibilityIdentifier("images.refresh")
-                }
-
-                ToolbarItem {
-                    Button(role: .destructive) {
-                        if let reference = model.selectedImage?.reference {
-                            requestDeletion(reference)
-                        }
-                    } label: {
-                        Label("Delete Image", systemImage: "trash")
-                    }
-                    .disabled(
-                        model.selectedImage == nil
-                            || model.preparingImageDeletionReference != nil
-                            || model.deletingImageReference != nil
-                    )
-                    .accessibilityIdentifier("images.delete")
-                }
-            }
+            .toolbar { toolbar }
             .overlay { listOverlay }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 0) {
+                    savedArchiveBanner
                     deletionErrorBanner
                     refreshErrorBanner
                 }
@@ -110,32 +44,141 @@ struct ImageListView: View {
             .task(id: model.selectedImageID) {
                 await model.inspectSelectedImage()
             }
-            .sheet(item: $pendingDeletion) { plan in
-                ImageDeletionSheet(plan: plan, model: model)
-            }
-            .sheet(item: $pullModel) { pullModel in
-                ImagePullSheet(model: pullModel) {
-                    activePullModel = pullModel
-                    activePullTask = Task { await pullModel.pull(using: model) }
-                    self.pullModel = nil
-                }
-            }
-            .sheet(item: $buildModel) { buildModel in
-                ImageBuildSheet(model: buildModel, appModel: model)
-            }
-            .sheet(item: $runContainerModel) { runModel in
-                RunContainerSheet(
-                    model: runModel,
-                    appModel: model,
-                    networkModel: model.networkModel,
-                    volumeModel: model.volumeModel
-                )
-            }
+            .modifier(ImageSheets(
+                model: model,
+                pendingDeletion: $pendingDeletion,
+                pullModel: $pullModel,
+                tagModel: $tagModel,
+                pushModel: $pushModel,
+                saveModel: $saveModel,
+                loadModel: $loadModel,
+                bulkDeleteModel: $bulkDeleteModel,
+                pruneModel: $pruneModel,
+                buildModel: $buildModel,
+                runContainerModel: $runContainerModel,
+                savedArchiveURL: $savedArchiveURL
+            ))
             .inspector(isPresented: $model.isImageInspectorPresented) {
                 ImageInspectionView(model: model)
                     .id(model.selectedImageID)
                     .inspectorColumnWidth(min: 360, ideal: 460, max: 680)
             }
+    }
+
+    private var content: some View {
+        VStack(spacing: 0) {
+            ImageScreenHeader(
+                count: model.images.count,
+                totalSize: model.images.compactMap(\.size).reduce(0, &+)
+            )
+            if let activity = model.imageOperations.activity {
+                ImageOperationProgressRow(
+                    activity: activity,
+                    cancel: model.imageOperations.cancel,
+                    dismiss: model.imageOperations.dismiss
+                )
+            }
+            table
+            ImageListFooter(
+                unused: model.unusedImages,
+                showsUnusedOnly: $model.showsUnusedImagesOnly
+            )
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        ToolbarItem {
+            Button {
+                buildModel = ImageBuildModel()
+            } label: {
+                Label("Build Image", systemImage: "hammer")
+            }
+            .accessibilityIdentifier("images.build")
+        }
+
+        ToolbarItem {
+            Button {
+                pullModel = ImagePullModel(capabilities: model.imageCapabilities)
+            } label: {
+                Label("Pull Image", systemImage: "arrow.down.circle")
+            }
+            .disabled(model.imageOperations.isBusy)
+            .accessibilityIdentifier("images.pull")
+        }
+
+        ToolbarItem {
+            Button {
+                guard let selectedImage = model.selectedImage else { return }
+                runContainerModel = RunContainerModel(
+                    image: selectedImage.reference,
+                    networkModel: model.networkModel,
+                    volumeModel: model.volumeModel
+                )
+            } label: {
+                Label("Run Image", systemImage: "play.fill")
+            }
+            .disabled(model.selectedImage == nil)
+            .accessibilityIdentifier("images.run")
+        }
+
+        ToolbarItem {
+            Button {
+                Task { await model.refreshImages() }
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .keyboardShortcut("r", modifiers: .command)
+            .disabled(model.imageListState == .loading)
+            .accessibilityIdentifier("images.refresh")
+        }
+
+        ToolbarItem {
+            Button(role: .destructive) {
+                if let reference = model.selectedImage?.reference {
+                    requestDeletion(reference)
+                }
+            } label: {
+                Label("Delete Image", systemImage: "trash")
+            }
+            .disabled(
+                model.selectedImage == nil
+                    || model.preparingImageDeletionReference != nil
+                    || model.deletingImageReference != nil
+            )
+            .accessibilityIdentifier("images.delete")
+        }
+
+        // The rest of the image surface would be a wall of toolbar icons, so it
+        // goes behind one labelled menu instead. Row-scoped entries mirror it in
+        // the context menu.
+        ToolbarItem {
+            Menu {
+                Button("Tag Selected Image…") { tagModel = makeTagModel() }
+                    .disabled(model.selectedImage == nil)
+                Button("Push Selected Image…") { pushModel = makePushModel() }
+                    .disabled(model.selectedImage == nil || model.imageOperations.isBusy)
+                Divider()
+                Button("Save Images…") { saveModel = makeSaveModel() }
+                    .disabled(model.images.isEmpty || model.imageOperations.isBusy)
+                Button("Load Archive…") { loadModel = ImageLoadModel() }
+                    .disabled(model.imageOperations.isBusy)
+                Divider()
+                Button("Delete Images…", role: .destructive) {
+                    bulkDeleteModel = ImageBulkDeleteModel(
+                        preselected: model.selectedImage?.reference
+                    )
+                }
+                .disabled(model.images.isEmpty || model.imageOperations.isBusy)
+                Button("Prune Images…", role: .destructive) {
+                    pruneModel = ImagePruneModel()
+                }
+                .disabled(model.imageOperations.isBusy)
+            } label: {
+                Label("More Image Actions", systemImage: "ellipsis.circle")
+            }
+            .accessibilityIdentifier("images.moreActions")
+        }
     }
 
     private static let columns: [DSTableColumn<ImageSummary>] = [
@@ -182,24 +225,47 @@ struct ImageListView: View {
                 MonoText(value: image.size.map(Self.formatBytes) ?? "—", dimmed: true, tabular: true, selectable: false)
             }
             .dsColumn(Self.columns[4])
-            .contextMenu {
-                Button("Run Image…") {
-                    runContainerModel = RunContainerModel(
-                        image: image.reference,
-                        networkModel: model.networkModel,
-                        volumeModel: model.volumeModel
-                    )
-                }
-                Button("Delete…", role: .destructive) {
-                    requestDeletion(image.reference)
-                }
-                .disabled(
-                    model.preparingImageDeletionReference != nil
-                        || model.deletingImageReference != nil
-                )
-            }
+            .contextMenu { rowMenu(for: image) }
         }
         .accessibilityIdentifier("images.table")
+    }
+
+    @ViewBuilder
+    private func rowMenu(for image: ImageSummary) -> some View {
+        Button("Run Image…") {
+            runContainerModel = RunContainerModel(
+                image: image.reference,
+                networkModel: model.networkModel,
+                volumeModel: model.volumeModel
+            )
+        }
+        Button("Tag…") { tagModel = ImageTagModel(source: image.reference) }
+        Button("Push…") { pushModel = ImagePushModel(reference: image.reference) }
+            .disabled(model.imageOperations.isBusy)
+        Button("Save…") {
+            saveModel = ImageSaveModel(available: model.images, preselected: image.reference)
+        }
+        .disabled(model.imageOperations.isBusy)
+        Divider()
+        Button("Delete…", role: .destructive) {
+            requestDeletion(image.reference)
+        }
+        .disabled(
+            model.preparingImageDeletionReference != nil
+                || model.deletingImageReference != nil
+        )
+    }
+
+    private func makeTagModel() -> ImageTagModel? {
+        model.selectedImage.map { ImageTagModel(source: $0.reference) }
+    }
+
+    private func makePushModel() -> ImagePushModel? {
+        model.selectedImage.map { ImagePushModel(reference: $0.reference) }
+    }
+
+    private func makeSaveModel() -> ImageSaveModel {
+        ImageSaveModel(available: model.images, preselected: model.selectedImage?.reference)
     }
 
     private func requestDeletion(_ reference: String) {
@@ -236,7 +302,7 @@ struct ImageListView: View {
                     description: "Pull an image to run your first container."
                 ) {
                     Button("Pull Image…") {
-                        pullModel = ImagePullModel()
+                        pullModel = ImagePullModel(capabilities: model.imageCapabilities)
                     }
                 }
             } else {
@@ -245,6 +311,22 @@ struct ImageListView: View {
 
         default:
             EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private var savedArchiveBanner: some View {
+        if let url = savedArchiveURL {
+            InlineBanner(
+                message: "Archive saved",
+                detail: url.path,
+                scope: .bar,
+                severity: .info,
+                actionTitle: "Reveal in Finder",
+                action: { NSWorkspace.shared.activateFileViewerSelecting([url]) },
+                onDismiss: { savedArchiveURL = nil }
+            )
+            .accessibilityIdentifier("images.save.saved")
         }
     }
 
@@ -292,6 +374,83 @@ struct ImageListView: View {
     }
 }
 
+/// Every sheet the Images screen presents, lifted out of `body` so the screen's
+/// own layout stays type-checkable.
+private struct ImageSheets: ViewModifier {
+    @Bindable var model: AppModel
+    @Binding var pendingDeletion: ImageDeletionPlan?
+    @Binding var pullModel: ImagePullModel?
+    @Binding var tagModel: ImageTagModel?
+    @Binding var pushModel: ImagePushModel?
+    @Binding var saveModel: ImageSaveModel?
+    @Binding var loadModel: ImageLoadModel?
+    @Binding var bulkDeleteModel: ImageBulkDeleteModel?
+    @Binding var pruneModel: ImagePruneModel?
+    @Binding var buildModel: ImageBuildModel?
+    @Binding var runContainerModel: RunContainerModel?
+    @Binding var savedArchiveURL: URL?
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(item: $pendingDeletion) { plan in
+                ImageDeletionSheet(plan: plan, model: model)
+            }
+            .sheet(item: $pullModel) { draft in
+                ImagePullSheet(model: draft) { configuration in
+                    model.startImageOperation(.pull(configuration))
+                }
+            }
+            .sheet(item: $tagModel) { draft in
+                ImageTagSheet(model: draft, appModel: model)
+            }
+            .sheet(item: $pushModel) { draft in
+                ImagePushSheet(model: draft, registryModel: model.registryModel) { configuration in
+                    model.startImageOperation(.push(configuration))
+                }
+            }
+            .sheet(item: $saveModel) { draft in
+                ImageSaveSheet(model: draft) { configuration in
+                    let url = draft.outputURL
+                    savedArchiveURL = nil
+                    model.imageOperations.start(.save(configuration)) { state in
+                        // Offered only for an archive that was actually written.
+                        if state == .succeeded { savedArchiveURL = url }
+                    }
+                }
+            }
+            .sheet(item: $loadModel) { draft in
+                ImageLoadSheet(model: draft) { configuration in
+                    model.startImageOperation(.load(configuration))
+                }
+            }
+            .sheet(item: $bulkDeleteModel) { draft in
+                ImageBulkDeleteSheet(model: draft, appModel: model) { configuration in
+                    model.startImageOperation(.delete(configuration))
+                }
+            }
+            .sheet(item: $pruneModel) { draft in
+                ImagePruneSheet(
+                    model: draft,
+                    images: model.images,
+                    inventoryIndex: model.inventoryIndex
+                ) { all in
+                    model.startImageOperation(.prune(all: all))
+                }
+            }
+            .sheet(item: $buildModel) { draft in
+                ImageBuildSheet(model: draft, appModel: model)
+            }
+            .sheet(item: $runContainerModel) { runModel in
+                RunContainerSheet(
+                    model: runModel,
+                    appModel: model,
+                    networkModel: model.networkModel,
+                    volumeModel: model.volumeModel
+                )
+            }
+    }
+}
+
 private struct ImageScreenHeader: View {
     let count: Int
     let totalSize: UInt64
@@ -309,34 +468,6 @@ private struct ImageScreenHeader: View {
 
     private static func formatBytes(_ bytes: UInt64) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file)
-    }
-}
-
-private struct ImagePullProgressRow: View {
-    let model: ImagePullModel
-    let cancel: () -> Void
-    let dismiss: () -> Void
-
-    var body: some View {
-        HStack(spacing: DSMetrics.spacing12) {
-            ProgressView(value: model.progressFraction)
-                .frame(width: 100)
-            VStack(alignment: .leading, spacing: DSMetrics.spacing4) {
-                MonoText(value: model.reference, truncation: .middle)
-                Text(model.errorMessage ?? (model.didFinish ? "Image pulled" : model.progressLabel))
-                    .foregroundStyle(model.errorMessage == nil ? Color.dsTextSecondary : Color.dsStateDestructive)
-                    .lineLimit(1)
-            }
-            Spacer()
-            if model.isPulling {
-                Button("Cancel", role: .cancel, action: cancel)
-            } else {
-                Button("Dismiss", systemImage: "xmark", action: dismiss).labelStyle(.iconOnly)
-            }
-        }
-        .padding(.horizontal, DSMetrics.spacing12)
-        .frame(minHeight: 48)
-        .background(Color.dsBlue100.opacity(0.35))
     }
 }
 
@@ -518,65 +649,6 @@ private struct ImageDeletionSheet: View {
             return "Delete"
         case .unknown:
             return "Manual cleanup required"
-        }
-    }
-}
-
-/// The pull sheet's only form page. It still goes through the rail so the sheet
-/// carries the same title, form pane, and command strip as the other modals.
-enum ImagePullSection: String, SheetSection {
-    case image
-
-    var isRequired: Bool { true }
-
-    var title: LocalizedStringResource { "Image" }
-}
-
-private struct ImagePullSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Bindable var model: ImagePullModel
-    let onStart: () -> Void
-    @State private var page: ImagePullSection = .image
-
-    var body: some View {
-        SheetScaffold(
-            command: model.commandPreview,
-            commandAccessibilityID: "images.pull.preview"
-        ) {
-            SheetSectionPane(
-                title: "Pull image",
-                selection: $page,
-                accessibilityID: "images.pull.rail"
-            ) {
-                Section("Image") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        LabeledContent("Reference") {
-                            TextField(text: $model.reference, prompt: Text("alpine:3.21")) {
-                                Text("Reference")
-                            }
-                            .labelsHidden()
-                            .dsMonoField()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .accessibilityIdentifier("images.pull.reference")
-                        }
-                        if let error = model.referenceError {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(Color.dsStateDestructive)
-                        }
-                    }
-                }
-            }
-        } footer: {
-            SheetCancelButton(accessibilityID: "images.pull.cancel") { dismiss() }
-
-            Spacer()
-
-            Button("Pull", action: onStart)
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-                .disabled(!model.canPull)
-                .accessibilityIdentifier("images.pull.submit")
         }
     }
 }

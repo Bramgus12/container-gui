@@ -225,6 +225,120 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(ContainerMutation.delete(force: true).isAllowed(for: .unknown("future")))
     }
 
+    // MARK: - Registry and image composition
+
+    func testActivateBuildsTheRegistryStackAndImageCapabilities() async {
+        let model = AppDependencies.makeAppModel()
+        await model.setup.checkIfNeeded()
+        guard case .ready(let context) = model.setup.readiness else {
+            return XCTFail("Hosted XCTest should use the ready mock preflight.")
+        }
+
+        await model.activate(context)
+
+        XCTAssertNotNil(model.registryModel, "Activation must build the registry stack.")
+        // The fixture reports CLI 1.0.0, which is exactly the boundary.
+        XCTAssertTrue(model.imageCapabilities.supportsConcurrentDownloadLimit)
+    }
+
+    func testChangingTheExecutableRebuildsTheRegistryStack() async {
+        let model = AppDependencies.makeAppModel()
+        await model.setup.checkIfNeeded()
+        guard case .ready(let context) = model.setup.readiness else {
+            return XCTFail("Hosted XCTest should use the ready mock preflight.")
+        }
+        await model.activate(context)
+        let first = model.registryModel
+
+        let moved = PreflightContext(
+            executableURL: URL(fileURLWithPath: "/opt/homebrew/bin/container"),
+            versions: context.versions,
+            status: context.status
+        )
+        await model.activate(moved)
+
+        XCTAssertNotNil(model.registryModel)
+        XCTAssertFalse(
+            first === model.registryModel,
+            "A different executable must rebuild the registry stack, not reuse it."
+        )
+    }
+
+    func testRegistriesAppearInTheSidebarWithACount() async {
+        // Built directly rather than through `activate`, which also refreshes in
+        // a detached task: two concurrent refreshes make the generation guard —
+        // and so the count at any given instant — non-deterministic.
+        let model = AppModel(
+            setup: SetupModel(),
+            registryService: StaticRegistryService(hosts: ["ghcr.io", "docker.io"])
+        )
+
+        await model.registryModel?.refresh()
+
+        XCTAssertTrue(
+            AppDestination.available(with: model.machineCapabilities).contains(.registries)
+        )
+        XCTAssertEqual(model.inventoryCount(for: .registries), 2)
+    }
+
+    func testSidebarRefreshLeavesAnInFlightRegistryMutationAlone() async {
+        let model = AppModel(
+            setup: SetupModel(),
+            registryService: BlockingRegistryService()
+        )
+        let registryModel = try? XCTUnwrap(model.registryModel)
+        guard let registryModel else { return }
+
+        // Hold a mutation open, then refresh the sidebar underneath it.
+        let login = Task {
+            await registryModel.login(
+                try! RegistryLoginConfiguration(server: "ghcr.io", username: "ci-user"),
+                password: "sentinel"
+            )
+        }
+        while !registryModel.isBusy {
+            await Task.yield()
+        }
+
+        await model.refreshSidebarData()
+        let listedDuringMutation = await (model.registryModel?.listState)
+
+        XCTAssertEqual(
+            listedDuringMutation,
+            .idle,
+            "A refresh must not list registries while a login owns that state."
+        )
+        login.cancel()
+        _ = await login.value
+    }
+
+}
+
+private actor StaticRegistryService: RegistryManaging {
+    private let hosts: [String]
+
+    init(hosts: [String]) {
+        self.hosts = hosts
+    }
+
+    func listRegistries() throws -> [RegistrySummary] {
+        try hosts.map { RegistrySummary(host: try RegistryHost(validating: $0)) }
+    }
+
+    func login(_ configuration: RegistryLoginConfiguration, password: String) {}
+    func logout(host: String) {}
+}
+
+/// Blocks inside `login` so a test can observe the model while a mutation is in
+/// flight, then reports no registries.
+private actor BlockingRegistryService: RegistryManaging {
+    func listRegistries() -> [RegistrySummary] { [] }
+
+    func login(_ configuration: RegistryLoginConfiguration, password: String) async throws {
+        try await Task.sleep(for: .seconds(30))
+    }
+
+    func logout(host: String) {}
 }
 
 private actor ContainerCLIStub: ContainerCLI {

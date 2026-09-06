@@ -1,96 +1,109 @@
 import Foundation
 import Observation
 
+/// The pull sheet's form. It builds a configuration and hands it to the shared
+/// operation activity; the progress and cancellation live there, so navigating
+/// away from Images mid-pull no longer orphans the child process.
 @MainActor
 @Observable
 final class ImagePullModel: Identifiable {
     let id = UUID()
     var reference = ""
-    private(set) var isPulling = false
-    private(set) var didFinish = false
-    private(set) var progress = ""
-    private(set) var errorMessage: String?
-    private(set) var progressLabel = "Waiting to start"
-    private(set) var progressFraction: Double?
+    var scheme: RegistryScheme = .auto
+    var platform = ""
+    var operatingSystem = ""
+    var architecture = ""
+    /// Empty leaves the CLI's own default in place. Only offered when the CLI
+    /// is new enough to have the flag at all.
+    var maximumConcurrentDownloads = ""
 
-    var referenceError: String? {
-        do {
-            _ = try ImageReference(validating: trimmedReference)
-            return nil
-        } catch {
-            return DiagnosticSanitizer.sanitize(error.localizedDescription)
-        }
+    let capabilities: ImageCapabilities
+
+    init(capabilities: ImageCapabilities = ImageCapabilities(supportsConcurrentDownloadLimit: true)) {
+        self.capabilities = capabilities
     }
 
-    var canPull: Bool {
-        referenceError == nil && !isPulling && !didFinish
+    var referenceError: String? {
+        validationMessage { _ = try ImageReference(validating: trimmedReference) }
+    }
+
+    var platformError: String? {
+        validationMessage { _ = try platformSelection() }
+    }
+
+    var concurrencyError: String? {
+        validationMessage { _ = try concurrencyLimit() }
+    }
+
+    var configuration: ImagePullConfiguration? {
+        try? makeConfiguration()
+    }
+
+    var canPull: Bool { configuration != nil }
+
+    /// The number of options set, for the rail's badge.
+    var optionCount: Int {
+        var count = scheme == .auto ? 0 : 1
+        count += (try? platformSelection())?.setValueCount ?? 0
+        if (try? concurrencyLimit()) ?? nil != nil { count += 1 }
+        return count
     }
 
     var commandPreview: String {
-        guard let reference = try? ImageReference(validating: trimmedReference) else {
+        guard let configuration else {
             return "container image pull"
         }
         return ProcessContainerCLI.displayInvocation(
             executable: "container",
-            arguments: ContainerCommand.pullImage(reference: reference).arguments
+            arguments: ContainerCommand.pullImage(configuration: configuration).arguments
         )
     }
 
-    func pull(using appModel: AppModel) async {
-        guard canPull else { return }
-        isPulling = true
-        progress = ""
-        errorMessage = nil
-        defer { isPulling = false }
-
-        do {
-            try await appModel.pullImage(reference: trimmedReference) { [weak self] event in
-                self?.record(event)
-            }
-            didFinish = true
-        } catch is CancellationError {
-            errorMessage = "Pull cancelled."
-        } catch CLIError.cancelled {
-            errorMessage = "Pull cancelled."
-        } catch {
-            errorMessage = DiagnosticSanitizer.sanitize(error.localizedDescription)
-        }
+    func makeConfiguration() throws -> ImagePullConfiguration {
+        try ImagePullConfiguration(
+            reference: trimmedReference,
+            scheme: scheme,
+            platform: platformSelection(),
+            maximumConcurrentDownloads: concurrencyLimit()
+        )
     }
 
     private var trimmedReference: String {
         reference.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func record(_ event: ProcessEvent) {
-        switch event {
-        case .standardOutput(let output), .standardError(let output):
-            progress.append(DiagnosticSanitizer.sanitize(output))
-            updateParsedProgress(from: output)
-        case .terminated(let exitCode):
-            progress.append("Process exited with status \(exitCode).\n")
-        }
-        if progress.count > 65_536 {
-            progress = String(progress.suffix(65_536))
-        }
+    private func platformSelection() throws -> ImagePlatformSelection {
+        try ImagePlatformSelection(
+            platform: platform,
+            operatingSystem: operatingSystem,
+            architecture: architecture
+        )
     }
 
-    private func updateParsedProgress(from output: String) {
-        guard let line = output.split(whereSeparator: \.isNewline).last.map(String.init),
-              !line.isEmpty else { return }
-        progressLabel = DiagnosticSanitizer.sanitize(line)
-
-        let pattern = #"(\d+)\s*/\s*(\d+)"#
-        guard let match = try? NSRegularExpression(pattern: pattern).firstMatch(
-            in: line,
-            range: NSRange(line.startIndex..., in: line)
-        ),
-        let completedRange = Range(match.range(at: 1), in: line),
-        let totalRange = Range(match.range(at: 2), in: line),
-        let completed = Double(line[completedRange]),
-        let total = Double(line[totalRange]), total > 0 else {
-            progressFraction = nil
-            return
+    /// Never emitted below 1.0.0, whatever the field holds — the flag does not
+    /// exist there and passing it is a hard failure.
+    private func concurrencyLimit() throws -> Int? {
+        guard capabilities.supportsConcurrentDownloadLimit else { return nil }
+        let trimmed = maximumConcurrentDownloads.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let value = Int(trimmed) else {
+            throw CommandValidationError.invalid(
+                field: "Maximum concurrent downloads",
+                value: trimmed
+            )
         }
-        progressFraction = min(1, max(0, completed / total))
+        guard value > 0 else {
+            throw CommandValidationError.nonPositive(field: "Maximum concurrent downloads")
+        }
+        return value
+    }
+
+    private func validationMessage(_ operation: () throws -> Void) -> String? {
+        do {
+            try operation()
+            return nil
+        } catch {
+            return DiagnosticSanitizer.sanitize(error.localizedDescription)
+        }
     }
 }

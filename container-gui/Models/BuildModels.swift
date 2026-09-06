@@ -39,15 +39,18 @@ nonisolated struct LocalPath: Equatable, Sendable {
     }
 }
 
+/// An `os/arch[/variant]` platform triple. Shared by build and by the image
+/// transfer commands, so the field name is a parameter: a bad platform typed
+/// into the pull sheet must not report itself as a *build* platform.
 nonisolated struct BuildPlatform: Equatable, Sendable {
     let rawValue: String
 
-    init(validating value: String) throws {
+    init(validating value: String, field: String = "Build platform") throws {
         guard value.range(
             of: #"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)?$"#,
             options: .regularExpression
         ) != nil else {
-            throw CommandValidationError.invalid(field: "Build platform", value: value)
+            throw CommandValidationError.invalid(field: field, value: value)
         }
         rawValue = value
     }
@@ -122,7 +125,7 @@ nonisolated struct BuildConfiguration: Equatable, Sendable {
         self.labels = labels
         self.noCache = noCache
         self.target = try target.map { try Self.validatedToken($0, field: "Build target") }
-        self.platform = try platform.map(BuildPlatform.init(validating:))
+        self.platform = try platform.map { try BuildPlatform(validating: $0) }
         self.operatingSystem = try operatingSystem.map {
             try Self.validatedToken($0, field: "Build OS")
         }

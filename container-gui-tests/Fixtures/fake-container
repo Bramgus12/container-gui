@@ -29,6 +29,22 @@ case "${FAKE_CONTAINER_SCENARIO:-success}" in
         /bin/sleep 1
         printf 'second\n'
         ;;
+    stdin-echo)
+        # `cat` returns only once the parent closes the write end, so a
+        # completed run proves both the bytes and the EOF arrived.
+        printf 'args:%s\n' "$*"
+        printf 'stdin:'
+        cat
+        ;;
+    stdin-failure)
+        cat >/dev/null
+        printf 'authentication rejected\n' >&2
+        exit 13
+        ;;
+    stdin-hang)
+        cat >/dev/null
+        exec /bin/sleep 30
+        ;;
     *)
         printf 'unknown fixture scenario\n' >&2
         exit 64

@@ -15,13 +15,6 @@ nonisolated protocol ContainerRunning: Sendable {
     ) -> AsyncThrowingStream<ProcessEvent, Error>
 }
 
-nonisolated protocol ImageManaging: Sendable {
-    func listImages() async throws -> [ImageSummary]
-    func inspectImage(reference: String) async throws -> ImageInspection
-    func pullImage(reference: String) -> AsyncThrowingStream<ProcessEvent, Error>
-    func deleteImage(reference: String) async throws
-}
-
 actor CLIContainerListService: ContainerListing {
     private let cli: any ContainerCLI
 
@@ -65,67 +58,6 @@ nonisolated struct CLIContainerRunService: ContainerRunning {
         _ configuration: RunConfiguration
     ) -> AsyncThrowingStream<ProcessEvent, Error> {
         cli.stream(.run(configuration))
-    }
-}
-
-nonisolated struct CLIImageService: ImageManaging {
-    let cli: any ContainerCLI
-
-    func listImages() async throws -> [ImageSummary] {
-        let result = try await cli.run(.listImages)
-        do {
-            return try JSONDecoder()
-                .decode([ImageDTO].self, from: Data(result.standardOutput.utf8))
-                .compactMap(ImageSummary.init(dto:))
-        } catch {
-            throw CLIError.invalidOutput(
-                description: "The image list could not be decoded as JSON: \(error.localizedDescription)"
-            )
-        }
-    }
-
-    func inspectImage(reference: String) async throws -> ImageInspection {
-        let imageReference = try ImageReference(validating: reference)
-        let result = try await cli.run(.inspectImage(reference: imageReference))
-        let data = Data(result.standardOutput.utf8)
-        do {
-            let dtos: [ImageDTO]
-            if let decoded = try? JSONDecoder().decode([ImageDTO].self, from: data) {
-                dtos = decoded
-            } else {
-                dtos = [try JSONDecoder().decode(ImageDTO.self, from: data)]
-            }
-            guard let dto = dtos.first,
-                  dto.containsInspectionData,
-                  let inspection = ImageInspection(
-                    dto: dto,
-                    fallbackReference: reference,
-                    rawJSON: result.standardOutput
-                  ) else {
-                throw CLIError.invalidOutput(description: "Image inspection returned no entries.")
-            }
-            return inspection
-        } catch let error as CLIError {
-            throw error
-        } catch {
-            throw CLIError.invalidOutput(
-                description: "Image inspection could not be decoded as JSON: \(error.localizedDescription)"
-            )
-        }
-    }
-
-    func pullImage(reference: String) -> AsyncThrowingStream<ProcessEvent, Error> {
-        do {
-            let imageReference = try ImageReference(validating: reference)
-            return cli.stream(.pullImage(reference: imageReference))
-        } catch {
-            return AsyncThrowingStream { $0.finish(throwing: error) }
-        }
-    }
-
-    func deleteImage(reference: String) async throws {
-        let imageReference = try ImageReference(validating: reference)
-        _ = try await cli.run(.deleteImage(reference: imageReference))
     }
 }
 
@@ -192,6 +124,7 @@ enum AppDestination: String, CaseIterable, Identifiable, Sendable {
     case containers = "Containers"
     case machines = "Machines"
     case images = "Images"
+    case registries = "Registries"
     case volumes = "Volumes"
     case networks = "Networks"
     case system = "System"
@@ -203,6 +136,7 @@ enum AppDestination: String, CaseIterable, Identifiable, Sendable {
         case .containers: "Containers"
         case .machines: "Machines"
         case .images: "Images"
+        case .registries: "Registries"
         case .volumes: "Volumes"
         case .networks: "Networks"
         case .system: "System"
@@ -214,6 +148,7 @@ enum AppDestination: String, CaseIterable, Identifiable, Sendable {
         case .containers: "shippingbox"
         case .machines: "desktopcomputer"
         case .images: "square.stack.3d.up"
+        case .registries: "person.badge.key"
         case .volumes: "externaldrive"
         case .networks: "network"
         case .system: "gauge.with.dots.needle.67percent"
@@ -341,6 +276,11 @@ final class AppModel {
     private(set) var preparingImageDeletionReference: String?
     private(set) var deletingImageReference: String?
     private(set) var imageDeletionFailure: ImageDeletionFailure?
+    private(set) var registryModel: RegistryModel?
+    /// Defaults to the newest surface so a model built without a preflight
+    /// context — previews and unit tests — offers every option.
+    private(set) var imageCapabilities = ImageCapabilities(supportsConcurrentDownloadLimit: true)
+    let imageOperations: ImageOperationsModel
     private(set) var networkModel: NetworkModel?
     private(set) var volumeModel: VolumeModel?
     private(set) var machineModel: MachineModel?
@@ -380,6 +320,8 @@ final class AppModel {
         containerDiagnoser: (any ContainerDiagnosing)? = nil,
         lifecycleService: (any ContainerLifecycleManaging)? = nil,
         imageService: (any ImageManaging)? = nil,
+        imageCapabilities: ImageCapabilities? = nil,
+        registryService: (any RegistryManaging)? = nil,
         imageBuilder: (any ImageBuilding)? = nil,
         networkService: (any NetworkManaging)? = nil,
         networkCapabilities: NetworkCapabilities? = nil,
@@ -402,6 +344,16 @@ final class AppModel {
         self.imageService = imageService
         self.imageBuilder = imageBuilder
         self.failureLog = failureLog ?? OperationFailureLog()
+        imageOperations = ImageOperationsModel(
+            service: imageService,
+            failureLog: self.failureLog
+        )
+        if let imageCapabilities {
+            self.imageCapabilities = imageCapabilities
+        }
+        if let registryService {
+            registryModel = RegistryModel(service: registryService, failureLog: self.failureLog)
+        }
         if let networkService {
             self.networkModel = NetworkModel(
                 service: networkService,
@@ -491,10 +443,17 @@ final class AppModel {
             containerDiagnoser = diagnostics
             lifecycleService = CLIContainerLifecycleService(cli: cli)
             statsPoller = ContainerStatsPoller(provider: diagnostics)
-            imageService = CLIImageService(cli: cli)
+            let imageCLIService = CLIImageService(cli: cli)
+            imageService = imageCLIService
+            imageOperations.setService(imageCLIService)
             imageBuilder = CLIImageBuildService(cli: cli)
             let cliVersion = (try? context.versions.cli.map { try SemanticVersion($0.version) })
                 ?? SemanticVersion(major: 1, minor: 0, patch: 0)
+            imageCapabilities = ImageCapabilities(version: cliVersion)
+            registryModel = RegistryModel(
+                service: CLIRegistryService(cli: cli),
+                failureLog: failureLog
+            )
             networkModel = NetworkModel(
                 service: CLINetworkService(cli: cli),
                 capabilities: NetworkCapabilities(version: cliVersion),
@@ -536,6 +495,7 @@ final class AppModel {
             preparingImageDeletionReference = nil
             deletingImageReference = nil
             imageDeletionFailure = nil
+            showsUnusedImagesOnly = false
         }
 
         if containerListState == .idle {
@@ -574,6 +534,7 @@ final class AppModel {
         case .containers: containers.count
         case .machines: machineModel?.machines.count
         case .images: images.count
+        case .registries: registryModel?.registries.count
         case .volumes: volumeModel?.volumes.count
         case .networks: networkModel?.networks.count
         case .system: nil
@@ -588,13 +549,19 @@ final class AppModel {
     }
 
     func refreshSidebarData() async {
+        // A login or logout in flight owns the registry list; refreshing under
+        // it would race the reconciliation the mutation does itself.
+        let refreshesRegistries = registryModel?.isBusy == false
         async let images: Void = refreshImages()
         async let volumes: Void = volumeModel?.refresh() ?? ()
         async let networks: Void = networkModel?.refresh() ?? ()
         async let machines: Void = machineModel?.refresh() ?? ()
         async let builder: Void = builderModel?.refresh() ?? ()
         async let system: Void = systemModel?.refresh() ?? ()
-        _ = await (images, volumes, networks, machines, builder, system)
+        async let registries: Void = refreshesRegistries
+            ? (registryModel?.refresh() ?? ())
+            : ()
+        _ = await (images, volumes, networks, machines, builder, system, registries)
         rebuildInventoryIndex()
     }
 
@@ -660,38 +627,63 @@ final class AppModel {
         }
     }
 
-    func pullImage(
-        reference: String,
-        onEvent: (ProcessEvent) -> Void
-    ) async throws {
-        guard let imageService else {
-            throw CLIError.launchFailed(message: "The container executable is not ready.")
-        }
-
-        do {
-            var standardError = ""
-            for try await event in imageService.pullImage(reference: reference) {
-                if case .standardError(let output) = event {
-                    standardError.append(output)
+    /// Starts one of the streaming image operations and reconciles afterwards.
+    ///
+    /// Reconciliation runs on cancellation too, not only on success: a load or a
+    /// multi-image delete that was interrupted part-way has still changed the
+    /// inventory, and the screen must not keep showing the pre-operation answer.
+    @discardableResult
+    func startImageOperation(_ kind: ImageOperationKind) -> Bool {
+        imageOperations.start(kind) { [weak self] state in
+            guard let self else { return }
+            switch state {
+            case .running:
+                return
+            case .succeeded, .cancelled:
+                guard kind.mutatesLocalImages else { return }
+                await self.refreshImages()
+                if case .succeeded = state, let reference = kind.primaryReference,
+                   self.images.contains(where: { $0.reference == reference }) {
+                    self.selectedImageID = reference
                 }
-                if case .terminated(let exitCode) = event, exitCode != 0 {
-                    onEvent(event)
-                    let validatedReference = try ImageReference(validating: reference)
-                    throw CLIError.nonZeroExit(
-                        invocation: ProcessContainerCLI.displayInvocation(
-                            executable: "container",
-                            arguments: ContainerCommand.pullImage(reference: validatedReference).arguments
-                        ),
-                        exitCode: exitCode,
-                        standardError: standardError
-                    )
-                }
-                onEvent(event)
+                // Deleting and pruning free disk and can strand containers, so
+                // the sidebar's glance layer would otherwise stay stale.
+                await self.refreshContainers()
+                await self.systemModel?.refresh()
+                self.rebuildInventoryIndex()
+            case .failed:
+                guard kind.mutatesLocalImages else { return }
+                await self.refreshImages()
             }
+        }
+    }
+
+    /// Tag is the one image mutation that does not stream: it is a single
+    /// metadata write with no progress to show.
+    func tagImage(_ configuration: ImageTagConfiguration) async -> String? {
+        guard let imageService else {
+            return "The container executable is not ready."
+        }
+        do {
+            try await imageService.tagImage(configuration)
             await refreshImages()
+            // The CLI may normalize what it stored, so fall back to the source
+            // image's digest rather than claiming the tag went missing.
+            if images.contains(where: { $0.reference == configuration.target.rawValue }) {
+                selectedImageID = configuration.target.rawValue
+            } else if let digest = images.first(where: {
+                $0.reference == configuration.source.rawValue
+            })?.digest, let match = images.first(where: { $0.digest == digest }) {
+                selectedImageID = match.id
+            }
+            return nil
+        } catch is CancellationError {
+            return nil
+        } catch CLIError.cancelled {
+            return nil
         } catch {
-            failureLog.record(operation: "Pull image", error: error)
-            throw error
+            failureLog.record(operation: "Tag image", error: error)
+            return DiagnosticSanitizer.sanitize(error.localizedDescription)
         }
     }
 
@@ -874,8 +866,14 @@ final class AppModel {
                 }
             }
             do {
-                try await imageService.deleteImage(
-                    reference: imageDigest
+                // The dependency-safe path deletes exactly one image, by the
+                // digest it revalidated, through the same generalized command
+                // the bulk sheet uses. `force` stays off: this path has already
+                // proved the image is there and that nothing depends on it.
+                let configuration = try ImageDeleteConfiguration(references: [imageDigest])
+                try await drainImageOperation(
+                    imageService.deleteImages(configuration),
+                    command: .deleteImages(configuration: configuration)
                 )
             } catch is CancellationError {
                 throw CancellationError()

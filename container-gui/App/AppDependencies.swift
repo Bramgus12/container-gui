@@ -127,7 +127,7 @@ nonisolated private enum UITestPreflightScenario: String, Sendable {
                 ))
             )
         case .networkLegacy:
-            .ready(Self.context(isRunning: true, cliVersion: "0.12.0"))
+            .ready(Self.context(isRunning: true, cliVersion: "0.12.3"))
         case .ready, .lifecycle, .imageCleanup, .cancelRun, .networkCurrent:
             .ready(Self.context(isRunning: true))
         }
@@ -278,6 +278,10 @@ private actor UITestContainerCLI: ContainerCLI {
         ),
     ]
     private var builderState: String?
+    /// Sentinel hosts only. The stub asserts a password arrives through stdin
+    /// and discards it immediately — it is never stored, echoed, or compared.
+    private var registries = ["registry.example.test"]
+    private(set) var receivedLoginPasswordLength = 0
 
     init(scenario: UITestPreflightScenario) {
         self.scenario = scenario
@@ -361,21 +365,77 @@ private actor UITestContainerCLI: ContainerCLI {
             output = """
             [{"configuration":{"name":"ghcr.io/example/demo:1.0","creationDate":"2026-06-16T00:00:15Z","descriptor":{"digest":"sha256:demo-index","size":9218,"mediaType":"application/vnd.oci.image.index.v1+json"}},"variants":[{"digest":"sha256:demo-manifest","size":4184689,"platform":{"os":"linux","architecture":"arm64","variant":"v8"},"config":{"created":"2026-06-15T22:00:00Z","author":"UI Test","architecture":"arm64","os":"linux","config":{"User":"1000:1000","Env":["TOKEN=image-secret","MODE=test"],"Entrypoint":["/bin/demo"],"Cmd":["serve"],"WorkingDir":"/app","Labels":{"org.example.fixture":"true"},"StopSignal":"SIGTERM"},"rootfs":{"type":"layers","diff_ids":["sha256:demo-layer"]},"history":[{"created_by":"COPY demo /bin/demo","empty_layer":false}]}}]}]
             """
-        case .deleteImage(let reference):
-            let imageReference = reference.rawValue == "sha256:demo-index"
-                ? "ghcr.io/example/demo:1.0"
-                : reference.rawValue
-            if containers.contains(where: { $0.image == imageReference }) {
+        case .deleteImages(let configuration):
+            if configuration.all {
+                let inUse = images.filter { reference in
+                    containers.contains { $0.image == reference }
+                }
+                images.removeAll { !inUse.contains($0) }
+                output = ""
+            } else {
+                var deleted: [String] = []
+                for reference in configuration.references.map(\.rawValue) {
+                    let imageReference = reference == "sha256:demo-index"
+                        ? "ghcr.io/example/demo:1.0"
+                        : reference
+                    guard images.contains(imageReference) else {
+                        // `--force` means "ignore targets already missing",
+                        // and nothing more than that.
+                        if configuration.force { continue }
+                        throw CLIError.nonZeroExit(
+                            invocation: "ui-test-container image delete \(reference)",
+                            exitCode: 1,
+                            standardError: "image not found"
+                        )
+                    }
+                    if containers.contains(where: { $0.image == imageReference }) {
+                        throw CLIError.nonZeroExit(
+                            invocation: "ui-test-container image delete \(reference)",
+                            exitCode: 1,
+                            standardError: "image is in use"
+                        )
+                    }
+                    images.removeAll { $0 == imageReference }
+                    deleted.append(imageReference)
+                }
+                output = deleted.joined(separator: "\n")
+            }
+        case .pruneImages(let all):
+            let unused = images.filter { reference in
+                !containers.contains { $0.image == reference }
+            }
+            let removed = all ? unused : unused.filter { !$0.contains(":") }
+            images.removeAll { removed.contains($0) }
+            output = "Reclaimed 4,2 MB in disk space\n" + removed.joined(separator: "\n")
+        case .tagImage(let configuration):
+            guard images.contains(configuration.source.rawValue) else {
                 throw CLIError.nonZeroExit(
-                    invocation: "ui-test-container image delete \(reference.rawValue)",
+                    invocation: "ui-test-container image tag",
                     exitCode: 1,
-                    standardError: "image is in use"
+                    standardError: "image not found"
                 )
             }
-            images.removeAll { $0 == imageReference }
+            images.append(configuration.target.rawValue)
             output = ""
-        case .pruneImages:
-            images.removeAll()
+        case .listRegistries:
+            output = registries.joined(separator: "\n") + "\n"
+        case .loginRegistry(let configuration):
+            // Reached only through `run(_:standardInput:)`, which records the
+            // payload first; a login with no stdin is a fixture failure.
+            guard receivedLoginPasswordLength > 0 else {
+                throw CLIError.nonZeroExit(
+                    invocation: "ui-test-container registry login",
+                    exitCode: 1,
+                    standardError: "no password on standard input"
+                )
+            }
+            receivedLoginPasswordLength = 0
+            if !registries.contains(configuration.server.rawValue) {
+                registries.append(configuration.server.rawValue)
+            }
+            output = ""
+        case .logoutRegistry(let host):
+            registries.removeAll { $0 == host.rawValue }
             output = ""
         case .listNetworks:
             output = networkListJSON
@@ -461,7 +521,8 @@ private actor UITestContainerCLI: ContainerCLI {
             output = options.showsBootLog ? machineBootLog : machineOutputLog
         case .machineRun:
             output = "ui test machine output\n"
-        case .systemStart, .systemStop, .pullImage, .build, .run, .stats:
+        case .systemStart, .systemStop, .pullImage, .pushImage, .saveImages,
+             .loadImages, .build, .run, .stats:
             output = ""
         }
         return CommandResult(
@@ -471,6 +532,19 @@ private actor UITestContainerCLI: ContainerCLI {
             duration: .zero,
             invocation: "ui-test-container \(command.arguments.joined(separator: " "))"
         )
+    }
+
+    /// Records only that a payload of some length arrived, then drops it. The
+    /// fixture deliberately cannot compare the secret to anything: a stub that
+    /// stored it would be one more place a password could leak from.
+    func run(
+        _ command: ContainerCommand,
+        standardInput: Data?
+    ) async throws -> CommandResult {
+        if let standardInput {
+            receivedLoginPasswordLength = standardInput.count
+        }
+        return try await run(command)
     }
 
     nonisolated func stream(

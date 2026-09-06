@@ -316,13 +316,6 @@ private actor RunContainerImageService: ImageManaging {
         return ImageInspection(dto: dto, fallbackReference: reference, rawJSON: rawJSON)!
     }
 
-    nonisolated func pullImage(
-        reference: String
-    ) -> AsyncThrowingStream<ProcessEvent, Error> {
-        AsyncThrowingStream { $0.finish() }
-    }
-
-    func deleteImage(reference: String) {}
 }
 
 private func makeSummary(id: String, state: String) -> ContainerSummary {

@@ -12,7 +12,7 @@ watching resource usage, and keeping the Apple Container service healthy.
 [![macOS 26+](https://img.shields.io/badge/macOS-26%2B-111111?style=for-the-badge&logo=apple&logoColor=white)](https://www.apple.com/macos/)
 [![Apple silicon](https://img.shields.io/badge/Apple%20silicon-required-111111?style=for-the-badge&logo=apple&logoColor=white)](#requirements)
 [![SwiftUI](https://img.shields.io/badge/SwiftUI-native-F05138?style=for-the-badge&logo=swift&logoColor=white)](https://developer.apple.com/xcode/swiftui/)
-[![Apple Container 0.12–<2.0](https://img.shields.io/badge/Apple%20Container-0.12–%3C2.0-3276D3?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/apple/container)
+[![Apple Container 0.12.3–<2.0](https://img.shields.io/badge/Apple%20Container-0.12.3–%3C2.0-3276D3?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/apple/container)
 
 [Get started](#getting-started) · [Explore features](#everything-you-need-in-one-window) · [Develop](#development) · [Troubleshoot](docs/TROUBLESHOOTING.md)
 
@@ -36,7 +36,10 @@ directly, never through a shell.
 | 🖥️ | **Machines** | List, search, and inspect the long-lived Linux VMs `container machine` manages; create them with every flag pre-filled from what the CLI would compute; move the default; stop and delete. Needs CLI 1.0.0 or later. |
 | 🐚 | **Machine shells** | Open a real login shell inside a machine in an embedded terminal, or run a one-off command, with environment, user, and working directory controls. |
 | ⚙️ | **Boot configuration** | Edit CPUs, memory, home mount, nested virtualization, and the kernel as a running-versus-after-restart pair, because `container machine set` only takes effect on the next boot. |
-| 🖼️ | **Images** | Search local images, inspect metadata, stream pull progress, run, and delete with dependency-aware cleanup. |
+| 🖼️ | **Images** | Search local images, inspect metadata, stream pull progress with scheme, platform and download-concurrency controls, run, and delete with dependency-aware cleanup. |
+| 📦 | **Image transfer** | Tag an existing image, push it to a registry, save one or more images to a tar archive, and load an archive back — each cancellable, with the exact command shown before it runs. |
+| 🧹 | **Image housekeeping** | Delete several named images or every image, and prune either dangling images or everything no container uses, with the scope re-checked against a fresh snapshot before it runs. |
+| 🔑 | **Registries** | See which registry hosts the CLI is logged in to, log in with a user name and token, and log out. The password goes to the command's standard input and is never stored, previewed, or logged. |
 | 🛠️ | **Builds** | Build tagged images from a local Dockerfile with arguments, labels, target/platform, cache, resource, pull, and output controls. |
 | 💾 | **Volumes** | List, search, inspect, create, delete, and prune persistent volumes across Apple Container 0.12 and 1.x JSON shapes. |
 | 📂 | **Container storage** | Mount named volumes or host folders into new containers, with optional read-only access. |
@@ -64,7 +67,7 @@ directly, never through a shell.
 
 - An **Apple-silicon Mac** running **macOS 26 or later**
 - [Apple Container](https://github.com/apple/container/releases) CLI version
-  **0.12.0 or later and earlier than 2.0.0**. The **Machines** screen needs
+  **0.12.3 or later and earlier than 2.0.0**. The **Machines** screen needs
   **1.0.0 or later**, since that is when `container machine` was added; below it
   the screen is hidden rather than shown broken.
 - Xcode, when building Container GUI from source — see
@@ -293,7 +296,10 @@ prune or another bulk deletion command.
 Container GUI intentionally focuses on local container, image, volume, network, build, and service
 workflows. It does not yet manage:
 
-- registry authentication;
+- remote registry browsing — the CLI has no catalog, repository, or tag listing
+  command, so there is nothing to browse against;
+- storing registry credentials itself — the Apple Container CLI remains the
+  credential store, and the app neither reads nor writes Keychain entries;
 - build secrets or SSH forwarding;
 - interactive terminals inside the app — a command that needs one is handed to
   Terminal instead;
@@ -308,10 +314,11 @@ formats have fixture and smoke-test coverage.
 
 | Resource | Description |
 | --- | --- |
-| [Troubleshooting](docs/TROUBLESHOOTING.md) | Setup, service, upgrade, pull, and deletion help |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Setup, service, upgrade, pull, registry, transfer, and deletion help |
 | [Release notes](docs/RELEASE_NOTES.md) | Feature, compatibility, and upgrade notes for each release |
 | [Release checklist](docs/RELEASE_CHECKLIST.md) | Testing, accessibility, signing, and notarization gates |
 | [Architecture decision](docs/decisions/0001-cli-wrapper-and-distribution.md) | Why the app wraps the CLI and ships outside the Mac App Store |
+| [CLI image/registry baseline](docs/CLI_IMAGE_REGISTRY_BASELINE.md) | The observed CLI surfaces the image and registry workflows are built against |
 
 ## License
 
