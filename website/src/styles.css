@@ -1,123 +1,57 @@
 @import "tailwindcss";
-@import "shadcn/tailwind.css";
+/*
+ * The `standard` entry rather than the package root: only that file carries
+ * both variable axes. The site's whole type hierarchy is built on `wdth`
+ * (62–125), so the default weight-only file would silently flatten it.
+ */
+@import "@fontsource-variable/archivo/standard.css";
 @import "@fontsource-variable/geist-mono";
 
-/*
- * The design is monospace end to end — headings, body, everything — so
- * `--font-sans` deliberately points at Geist Mono too. Nothing on the page
- * should render in a proportional face.
- */
-@theme inline {
-  --font-sans: "Geist Mono Variable", ui-monospace, SFMono-Regular, monospace;
+@theme {
+  /*
+   * One family for everything a person wrote, one for everything a machine
+   * printed. Mono appears only on real commands, image tags, versions and
+   * counts — never as a decorative label.
+   */
+  --font-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, monospace;
-  --font-heading: var(--font-sans);
-
-  /* Design tokens beyond the shadcn set, named for the role they play. */
-  --color-surface: var(--surface);
-  --color-surface-raised: var(--surface-raised);
-  --color-surface-hover: var(--surface-hover);
-  --color-edge: var(--edge);
-  --color-edge-faint: var(--edge-faint);
-  --color-dim: var(--dim);
-  --color-dimmer: var(--dimmer);
-  --color-dimmest: var(--dimmest);
-  --color-amber: var(--amber);
-  --color-code: var(--code);
-  --color-link: var(--link);
-
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --color-foreground: var(--foreground);
-  --color-background: var(--background);
-
-  --radius-sm: 5px;
-  --radius-md: 8px;
-  --radius-lg: 9px;
-  --radius-xl: 12px;
-  --radius-2xl: 14px;
-}
-
-/*
- * One appearance only. The design is built on near-black, and the app
- * screenshot it centres on is a dark capture, so there is no light variant to
- * fall back to.
- */
-:root {
-  color-scheme: dark;
-
-  --background: #08090b;
-  --foreground: #f2f3f5;
-
-  --surface: #101216;
-  --surface-raised: #0d0f13;
-  --surface-hover: #0f1115;
-
-  --edge: #22262e;
-  --edge-faint: #16191e;
-  --border: #1a1d22;
-  --input: #22262e;
 
   /*
-   * A four-step grey scale for secondary text, every step at or above the
-   * 4.5:1 WCAG AA threshold against the background.
-   *
-   * The design's two darkest greys (#5C6270 and #3E434C) measure 3.3:1 and
-   * 2.0:1 on #08090B, which is unreadable for a lot of people at the 11–12px
-   * these tones are used at. The scale below keeps the same ordering and very
-   * nearly the same tone, lifted just far enough to pass.
+   * Sampled from the app icon: a pale blue-white ground, a cyan-to-azure
+   * hexagon, and the deep blue of the container's shaded face. Every ratio
+   * below is measured against the surface the colour is used on, and every
+   * text tone clears WCAG AA at the size it appears.
    */
-  --muted-foreground: #9ba1ac; /* 7.7:1 */
-  --dim: #8a909e; /* 6.2:1 */
-  --dimmer: #828997; /* 5.7:1 */
-  --dimmest: #767d8b; /* 4.8:1 */
-  --code: #c9ced6; /* 12.6:1 */
+  --color-paper: #e9edf3; /* the page */
+  --color-paper-raised: #f3f6fa; /* rows and fields lifted off it */
+  --color-ink: #0b1220; /* headlines, and every dark product surface — 15.9:1 */
+  --color-ink-raised: #141d2e; /* a lifted row inside a dark surface */
+  --color-slate: #4f5a6b; /* body text on paper — 5.9:1 */
+  --color-mute: #5b6778; /* small print on paper — 4.9:1 */
+  --color-azure: #0a5fe0; /* the one action colour — 4.8:1 on paper */
+  --color-azure-lit: #4c9bff; /* the same action colour on ink — 6.6:1 */
+  --color-cyan: #39c9fd; /* the icon's hexagon, only ever on ink — 9.8:1 */
+  --color-chalk: #f7f9fc; /* text on ink — 17.8:1 */
+  --color-haze: #8d9aaf; /* secondary text on ink — 6.6:1 */
+  --color-rule: #d4dbe5; /* hairline on paper */
+  --color-rule-ink: #202b3f; /* hairline on ink */
 
-  --primary: #1c7bf5;
-  --primary-foreground: #08090b;
-  --ring: #1c7bf5;
-  --link: #5ca0ff;
-  --amber: #e8912a;
-
-  --card: #0d0f13;
-  --card-foreground: #f2f3f5;
-  --popover: #0d0f13;
-  --popover-foreground: #f2f3f5;
-  --secondary: #101216;
-  --secondary-foreground: #f2f3f5;
-  --muted: #101216;
-  --accent: #0f1115;
-  --accent-foreground: #f2f3f5;
-  --destructive: oklch(0.704 0.191 22.216);
-  --radius: 8px;
+  /* Radius carries meaning: a window, a control, and nothing else. */
+  --radius-window: 12px;
+  --radius-control: 7px;
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-
   html {
-    @apply font-sans;
+    font-family: var(--font-sans);
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
   }
 
   /* Long unbroken commands must not push the page sideways on a phone. */
@@ -127,54 +61,102 @@
   }
 
   ::selection {
-    background: color-mix(in oklab, var(--primary) 35%, transparent);
+    background: color-mix(in oklab, var(--color-azure) 22%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-azure);
+    outline-offset: 3px;
+  }
+
+  /*
+   * Inside the dark surfaces a blue ring would vanish against the selected
+   * row, which is itself azure. White reads on both the panel and the
+   * selection.
+   */
+  .on-ink :focus-visible {
+    outline-color: var(--color-chalk);
+    outline-offset: 2px;
   }
 }
 
-@keyframes blink {
-  0%,
-  49% {
-    opacity: 1;
+@layer components {
+  /*
+   * The type scale, expressed as width and weight rather than as two
+   * typefaces. Archivo's `wdth` axis runs 62–125; the headline sits wide and
+   * heavy, body at normal width, and interface labels slightly narrowed so
+   * they read as chrome without being set in caps.
+   */
+  .t-display {
+    font-weight: 700;
+    font-stretch: 113%;
+    letter-spacing: -0.03em;
+    line-height: 0.95;
   }
-  50%,
-  100% {
-    opacity: 0;
+
+  .t-heading {
+    font-weight: 650;
+    font-stretch: 108%;
+    letter-spacing: -0.022em;
+    line-height: 1.06;
+  }
+
+  .t-sub {
+    font-weight: 600;
+    font-stretch: 104%;
+    letter-spacing: -0.012em;
+  }
+
+  .t-ui {
+    font-weight: 500;
+    font-stretch: 94%;
+  }
+
+  .t-label {
+    font-weight: 550;
+    font-stretch: 88%;
+    letter-spacing: 0.012em;
+  }
+
+  /*
+   * The destination strip scrolls sideways on a phone. The clipped tab at the
+   * edge is the affordance; a scrollbar drawn under a row of controls reads as
+   * a stray rule.
+   */
+  .tab-strip {
+    scrollbar-width: none;
+  }
+
+  .tab-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  /*
+   * The one shadow recipe, used only on the two objects that are actually
+   * floating above the paper: the app window and the split-view panel.
+   */
+  .float {
+    box-shadow:
+      0 0 0 1px rgb(11 18 32 / 0.08),
+      0 2px 4px -1px rgb(11 18 32 / 0.08),
+      0 14px 28px -12px rgb(11 18 32 / 0.22),
+      0 44px 72px -32px rgb(11 18 32 / 0.3);
   }
 }
 
-@keyframes marquee {
+/*
+ * The single moment of motion: the page settles once, on load.
+ *
+ * Done as a plain CSS animation rather than an IntersectionObserver, so no
+ * markup ever ships hidden — an observer has to hide content first, which is
+ * what makes scroll reveals bad for crawlers and for anyone without
+ * JavaScript. Here the animation is the only thing standing between the
+ * element and its final state, and it starts immediately.
+ */
+@keyframes settle {
   from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
-}
-
-@keyframes pulse-dot {
-  0%,
-  100% {
-    opacity: 0.35;
-  }
-  50% {
-    opacity: 0.9;
-  }
-}
-
-@keyframes reveal {
-  from {
     opacity: 0;
-    transform: translateY(22px);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
@@ -182,58 +164,32 @@
   }
 }
 
-.animate-blink {
-  animation: blink 1s step-end infinite;
+@keyframes swap {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-.animate-marquee {
-  animation: marquee 34s linear infinite;
-}
+@media (prefers-reduced-motion: no-preference) {
+  [data-enter] {
+    animation: settle 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(var(--enter, 0) * 80ms);
+  }
 
-.animate-float {
-  animation: float 9s ease-in-out infinite;
-}
-
-.animate-pulse-dot {
-  animation: pulse-dot 2.4s ease-in-out infinite;
-}
-
-/*
- * Scroll-driven reveals, done in CSS rather than with an IntersectionObserver.
- *
- * A JavaScript observer has to hide the content first, which means the markup
- * either ships invisible — bad for crawlers and for anyone without JS — or
- * visibly flashes as it is hidden and re-shown. With `animation-timeline` the
- * element is simply visible unless the browser supports scroll-driven
- * animations, in which case it animates in as it enters the viewport.
- */
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    [data-reveal] {
-      animation: reveal linear both;
-      animation-timeline: view();
-      /*
-       * Finishes within the entry range rather than part-way into `cover`, so
-       * anything fully on screen has necessarily reached the end state. A range
-       * that runs into `cover` can leave the last element on a short page
-       * parked at partial opacity, which is both a visual bug and a contrast
-       * failure.
-       */
-      animation-range: entry 0% entry 45%;
-    }
+  /* The split view answering a click — motion that shows what changed. */
+  [data-swap] {
+    animation: swap 0.24s ease-out both;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
-  }
-
-  .animate-blink,
-  .animate-marquee,
-  .animate-float,
-  .animate-pulse-dot {
-    animation: none;
   }
 
   *,

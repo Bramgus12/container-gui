@@ -1,40 +1,60 @@
-import { Button } from "@/components/ui/button"
 import { GithubIcon } from "@/components/github-icon"
-import { APPLE_CONTAINER_URL, RELEASES_URL } from "@/lib/site"
+import {
+  APPLE_CONTAINER_URL,
+  APP_NAME,
+  RELEASES_URL,
+  TROUBLESHOOTING_URL,
+} from "@/lib/site"
 
 export function Install() {
   return (
     <section
       id="install"
-      className="mx-auto max-w-[1180px] scroll-mt-[58px] px-6 pt-[110px] sm:px-8"
+      className="mx-auto max-w-[1160px] scroll-mt-20 px-6 pt-28 sm:px-8 sm:pt-36"
     >
-      <div data-reveal className="text-center">
-        <h2 className="mb-[18px] text-[34px] font-semibold tracking-[-0.03em] sm:text-[44px]">
-          Install it
-        </h2>
-        <p className="mx-auto mb-9 max-w-[48ch] text-sm leading-[1.8] text-pretty text-muted-foreground">
-          Requires macOS 26 on Apple silicon and the{" "}
-          <a
-            href={APPLE_CONTAINER_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="text-foreground underline decoration-dimmer underline-offset-4 transition-colors hover:decoration-foreground"
-          >
-            container
-          </a>{" "}
-          CLI installed. The app will not install a runtime for you.
-        </p>
-        <Button
-          asChild
-          className="h-auto gap-3.5 rounded-[9px] px-[26px] py-[17px] text-[13.5px] font-semibold hover:bg-[#3e92ff]"
-        >
-          <a href={RELEASES_URL} target="_blank" rel="noreferrer">
-            <GithubIcon className="size-4" />
-            Download from GitHub Releases
-          </a>
-        </Button>
-        <p className="mt-[22px] text-[11.5px] text-dimmer">
-          Signed .dmg · Apple silicon only
+      <div className="grid gap-10 border-t border-rule pt-12 lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-16">
+        <div>
+          <h2 className="t-heading text-[clamp(1.9rem,4.6vw,2.9rem)]">
+            Install it.
+          </h2>
+          <p className="mt-5 max-w-[58ch] text-[16px] leading-[1.6] text-pretty text-slate">
+            Download the signed disk image from the releases page. {APP_NAME}{" "}
+            does not install a runtime for you — Apple's{" "}
+            <a
+              href={APPLE_CONTAINER_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-[15px] text-azure underline decoration-azure/35 underline-offset-4 transition-colors hover:decoration-azure"
+            >
+              container
+            </a>{" "}
+            CLI has to be on the machine first.
+          </p>
+
+          <div className="mt-9 flex flex-wrap items-center gap-x-8 gap-y-5">
+            <a
+              href={RELEASES_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="t-sub inline-flex items-center gap-2.5 rounded-control bg-azure px-5 py-3 text-[15px] text-white transition-colors hover:bg-[#0951c2]"
+            >
+              <GithubIcon className="size-[17px]" />
+              Download for Apple silicon
+            </a>
+            <a
+              href={TROUBLESHOOTING_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="t-ui py-3 text-[15px] text-slate underline decoration-transparent underline-offset-4 transition-colors hover:text-ink hover:decoration-current"
+            >
+              Something not working?
+            </a>
+          </div>
+        </div>
+
+        <p className="self-end text-[13px] leading-[1.65] text-pretty text-mute lg:text-right">
+          Free and open source under GPL-3.0. Unofficial, and not affiliated
+          with Apple Inc.
         </p>
       </div>
     </section>
