@@ -19,7 +19,7 @@ import { readFile, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
-const REPO = "Bramgus12/container-gui"
+const REPO = "Bramgus12/CargoDeck"
 const API = `https://api.github.com/repos/${REPO}/releases/latest`
 const TIMEOUT_MS = 10_000
 

@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="docs/app-icon.png" alt="Container GUI app icon" width="160">
+<img src="docs/app-icon.png" alt="CargoDeck app icon" width="160">
 
-# Container GUI
+# CargoDeck
 
 ### Apple Container, without the command-line friction.
 
@@ -20,7 +20,7 @@ watching resource usage, and keeping the Apple Container service healthy.
 
 ---
 
-Container GUI wraps Apple's [`container`](https://github.com/apple/container)
+CargoDeck wraps Apple's [`container`](https://github.com/apple/container)
 CLI in a focused SwiftUI experience. It handles the everyday container
 workflow—from guided setup to logs and live statistics—while executing commands
 directly, never through a shell.
@@ -47,7 +47,7 @@ directly, never through a shell.
 | 🔗 | **Container networking** | Attach a new container to multiple networks with optional MAC addresses and MTUs. |
 | 🧭 | **Local DNS** | Review resolver readiness, then set the service domain in `config.toml` and add or remove local domains in `/etc/resolver` — the app makes both changes for you, asking macOS to authenticate you for the one that needs root. |
 | ❤️ | **System health** | Check CLI, server, and image-builder status; control their lifecycles; and review disk usage, the service configuration, and recent logs. |
-| ⬆️ | **Update checks** | See when a newer Container GUI release exists, read its notes, and copy the upgrade command. |
+| ⬆️ | **Update checks** | See when a newer CargoDeck release exists, read its notes, and copy the upgrade command. |
 | 🩺 | **Diagnostics** | Copy a sanitized support report with common secrets and credentials redacted. |
 
 ### Designed to feel at home on macOS
@@ -70,21 +70,21 @@ directly, never through a shell.
   **0.12.3 or later and earlier than 2.0.0**. The **Machines** screen needs
   **1.0.0 or later**, since that is when `container machine` was added; below it
   the screen is hidden rather than shown broken.
-- Xcode, when building Container GUI from source — see
+- Xcode, when building CargoDeck from source — see
   [Building from source](#building-from-source) for its two setup steps
 
 ### 2. Install Apple Container
 
 Download Apple Container from its
 [official releases](https://github.com/apple/container/releases) and complete
-its installation. Container GUI normally discovers the executable at
+its installation. CargoDeck normally discovers the executable at
 `/usr/local/bin/container` or `/opt/homebrew/bin/container`; you can also choose
 a custom executable during onboarding.
 
-### 3. Install Container GUI
+### 3. Install CargoDeck
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh | bash
 ```
 
 The installer downloads the latest release disk image, checks its SHA-256
@@ -95,7 +95,7 @@ notarized, macOS accepts the app on first launch with no approval step.
 To read the script before running it:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh -o install.sh
 ```
 
 Then review `install.sh` and run `bash install.sh`.
@@ -111,11 +111,11 @@ but stopped, it can be started directly from onboarding.
 
 Once a day the app asks GitHub whether a newer release exists and shows the
 result under **System → Updates**, where the check can also be run on demand or
-turned off entirely. **Container GUI → Check for Updates…** checks immediately.
+turned off entirely. **CargoDeck → Check for Updates…** checks immediately.
 Updating is always the same one-line command as installing.
 
 > [!NOTE]
-> Container GUI releases are signed with a Developer ID Application certificate
+> CargoDeck releases are signed with a Developer ID Application certificate
 > and notarized by Apple, and the notarization ticket is stapled to both the app
 > and the disk image. Gatekeeper accepts them without any approval detour, and
 > the check works offline. Releases up to and including 1.2.0 were ad-hoc signed
@@ -123,15 +123,15 @@ Updating is always the same one-line command as installing.
 
 ### Installing from the DMG by hand
 
-Download `Container-GUI.dmg` from the
-[releases page](https://github.com/Bramgus12/container-gui/releases) and compare
+Download `CargoDeck.dmg` from the
+[releases page](https://github.com/Bramgus12/CargoDeck/releases) and compare
 its SHA-256 with the checksum in the release notes:
 
 ```sh
-shasum -a 256 ~/Downloads/Container-GUI.dmg
+shasum -a 256 ~/Downloads/CargoDeck.dmg
 ```
 
-Open the disk image and drag **Container GUI.app** to the Applications folder.
+Open the disk image and drag **CargoDeck.app** to the Applications folder.
 Because the app is Developer ID signed and notarized, macOS opens it after the
 one-time "downloaded from the Internet" confirmation that every browser download
 gets, in which it reports that Apple checked the app for malicious software.
@@ -139,8 +139,8 @@ There is no **Privacy & Security** detour. Confirm the signature and the stapled
 notarization ticket yourself with:
 
 ```sh
-spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"
-xcrun stapler validate "/Applications/Container GUI.app"
+spctl --assess --type execute --verbose=4 "/Applications/CargoDeck.app"
+xcrun stapler validate "/Applications/CargoDeck.app"
 ```
 
 If macOS does block the launch, the copy is damaged or was tampered with after
@@ -164,10 +164,10 @@ xcodebuild -downloadComponent MetalToolchain
 Then clone and open the project:
 
 ```bash
-git clone https://github.com/Bramgus12/container-gui.git && cd container-gui && open container-gui.xcodeproj
+git clone https://github.com/Bramgus12/CargoDeck.git && cd CargoDeck && open CargoDeck.xcodeproj
 ```
 
-In Xcode, select the **Container GUI** scheme and press <kbd>⌘</kbd><kbd>R</kbd>.
+In Xcode, select the **CargoDeck** scheme and press <kbd>⌘</kbd><kbd>R</kbd>.
 The first build asks you to trust SwiftTerm's SwiftPM build plugin; approve it
 once and Xcode remembers.
 
@@ -176,7 +176,7 @@ Command-line builds cannot answer that prompt, so they pass
 already do:
 
 ```bash
-xcodebuild -scheme "Container GUI" -destination "platform=macOS" -skipPackagePluginValidation build
+xcodebuild -scheme "CargoDeck" -destination "platform=macOS" -skipPackagePluginValidation build
 ```
 
 ## How it works
@@ -233,8 +233,8 @@ app treats safety as a product feature:
 
 ## Development
 
-Open [`container-gui.xcodeproj`](container-gui.xcodeproj) and use the
-**Container GUI** scheme. The project includes:
+Open [`CargoDeck.xcodeproj`](CargoDeck.xcodeproj) and use the
+**CargoDeck** scheme. The project includes:
 
 - unit tests for command construction, decoding, validation, and feature models;
 - fake-process integration tests for streaming, cancellation, and failures; and
@@ -244,8 +244,8 @@ Run the full automated suite from Terminal:
 
 ```sh
 xcodebuild test \
-  -project container-gui.xcodeproj \
-  -scheme "Container GUI" \
+  -project CargoDeck.xcodeproj \
+  -scheme "CargoDeck" \
   -destination "platform=macOS"
 ```
 
@@ -255,8 +255,8 @@ Create the Developer ID signed, notarized Release build and DMG with:
 ./scripts/release.sh
 ```
 
-The outputs are written to `build/export/Container GUI.app` and
-`build/export/Container-GUI.dmg`. The disk image includes an Applications
+The outputs are written to `build/export/CargoDeck.app` and
+`build/export/CargoDeck.dmg`. The disk image includes an Applications
 shortcut for drag-and-drop installation. Both artifacts are signed with the
 Developer ID Application certificate, notarized by Apple, and stapled.
 
@@ -264,7 +264,7 @@ This needs a Developer ID Application certificate in the keychain and notary
 credentials stored once:
 
 ```sh
-xcrun notarytool store-credentials container-gui-notary \
+xcrun notarytool store-credentials cargodeck-notary \
   --apple-id <your Apple ID> --team-id CN495B7KTS --password <app-specific password>
 ```
 
@@ -281,8 +281,8 @@ signed but unpublishable build for local checks.
 > container and network and may pull the configured image.
 
 ```sh
-CONTAINER_GUI_RUN_REAL_SMOKE=1 \
-CONTAINER_GUI_SMOKE_IMAGE=alpine:3.21 \
+CARGODECK_RUN_REAL_SMOKE=1 \
+CARGODECK_SMOKE_IMAGE=alpine:3.21 \
 ./scripts/real-smoke-test.sh
 ```
 
@@ -293,7 +293,7 @@ prune or another bulk deletion command.
 
 ## Current scope
 
-Container GUI intentionally focuses on local container, image, volume, network, build, and service
+CargoDeck intentionally focuses on local container, image, volume, network, build, and service
 workflows. It does not yet manage:
 
 - remote registry browsing — the CLI has no catalog, repository, or tag listing
@@ -322,7 +322,7 @@ formats have fixture and smoke-test coverage.
 
 ## License
 
-Container GUI is free software, licensed under the
+CargoDeck is free software, licensed under the
 [GNU General Public License v3.0](LICENSE). You may use, study, share, and
 modify it; if you distribute the app or a modified version of it, you have to
 pass the same freedoms on and make your source available under the same terms.

@@ -2,20 +2,20 @@
 
 set -euo pipefail
 
-if [[ "${CONTAINER_GUI_RUN_REAL_SMOKE:-}" != "1" ]]; then
-    print -u2 "Refusing to modify containers without CONTAINER_GUI_RUN_REAL_SMOKE=1."
+if [[ "${CARGODECK_RUN_REAL_SMOKE:-}" != "1" ]]; then
+    print -u2 "Refusing to modify containers without CARGODECK_RUN_REAL_SMOKE=1."
     exit 2
 fi
 
-cli="${CONTAINER_GUI_CLI:-/usr/local/bin/container}"
-image="${CONTAINER_GUI_SMOKE_IMAGE:-alpine:3.21}"
-resource="container-gui-smoke-$(date +%Y%m%d%H%M%S)-$$"
+cli="${CARGODECK_CLI:-/usr/local/bin/container}"
+image="${CARGODECK_SMOKE_IMAGE:-alpine:3.21}"
+resource="cargodeck-smoke-$(date +%Y%m%d%H%M%S)-$$"
 delete_pulled_image=0
 container_was_created=0
 network_was_created=0
 # The archive round-trip works on a throwaway tag of the image that is already
 # being pulled, so it never prunes and never touches an unrelated image.
-smoke_tag="container-gui-smoke:${resource##*-}"
+smoke_tag="CargoDeck-smoke:${resource##*-}"
 tag_was_created=0
 archive_path=""
 
@@ -55,7 +55,7 @@ fi
 "$cli" system version --format json
 "$cli" system status --format json
 "$cli" image pull --progress plain "$image"
-"$cli" network create --label "com.container-gui.smoke=true" "$resource"
+"$cli" network create --label "com.gussekloo.cargodeck.smoke=true" "$resource"
 network_was_created=1
 "$cli" network list --format json
 "$cli" network inspect "$resource"
@@ -74,7 +74,7 @@ network_was_created=0
 # Image archive round-trip: tag, save, remove only that tag, load it back, and
 # confirm the tag returns. Nothing here prunes, and no image other than the
 # throwaway tag is ever deleted.
-archive_path="$(mktemp -t container-gui-smoke).tar"
+archive_path="$(mktemp -t CargoDeck-smoke).tar"
 "$cli" image tag "$image" "$smoke_tag"
 tag_was_created=1
 "$cli" image save --output "$archive_path" "$smoke_tag"

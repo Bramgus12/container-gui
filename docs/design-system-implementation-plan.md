@@ -32,13 +32,13 @@ Two consequences worth stating up front:
 
 ## 1. Phase 1 — Foundation
 
-New folder `container-gui/Shared/DesignSystem/`. The Xcode project uses
+New folder `CargoDeck/Shared/DesignSystem/`. The Xcode project uses
 file-system synchronized groups (`objectVersion = 110`), so new files and folders
 are picked up without editing `project.pbxproj`.
 
 ### 1.1 Color
 
-Add colorsets to `container-gui/Assets.xcassets` with Any + Dark appearances so
+Add colorsets to `CargoDeck/Assets.xcassets` with Any + Dark appearances so
 they resolve without branching in code.
 
 | Asset | Light | Dark |
@@ -78,7 +78,7 @@ digests, ports, addresses, sizes, commands); prose, labels and buttons never are
 
 ### 1.3 Geist Mono
 
-- Add `container-gui/Resources/Fonts/GeistMono-{Regular,Medium,SemiBold}.ttf` plus
+- Add `CargoDeck/Resources/Fonts/GeistMono-{Regular,Medium,SemiBold}.ttf` plus
   the OFL-1.1 license file (shipping the license is required by the license).
 - Set `INFOPLIST_KEY_ATSApplicationFontsPath = Fonts` in both build configurations
   (`GENERATE_INFOPLIST_FILE = YES` is on, and Xcode passes `INFOPLIST_KEY_*` through).
@@ -128,7 +128,7 @@ Nothing here is visible on its own; it unblocks phases 3–7.
 **2.1 Widen `ContainerSummary`** (`Models/ContainerModels.swift:429`) with
 `publishedPorts`, `startedAt`, `mounts`, `networkNames`. All four are already in the
 `container ls` JSON — the fixtures confirm it
-(`container-gui-tests/Fixtures/1.0.0/containers-1.0.0.json` carries `publishedPorts`
+(`CargoDeckTests/Fixtures/1.0.0/containers-1.0.0.json` carries `publishedPorts`
 and `mounts`; `Fixtures/0.12.0/containers-0.12.0.json` carries `startedDate`) and the
 DTOs already decode them. Zero extra CLI calls.
 
@@ -265,7 +265,7 @@ mockup's `Build cache 740 MB` row is unbacked. Recommend dropping it and letting
 (`Models/SystemModels.swift:108`) — surface the row automatically if a future CLI adds it.
 
 **Onboarding (1k)** (`Features/ContentView.swift:52`): icon-led layout, a key/value card
-per state, one obvious action. `container-gui-ui-tests/OnboardingUITests.swift` asserts on
+per state, one obvious action. `CargoDeckUITests/OnboardingUITests.swift` asserts on
 literal titles ("Install Apple Container", "Start Service", "Copy Diagnostics") and
 identifiers — keep both, or update the tests deliberately in the same PR.
 
@@ -304,12 +304,12 @@ to the volume (`Features/Volumes/VolumesView.swift:311`) and network
 
 ## 9. Testing
 
-Unit (`container-gui-tests/`): uptime formatting; port summarization; the `InventoryIndex`
+Unit (`CargoDeckTests/`): uptime formatting; port summarization; the `InventoryIndex`
 cross-references; log severity classification and filtering; multi-entry stats decode;
 sidebar disk aggregation; a font-loading assertion for Geist Mono. Extend the JSON
 fixtures rather than adding new ones where the shapes already exist.
 
-UI (`container-gui-ui-tests/`): keep every existing accessibility identifier; add
+UI (`CargoDeckUITests/`): keep every existing accessibility identifier; add
 identifiers for new controls (sidebar disk block, command strips, log filter, reclaim);
 extend `OnboardingUITests` for the redesigned setup states.
 

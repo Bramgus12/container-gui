@@ -5,7 +5,7 @@
 
 ## Context
 
-Container GUI needs to control Apple's separately installed `container` tool. The
+CargoDeck needs to control Apple's separately installed `container` tool. The
 application needs a stable boundary around process execution, must work with the
 tool's background services and user-selected host files, and should be suitable
 for automated testing without requiring a live container installation.

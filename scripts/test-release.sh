@@ -3,7 +3,7 @@
 set -euo pipefail
 
 project_root="${0:A:h:h}"
-derived_data_path="${CONTAINER_GUI_RELEASE_TEST_DERIVED_DATA_PATH:-$project_root/build/ReleaseTestDerivedData}"
+derived_data_path="${CARGODECK_RELEASE_TEST_DERIVED_DATA_PATH:-$project_root/build/ReleaseTestDerivedData}"
 
 # Prefer the selected Xcode, but fall back to the beta when only Command Line
 # Tools are selected on a development machine.
@@ -21,8 +21,8 @@ fi
 # XCTest bundles. Disable Hardened Runtime only for this test build and enable
 # @testable imports; neither override changes the archive configuration.
 xcodebuild test \
-    -project "$project_root/container-gui.xcodeproj" \
-    -scheme "Container GUI" \
+    -project "$project_root/CargoDeck.xcodeproj" \
+    -scheme "CargoDeck" \
     -configuration Release \
     -destination "platform=macOS" \
     -derivedDataPath "$derived_data_path" \

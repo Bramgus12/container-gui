@@ -1,6 +1,6 @@
-# Container GUI website
+# CargoDeck website
 
-The marketing site for Container GUI: one prerendered page, built with
+The marketing site for CargoDeck: one prerendered page, built with
 [TanStack Start](https://tanstack.com/start) and Tailwind CSS v4.
 
 Bun is the package manager and script runner for this project. Use `bun` and

@@ -6,7 +6,7 @@ import { SCREENS } from "@/lib/site"
 /**
  * The app's shape, as the app's own shape.
  *
- * Container GUI is a `NavigationSplitView`: a sidebar of six destinations and
+ * CargoDeck is a `NavigationSplitView`: a sidebar of six destinations and
  * a detail pane. Describing that in a bulleted list would throw away the one
  * thing worth showing, so this section is the split view — pick a destination
  * on the left and the pane on the right changes, the way it does in the app.
@@ -60,14 +60,14 @@ export function Covers() {
             <span className="size-[9px] rounded-full bg-rule-ink" />
           </span>
           <span className="t-label ml-1.5 text-[12px] text-haze">
-            Container GUI
+            CargoDeck
           </span>
         </div>
 
         <div className="sm:grid sm:grid-cols-[200px_minmax(0,1fr)]">
           <div
             role="tablist"
-            aria-label="Screens in Container GUI"
+            aria-label="Screens in CargoDeck"
             aria-orientation="vertical"
             onKeyDown={onKeyDown}
             className="tab-strip flex gap-1 overflow-x-auto border-b border-rule-ink p-2.5 sm:flex-col sm:gap-0.5 sm:border-r sm:border-b-0"

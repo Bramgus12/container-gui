@@ -41,7 +41,7 @@ const structuredData = {
       "@type": "SoftwareApplication",
       "@id": `${SITE_URL}/#app`,
       name: APP_NAME,
-      alternateName: "Apple Container GUI",
+      alternateName: "CargoDeck for Apple Container",
       description: DESCRIPTION,
       applicationCategory: "DeveloperApplication",
       applicationSubCategory: "Container management",

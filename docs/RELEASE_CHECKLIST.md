@@ -5,7 +5,7 @@ hardware, CLI version, app commit, tester, and date in the release notes.
 
 ## Automated gates
 
-- Run the `Container GUI` Xcode scheme tests in Debug, then run the optimized
+- Run the `CargoDeck` Xcode scheme tests in Debug, then run the optimized
   Release test build with `scripts/test-release.sh`. The script uses ad-hoc
   signing and disables Hardened Runtime only for the test host so its XCTest
   bundles can load without a Team ID; release archives remain hardened.
@@ -80,12 +80,12 @@ Create the signed, notarized distribution:
 
 The script archives with the Developer ID Application certificate and the
 Hardened Runtime, exports it, submits the app to Apple's notary service, staples
-the ticket, builds and signs `Container-GUI.dmg`, notarizes and staples the disk
+the ticket, builds and signs `CargoDeck.dmg`, notarizes and staples the disk
 image too, runs the Gatekeeper assessment on both, and prints the SHA-256
 checksum. A Developer ID Application certificate and stored notary credentials
 are prerequisites; see the build section of the README.
 
-- Confirm the DMG contains both `Container GUI.app` and the Applications
+- Confirm the DMG contains both `CargoDeck.app` and the Applications
   shortcut.
 - Confirm the run printed `accepted` with `source=Notarized Developer ID` for
   the app and the disk image.
@@ -97,29 +97,29 @@ are prerequisites; see the build section of the README.
 - Confirm the notarization holds offline: disable networking on that Mac and
   launch the app again.
 
-After the release and its `Container-GUI.dmg` asset are published, verify the
+After the release and its `CargoDeck.dmg` asset are published, verify the
 one-command installer against it on a clean Apple-silicon Mac:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh | bash
 ```
 
 - Confirm the printed SHA-256 matches the checksum in the release notes and that
   the installer reports the expected release tag.
 - Confirm the app opens with no Gatekeeper dialog, and that
-  `spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"`
+  `spctl --assess --type execute --verbose=4 "/Applications/CargoDeck.app"`
   reports `accepted` with `source=Notarized Developer ID`.
 - Re-run the command over the existing install and confirm it upgrades in place.
 - Confirm `--version <previous tag>`, `--user`, and `--uninstall` each behave,
   and that `--uninstall` leaves settings at
-  `~/Library/Preferences/com.gussekloo.container-gui.plist`.
+  `~/Library/Preferences/com.gussekloo.CargoDeck.plist`.
 - Confirm a failed run leaves no mounted disk image behind (`hdiutil info`).
 
 Then confirm the in-app update check sees the new release. Launch the previous
 version and open **System → Updates**: it must report the new version, its
 notes, and a working **Copy Install Command**. Confirm the new version reports
 up to date, that **Skip This Version** hides only the automatic result, and that
-`container-gui-tests/Fixtures/github/release-latest.json` still matches the
+`CargoDeckTests/Fixtures/github/release-latest.json` still matches the
 shape GitHub returns for the release.
 
 ## Release notes

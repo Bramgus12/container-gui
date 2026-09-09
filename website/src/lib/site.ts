@@ -11,15 +11,15 @@
  * derives from it: the canonical tag, `og:url`, the sitemap, and the JSON-LD.
  * Change it here and nowhere else when the domain is settled.
  */
-export const SITE_URL = "https://container.gussekloo.com"
+export const SITE_URL = "https://cargodeck.gussekloo.com"
 
-export const REPO_URL = "https://github.com/Bramgus12/container-gui"
+export const REPO_URL = "https://github.com/Bramgus12/CargoDeck"
 export const RELEASES_URL = `${REPO_URL}/releases`
 export const LICENSE_URL = `${REPO_URL}/blob/main/LICENSE`
 export const TROUBLESHOOTING_URL = `${REPO_URL}/blob/main/docs/TROUBLESHOOTING.md`
 export const APPLE_CONTAINER_URL = "https://github.com/apple/container"
 
-export const APP_NAME = "Container GUI"
+export const APP_NAME = "CargoDeck"
 
 /**
  * The latest published release, refreshed from the GitHub releases API at the
@@ -38,7 +38,7 @@ export { APP_VERSION } from "./version"
 export const HEADLINE = "A window for Apple's container runtime."
 
 export const DESCRIPTION =
-  "Container GUI is a free, open-source native macOS app for Apple's container CLI. Run containers, build and pull images, follow logs and live stats, and manage Linux machines without the terminal."
+  "CargoDeck is a free, open-source native macOS app for Apple's container CLI. Run containers, build and pull images, follow logs and live stats, and manage Linux machines without the terminal."
 
 /** The hero deck, directly under the headline. */
 export const DECK =
@@ -46,10 +46,10 @@ export const DECK =
 
 export const SCREENSHOT = {
   /** Base name shared by every derivative in `public/`. */
-  base: "/container-gui-containers-inspector",
+  base: "/cargodeck-containers-inspector",
   width: 1200,
   height: 778,
-  alt: "Container GUI on macOS showing the Containers list with the inspector open on a running container, with live memory, CPU, network and block I/O statistics and streaming logs.",
+  alt: "CargoDeck on macOS showing the Containers list with the inspector open on a running container, with live memory, CPU, network and block I/O statistics and streaming logs.",
 } as const
 
 /**

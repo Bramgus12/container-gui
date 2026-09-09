@@ -7,7 +7,7 @@
 Companion to `docs/design-system-implementation-plan.md`. That document said what to
 build; this one says what is built, what is not, and in what order to finish it.
 
-Audited against the working tree on `main` (uncommitted). `xcodebuild -scheme "Container GUI"
+Audited against the working tree on `main` (uncommitted). `xcodebuild -scheme "CargoDeck"
 build` succeeds with no warnings, and the full test suite passes, including the six new
 `DesignSystemDataTests`.
 
