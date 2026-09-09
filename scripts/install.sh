@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# Container GUI installer.
+# CargoDeck installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh | bash
 #
 # Downloads the released disk image, verifies its checksum and code signature,
 # and installs the app. Releases are Developer ID signed and notarized, so
@@ -13,10 +13,10 @@
 
 set -euo pipefail
 
-readonly REPO="Bramgus12/container-gui"
-readonly APP_NAME="Container GUI.app"
-readonly DMG_NAME="Container-GUI.dmg"
-readonly PREFERENCES="$HOME/Library/Preferences/com.gussekloo.container-gui.plist"
+readonly REPO="Bramgus12/CargoDeck"
+readonly APP_NAME="CargoDeck.app"
+readonly DMG_NAME="CargoDeck.dmg"
+readonly PREFERENCES="$HOME/Library/Preferences/com.gussekloo.CargoDeck.plist"
 readonly MINIMUM_MACOS_MAJOR=26
 
 version_tag=""
@@ -48,7 +48,7 @@ fail() {
 
 usage() {
     cat <<USAGE
-Install Container GUI from its GitHub releases.
+Install CargoDeck from its GitHub releases.
 
 Usage: install.sh [options]
 
@@ -58,7 +58,7 @@ Options:
   --dir <path>      Install into <path> instead of /Applications.
   --user            Install into ~/Applications. Never needs an administrator
                     password.
-  --uninstall       Remove an installed Container GUI.app. Settings are kept.
+  --uninstall       Remove an installed CargoDeck.app. Settings are kept.
   -h, --help        Show this message.
 USAGE
 }
@@ -129,7 +129,7 @@ parse_arguments() {
 }
 
 require_macos() {
-    [[ "$(/usr/bin/uname -s)" == "Darwin" ]] || fail "Container GUI runs on macOS only."
+    [[ "$(/usr/bin/uname -s)" == "Darwin" ]] || fail "CargoDeck runs on macOS only."
 }
 
 require_supported_platform() {
@@ -138,7 +138,7 @@ require_supported_platform() {
     local architecture
     architecture="$(/usr/bin/uname -m)"
     [[ "$architecture" == "arm64" ]] \
-        || fail "Container GUI requires an Apple-silicon Mac (detected $architecture)."
+        || fail "CargoDeck requires an Apple-silicon Mac (detected $architecture)."
 
     local product_version major
     product_version="$(/usr/bin/sw_vers -productVersion)"
@@ -149,7 +149,7 @@ require_supported_platform() {
         ;;
     *)
         if [[ "$major" -lt "$MINIMUM_MACOS_MAJOR" ]]; then
-            fail "Container GUI requires macOS $MINIMUM_MACOS_MAJOR or later (detected $product_version)."
+            fail "CargoDeck requires macOS $MINIMUM_MACOS_MAJOR or later (detected $product_version)."
         fi
         ;;
     esac
@@ -157,7 +157,7 @@ require_supported_platform() {
 
 require_app_not_running() {
     if /usr/bin/pgrep -f "/$APP_NAME/Contents/MacOS/" >/dev/null 2>&1; then
-        fail "Container GUI is running. Quit it and run this command again."
+        fail "CargoDeck is running. Quit it and run this command again."
     fi
 }
 
@@ -341,11 +341,11 @@ install_app() {
 
     printf '\n'
     if [[ -n "$installed_version" ]]; then
-        info "Installed Container GUI $installed_version ($release_tag) at $target"
+        info "Installed CargoDeck $installed_version ($release_tag) at $target"
     else
-        info "Installed Container GUI ($release_tag) at $target"
+        info "Installed CargoDeck ($release_tag) at $target"
     fi
-    info "Open it with: open -a \"Container GUI\""
+    info "Open it with: open -a \"CargoDeck\""
 }
 
 uninstall_app() {
@@ -378,9 +378,9 @@ uninstall_app() {
 
     if [[ "$removed" == "false" ]]; then
         if [[ "$install_dir_explicit" == "true" ]]; then
-            info "Container GUI is not installed in $install_dir."
+            info "CargoDeck is not installed in $install_dir."
         else
-            info "Container GUI is not installed in /Applications or ~/Applications."
+            info "CargoDeck is not installed in /Applications or ~/Applications."
         fi
         return
     fi

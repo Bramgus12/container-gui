@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://container.gussekloo.com/sitemap.xml
+Sitemap: https://cargodeck.gussekloo.com/sitemap.xml

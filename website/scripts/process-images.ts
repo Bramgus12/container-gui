@@ -56,7 +56,7 @@ async function screenshots() {
   for (const w of SCREENSHOT_WIDTHS) {
     const suffix =
       w === SCREENSHOT_WIDTHS[0] ? "" : `@${w / SCREENSHOT_WIDTHS[0]}x`
-    const base = join(publicDir, `container-gui-containers-inspector${suffix}`)
+    const base = join(publicDir, `cargodeck-containers-inspector${suffix}`)
     const resized = source
       .clone()
       .resize({ width: w, withoutEnlargement: true })
@@ -124,7 +124,7 @@ async function openGraph() {
   const H = 630
 
   const shot = await sharp(
-    join(publicDir, "container-gui-containers-inspector@2x.png")
+    join(publicDir, "cargodeck-containers-inspector@2x.png")
   )
     .resize({ width: 880 })
     .toBuffer()
@@ -139,7 +139,7 @@ async function openGraph() {
         .n { font-family: "Helvetica Neue", Helvetica, sans-serif; fill: #0B1220; }
         .s { font-family: "Helvetica Neue", Helvetica, sans-serif; fill: #4F5A6B; }
       </style>
-      <text class="n" x="72" y="212" font-size="42" font-weight="700" letter-spacing="-1">Container GUI</text>
+      <text class="n" x="72" y="212" font-size="42" font-weight="700" letter-spacing="-1">CargoDeck</text>
       <text class="s" x="72" y="266" font-size="25">A window for Apple’s container runtime.</text>
     </svg>`)
 

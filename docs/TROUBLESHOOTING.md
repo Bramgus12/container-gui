@@ -10,7 +10,7 @@ check fails.
   download was truncated, then open an issue with both checksums.
 - **Signature verification failed.** The app in the disk image did not pass
   `codesign --verify --deep --strict`. Do not install it by hand; report it.
-- **Container GUI is running.** Quit the app and run the command again. The
+- **CargoDeck is running.** Quit the app and run the command again. The
   installer never replaces a running app.
 - **The GitHub API is unavailable or rate-limited.** Unauthenticated API calls
   are limited to 60 per hour per address. The installer falls back to the latest
@@ -32,9 +32,9 @@ offline. If macOS blocks the app anyway, check what Gatekeeper actually objects
 to:
 
 ```sh
-spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"
-xcrun stapler validate "/Applications/Container GUI.app"
-codesign --verify --deep --strict --verbose=2 "/Applications/Container GUI.app"
+spctl --assess --type execute --verbose=4 "/Applications/CargoDeck.app"
+xcrun stapler validate "/Applications/CargoDeck.app"
+codesign --verify --deep --strict --verbose=2 "/Applications/CargoDeck.app"
 ```
 
 `accepted` with `source=Notarized Developer ID` means the installed copy is
@@ -47,7 +47,7 @@ Releases up to and including 1.2.0 were ad-hoc signed and not notarized. Those
 older builds rely on the quarantine attribute being cleared:
 
 ```sh
-xattr -d -r com.apple.quarantine "/Applications/Container GUI.app"
+xattr -d -r com.apple.quarantine "/Applications/CargoDeck.app"
 ```
 
 ## The update check fails
@@ -62,7 +62,7 @@ xattr -d -r com.apple.quarantine "/Applications/Container GUI.app"
   blocks `api.github.com`. Update checks are the only network requests Container
   GUI makes; every container operation runs locally through the CLI.
 - **Turning it off.** Clear **Check automatically once a day** under
-  **System → Updates**. **Container GUI → Check for Updates…** still works on
+  **System → Updates**. **CargoDeck → Check for Updates…** still works on
   demand.
 - **A skipped version.** **Skip This Version** hides one release from the
   automatic check. The Updates section then offers **Show Again**, and a manual
@@ -77,7 +77,7 @@ executable file.
 
 ## The CLI version is unsupported
 
-Container GUI supports Apple Container `0.12.0` through versions earlier than
+CargoDeck supports Apple Container `0.12.0` through versions earlier than
 `2.0.0`. Install a supported release or select a compatible executable. Support
 for a newer CLI is added only after its JSON output has fixture and smoke-test
 coverage.
@@ -100,7 +100,7 @@ private-key, and URL-userinfo patterns.
 ## Pulls or commands hang
 
 Cancel the operation and retry after checking network connectivity. Image pulls
-and container runs expose cancellation while active. Container GUI terminates
+and container runs expose cancellation while active. CargoDeck terminates
 cancelled child processes, refreshes authoritative state because cancellation
 cannot undo completed container creation, and caps retained command and log
 output. If the service remains unhealthy, restart it outside any active
@@ -126,7 +126,7 @@ Networks screen, choose non-overlapping subnets, and retry.
 
 Built-in and default networks are intentionally protected. For a user-created
 network, stop and delete any containers attached to it, refresh Containers and
-Networks, then retry the exact network deletion. Container GUI does not offer a
+Networks, then retry the exact network deletion. CargoDeck does not offer a
 force-network-delete operation because the Apple Container CLI has none.
 
 ## Network lists or inspections fail after retrying
@@ -148,7 +148,7 @@ not the app's. Confirm the credential is the one that registry expects: many
 require a personal access token rather than an account password, and some need
 a specific user name alongside a token.
 
-Container GUI never stores the password. It is written to the command's
+CargoDeck never stores the password. It is written to the command's
 standard input and released, so a failed login leaves nothing to clear, and
 retrying means typing it again.
 
@@ -166,7 +166,7 @@ layers all travel in the clear, and the sheet says so before you submit.
 ## A push was cancelled part-way
 
 Cancelling stops the local process. It does not roll the remote registry back,
-and Container GUI does not claim that it does. A cancelled push may have
+and CargoDeck does not claim that it does. A cancelled push may have
 uploaded some layers, and may or may not have updated the tag. Check the
 registry itself before pushing again.
 

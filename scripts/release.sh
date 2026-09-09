@@ -3,27 +3,27 @@
 set -euo pipefail
 
 project_root="${0:A:h:h}"
-archive_path="${CONTAINER_GUI_ARCHIVE_PATH:-$project_root/build/Container GUI.xcarchive}"
-export_path="${CONTAINER_GUI_EXPORT_PATH:-$project_root/build/export}"
-derived_data_path="${CONTAINER_GUI_DERIVED_DATA_PATH:-$project_root/build/DerivedData}"
-export_options_template="${CONTAINER_GUI_EXPORT_OPTIONS:-$project_root/config/DeveloperIDExportOptions.plist}"
+archive_path="${CARGODECK_ARCHIVE_PATH:-$project_root/build/CargoDeck.xcarchive}"
+export_path="${CARGODECK_EXPORT_PATH:-$project_root/build/export}"
+derived_data_path="${CARGODECK_DERIVED_DATA_PATH:-$project_root/build/DerivedData}"
+export_options_template="${CARGODECK_EXPORT_OPTIONS:-$project_root/config/DeveloperIDExportOptions.plist}"
 export_options_path="$project_root/build/ExportOptions.plist"
-app_path="$export_path/Container GUI.app"
+app_path="$export_path/CargoDeck.app"
 dmg_staging_path="$project_root/build/dmg-staging"
-notarization_zip_path="$project_root/build/Container-GUI-notarize.zip"
-distribution_path="$export_path/Container-GUI.dmg"
-legacy_distribution_path="$export_path/Container-GUI.zip"
+notarization_zip_path="$project_root/build/CargoDeck-notarize.zip"
+distribution_path="$export_path/CargoDeck.dmg"
+legacy_distribution_path="$export_path/CargoDeck.zip"
 legacy_checksum_path="$export_path/SHA256SUMS.txt"
-notary_profile="${CONTAINER_GUI_NOTARY_PROFILE:-container-gui-notary}"
-skip_notarization="${CONTAINER_GUI_SKIP_NOTARIZATION:-0}"
+notary_profile="${CARGODECK_NOTARY_PROFILE:-cargodeck-notary}"
+skip_notarization="${CARGODECK_SKIP_NOTARIZATION:-0}"
 
 usage() {
     cat <<'USAGE'
 Usage: scripts/release.sh [--skip-notarization]
 
-Archives Container GUI with the Developer ID Application certificate, exports a
+Archives CargoDeck with the Developer ID Application certificate, exports a
 hardened-runtime app, submits it to Apple's notary service, staples the ticket,
-and packages a signed, notarized, stapled Container-GUI.dmg.
+and packages a signed, notarized, stapled CargoDeck.dmg.
 
 Options:
   --skip-notarization   Sign with Developer ID but do not contact Apple. The
@@ -31,18 +31,18 @@ Options:
   -h, --help            Show this help.
 
 Environment overrides:
-  CONTAINER_GUI_SIGNING_IDENTITY  Developer ID Application identity to use.
+  CARGODECK_SIGNING_IDENTITY  Developer ID Application identity to use.
                                   Defaults to the only matching keychain identity.
-  CONTAINER_GUI_TEAM_ID           Team ID. Defaults to the project's DEVELOPMENT_TEAM.
-  CONTAINER_GUI_EXPORT_OPTIONS    Export options plist template.
+  CARGODECK_TEAM_ID           Team ID. Defaults to the project's DEVELOPMENT_TEAM.
+  CARGODECK_EXPORT_OPTIONS    Export options plist template.
 
 Notary credentials, in the order they are tried:
-  CONTAINER_GUI_NOTARY_KEY, CONTAINER_GUI_NOTARY_KEY_ID, CONTAINER_GUI_NOTARY_ISSUER
+  CARGODECK_NOTARY_KEY, CARGODECK_NOTARY_KEY_ID, CARGODECK_NOTARY_ISSUER
       App Store Connect API key file, key ID, and issuer UUID.
-  CONTAINER_GUI_APPLE_ID, CONTAINER_GUI_APP_PASSWORD
+  CARGODECK_APPLE_ID, CARGODECK_APP_PASSWORD
       Apple ID and an app-specific password.
-  CONTAINER_GUI_NOTARY_PROFILE    notarytool keychain profile name.
-                                  Defaults to container-gui-notary.
+  CARGODECK_NOTARY_PROFILE    notarytool keychain profile name.
+                                  Defaults to cargodeck-notary.
 USAGE
 }
 
@@ -73,7 +73,7 @@ fi
 # Resolve the Developer ID Application certificate. Distribution outside the App
 # Store requires this certificate; an Apple Development certificate cannot be
 # notarized.
-signing_identity="${CONTAINER_GUI_SIGNING_IDENTITY:-}"
+signing_identity="${CARGODECK_SIGNING_IDENTITY:-}"
 if [[ -z "$signing_identity" ]]; then
     typeset -a developer_id_identities
     developer_id_identities=(${(f)"$(/usr/bin/security find-identity -v -p codesigning \
@@ -94,40 +94,40 @@ if [[ -z "$signing_identity" ]]; then
     if (( ${#developer_id_identities} > 1 )); then
         print -u2 "Error: several Developer ID Application certificates are installed:"
         printf '    %s\n' "${developer_id_identities[@]}" >&2
-        print -u2 "Choose one with CONTAINER_GUI_SIGNING_IDENTITY."
+        print -u2 "Choose one with CARGODECK_SIGNING_IDENTITY."
         exit 2
     fi
 
     signing_identity="${developer_id_identities[1]}"
 fi
 
-team_id="${CONTAINER_GUI_TEAM_ID:-}"
+team_id="${CARGODECK_TEAM_ID:-}"
 if [[ -z "$team_id" ]]; then
     team_id="$(/usr/bin/sed -n 's/^[[:space:]]*DEVELOPMENT_TEAM = \([A-Za-z0-9]*\);.*/\1/p' \
-        "$project_root/container-gui.xcodeproj/project.pbxproj" | /usr/bin/head -1)"
+        "$project_root/CargoDeck.xcodeproj/project.pbxproj" | /usr/bin/head -1)"
 fi
-[[ -n "$team_id" ]] || fail "Could not determine the Team ID. Set CONTAINER_GUI_TEAM_ID."
+[[ -n "$team_id" ]] || fail "Could not determine the Team ID. Set CARGODECK_TEAM_ID."
 
 # Pick the notary credentials once so both submissions use the same account.
 typeset -a notary_credentials
-if [[ -n "${CONTAINER_GUI_NOTARY_KEY:-}" ]]; then
-    [[ -n "${CONTAINER_GUI_NOTARY_KEY_ID:-}" && -n "${CONTAINER_GUI_NOTARY_ISSUER:-}" ]] \
-        || fail "CONTAINER_GUI_NOTARY_KEY also needs CONTAINER_GUI_NOTARY_KEY_ID and CONTAINER_GUI_NOTARY_ISSUER."
+if [[ -n "${CARGODECK_NOTARY_KEY:-}" ]]; then
+    [[ -n "${CARGODECK_NOTARY_KEY_ID:-}" && -n "${CARGODECK_NOTARY_ISSUER:-}" ]] \
+        || fail "CARGODECK_NOTARY_KEY also needs CARGODECK_NOTARY_KEY_ID and CARGODECK_NOTARY_ISSUER."
     notary_credentials=(
-        --key "$CONTAINER_GUI_NOTARY_KEY"
-        --key-id "$CONTAINER_GUI_NOTARY_KEY_ID"
-        --issuer "$CONTAINER_GUI_NOTARY_ISSUER"
+        --key "$CARGODECK_NOTARY_KEY"
+        --key-id "$CARGODECK_NOTARY_KEY_ID"
+        --issuer "$CARGODECK_NOTARY_ISSUER"
     )
-    notary_credentials_source="App Store Connect API key $CONTAINER_GUI_NOTARY_KEY_ID"
-elif [[ -n "${CONTAINER_GUI_APPLE_ID:-}" ]]; then
-    [[ -n "${CONTAINER_GUI_APP_PASSWORD:-}" ]] \
-        || fail "CONTAINER_GUI_APPLE_ID also needs CONTAINER_GUI_APP_PASSWORD (an app-specific password)."
+    notary_credentials_source="App Store Connect API key $CARGODECK_NOTARY_KEY_ID"
+elif [[ -n "${CARGODECK_APPLE_ID:-}" ]]; then
+    [[ -n "${CARGODECK_APP_PASSWORD:-}" ]] \
+        || fail "CARGODECK_APPLE_ID also needs CARGODECK_APP_PASSWORD (an app-specific password)."
     notary_credentials=(
-        --apple-id "$CONTAINER_GUI_APPLE_ID"
-        --password "$CONTAINER_GUI_APP_PASSWORD"
+        --apple-id "$CARGODECK_APPLE_ID"
+        --password "$CARGODECK_APP_PASSWORD"
         --team-id "$team_id"
     )
-    notary_credentials_source="Apple ID $CONTAINER_GUI_APPLE_ID"
+    notary_credentials_source="Apple ID $CARGODECK_APPLE_ID"
 else
     notary_credentials=(--keychain-profile "$notary_profile")
     notary_credentials_source="keychain profile $notary_profile"
@@ -162,8 +162,8 @@ print_notary_credentials_help() {
     print -u2 "    xcrun notarytool store-credentials $notary_profile \\"
     print -u2 "        --apple-id <your Apple ID> --team-id $team_id --password <app-specific password>"
     print -u2 ""
-    print -u2 "Or export CONTAINER_GUI_NOTARY_KEY, CONTAINER_GUI_NOTARY_KEY_ID, and"
-    print -u2 "CONTAINER_GUI_NOTARY_ISSUER to use an App Store Connect API key instead."
+    print -u2 "Or export CARGODECK_NOTARY_KEY, CARGODECK_NOTARY_KEY_ID, and"
+    print -u2 "CARGODECK_NOTARY_ISSUER to use an App Store Connect API key instead."
 }
 
 # Submits $1 to the notary service and staples the ticket to $3, which is the
@@ -213,8 +213,8 @@ rm -rf "$archive_path"
 # recorded rather than whatever the tag points at today.
 xcodebuild archive \
     -quiet \
-    -project "$project_root/container-gui.xcodeproj" \
-    -scheme "Container GUI" \
+    -project "$project_root/CargoDeck.xcodeproj" \
+    -scheme "CargoDeck" \
     -configuration Release \
     -archivePath "$archive_path" \
     -derivedDataPath "$derived_data_path" \
@@ -239,7 +239,7 @@ rm -f "$distribution_path" "$legacy_distribution_path" "$legacy_checksum_path" "
 /usr/libexec/PlistBuddy -c "Set :teamID $team_id" "$export_options_path" >/dev/null 2>&1 \
     || /usr/libexec/PlistBuddy -c "Add :teamID string $team_id" "$export_options_path" >/dev/null
 
-rm -rf "$export_path/Container GUI.app" "$export_path/DistributionSummary.plist" \
+rm -rf "$export_path/CargoDeck.app" "$export_path/DistributionSummary.plist" \
     "$export_path/ExportOptions.plist" "$export_path/Packaging.log"
 xcodebuild -exportArchive \
     -quiet \
@@ -270,18 +270,18 @@ else
 fi
 
 mkdir -p "$dmg_staging_path"
-/usr/bin/ditto "$app_path" "$dmg_staging_path/Container GUI.app"
+/usr/bin/ditto "$app_path" "$dmg_staging_path/CargoDeck.app"
 /bin/ln -s /Applications "$dmg_staging_path/Applications"
 
 if /usr/sbin/diskutil image create from --help >/dev/null 2>&1; then
     /usr/sbin/diskutil image create from \
-        --volumeName "Container GUI" \
+        --volumeName "CargoDeck" \
         --format UDZO \
         "$dmg_staging_path" \
         "$distribution_path"
 else
     /usr/bin/hdiutil create \
-        -volname "Container GUI" \
+        -volname "CargoDeck" \
         -srcfolder "$dmg_staging_path" \
         -format UDZO \
         -ov \

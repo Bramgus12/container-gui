@@ -11,7 +11,7 @@ kept below because the reasoning still explains the shape of the UI.
 
 Apple Container creates and removes `/etc/resolver/containerization.<domain>`
 files through `container system dns create` and `delete`. Those commands must
-run as an administrator. Container GUI has no privileged helper and does not
+run as an administrator. CargoDeck has no privileged helper and does not
 invoke a shell, as established by ADR 0001.
 
 The original decision was that the app would render the exact
@@ -29,7 +29,7 @@ shell, or password handling. Two things have changed since:
 
 ## Decision
 
-Container GUI offers three routes to the same privileged change, and the UI
+CargoDeck offers three routes to the same privileged change, and the UI
 names the difference between them:
 
 1. **The macOS authorization dialog** (the default; the "Add Domain" and
@@ -42,7 +42,7 @@ names the difference between them:
 3. **Copy Command.** Unchanged, for anyone who would rather run it themselves.
 
 Route 2 is a deliberate trade and is documented as one. The password is typed
-into Container GUI's own terminal rather than the system's password dialog, and
+into CargoDeck's own terminal rather than the system's password dialog, and
 keystrokes pass through `EmbeddedTerminalView.Coordinator.send(source:data:)` on
 their way into the pty. The app does not store, echo, or log them, and the
 banner at the top of the sheet says plainly whose terminal this is and offers

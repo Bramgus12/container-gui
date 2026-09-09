@@ -1,0 +1,731 @@
+import AppKit
+import SwiftUI
+
+struct SystemView: View {
+    @Bindable var model: SystemModel
+    let builder: BuilderModel?
+    let dns: DNSModel?
+    let updates: UpdateModel
+    @State private var confirmsStop = false
+    @State private var showsDiagnostics = false
+    @State private var confirmsReclaim = false
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 20) {
+                HStack(alignment: .top, spacing: DSMetrics.spacing12) {
+                    ServiceCard(model: model, confirmsStop: $confirmsStop)
+                    if let builder {
+                        BuilderCard(model: builder)
+                    }
+                    UpdateCard(model: updates)
+                }
+                SystemDiskUsageSection(model: model, reclaim: { confirmsReclaim = true })
+                SystemPropertiesSection(model: model)
+                if let dns { SystemDNSSection(model: dns, system: model) }
+                SystemLogsSection(model: model)
+                UpdateSection(model: updates)
+            }
+            .padding(24)
+            .frame(maxWidth: 1_000, alignment: .leading)
+        }
+        .navigationTitle("System")
+        .toolbar {
+            ToolbarItemGroup {
+                Button {
+                    Task {
+                        await model.refresh()
+                        await builder?.refresh()
+                        await dns?.refresh()
+                    }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(model.isWorking)
+                .accessibilityIdentifier("system.refresh")
+
+                Button {
+                    showsDiagnostics = true
+                } label: {
+                    Label("Diagnostics", systemImage: "stethoscope")
+                }
+                .accessibilityIdentifier("system.diagnostics")
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let error = model.actionError ?? dns?.actionError {
+                InlineBanner(
+                    message: "System action failed",
+                    detail: error,
+                    scope: .bar,
+                    severity: .error,
+                    copyValue: error,
+                    onDismiss: { model.dismissActionError(); dns?.dismissActionError() }
+                )
+                .accessibilityIdentifier("system.actionError")
+            }
+        }
+        .alert("Stop Container Services?", isPresented: $confirmsStop) {
+            Button("Stop Service", role: .destructive) {
+                Task { await model.perform(.stop) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                """
+                Running containers will stop and CargoDeck will be unavailable \
+                until the services are started again.
+                """
+            )
+        }
+        .alert("Reclaim Unused Resources?", isPresented: $confirmsReclaim) {
+            Button("Reclaim", role: .destructive) {
+                Task { await model.reclaimUnusedResources() }
+            }
+            .accessibilityIdentifier("system.reclaim.confirm")
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(reclaimMessage)
+        }
+        .sheet(isPresented: $showsDiagnostics) {
+            SystemDiagnosticsSheet(model: model, isPresented: $showsDiagnostics)
+        }
+        .task {
+            if model.snapshotState == .idle {
+                await model.refresh()
+            }
+            await builder?.loadIfNeeded()
+            await dns?.loadIfNeeded()
+        }
+        .accessibilityIdentifier("system.screen")
+    }
+
+    private var reclaimMessage: String {
+        guard let usage = model.diskUsage else {
+            return "Unused images and volumes will be permanently deleted."
+        }
+        let images = usage.resource(named: "image")?.reclaimableBytes ?? 0
+        let volumes = usage.resource(named: "volume")?.reclaimableBytes ?? 0
+        return "This permanently deletes up to \(Self.formatBytes(images)) of unused images and \(Self.formatBytes(volumes)) of unused volumes."
+    }
+
+    private static func formatBytes(_ bytes: UInt64) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file)
+    }
+
+}
+
+private struct SystemDNSSection: View {
+    @Bindable var model: DNSModel
+    /// The DNS domain only takes effect when the service restarts, so the
+    /// section can restart it from where the change was made.
+    let system: SystemModel
+    @State private var addModel: AddLocalDomainModel?
+    @State private var domainModel: SetServiceDomainModel?
+    @State private var domainToRemove: String?
+    @State private var sudoCommand: PrivilegedCommandModel?
+    @State private var showsResolverContents = false
+
+    /// Restarts the service, then reloads DNS so the notice clears itself as
+    /// soon as the service reports the domain it just read.
+    private func restartService() {
+        Task {
+            await system.perform(.restart)
+            await model.refresh()
+        }
+    }
+
+    private var removeConfiguration: DNSDeleteConfiguration? {
+        guard let domainToRemove, let domain = try? DNSDomainName(validating: domainToRemove) else { return nil }
+        return DNSDeleteConfiguration(domain: domain)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DSMetrics.spacing12) {
+            SectionLabel(title: "DNS")
+            StateDot(model.readiness.designState, label: LocalizedStringResource(stringLiteral: model.readiness.message), accessibilityLabel: LocalizedStringResource(stringLiteral: model.readiness.message))
+                .font(.dsCardHeading)
+
+            HStack(alignment: .top, spacing: DSMetrics.spacing12) {
+                DSCard {
+                    VStack(alignment: .leading, spacing: DSMetrics.spacing8) {
+                        HStack { Text("Step 1 · Service").font(.dsCardHeading); Spacer(); if model.pendingServiceDomain != nil { StateChip(title: "Restart needed", state: .attention) } else if model.serviceDomain == nil { StateChip(title: "Missing", state: .attention) } else { TagChip(title: "Applied") } }
+                        SystemCardRow(label: "Domain", value: model.serviceDomain ?? "Not set")
+                        if let pending = model.pendingServiceDomain { SystemCardRow(label: "Written", value: pending) }
+                        Spacer(minLength: 8)
+                        HStack { Button("Set Domain…") { domainModel = SetServiceDomainModel(dns: model) }.disabled(model.isWritingConfig).accessibilityIdentifier("system.dns.setDomain"); Button("Reveal Config") { model.revealConfigFile() }.accessibilityIdentifier("system.dns.revealConfig"); Button("Copy TOML") { model.copyConfigSnippet() }.accessibilityIdentifier("system.dns.copyConfig") }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
+                DSCard {
+                    VStack(alignment: .leading, spacing: DSMetrics.spacing8) {
+                        let active = model.domains.first(where: { $0.isServiceDomain })?.resolverFile
+                        HStack { Text("Step 2 · macOS").font(.dsCardHeading); Spacer(); if active == nil { StateChip(title: "Missing", state: .attention) } else { StateChip(title: "Active", state: .running) } }
+                        SystemCardRow(label: "Resolver", value: active?.path.path ?? "Not installed")
+                        Spacer(minLength: 8)
+                        HStack { Button("Test Resolution") { Task { await model.probeResolution() } }.disabled(model.registeredNames.isEmpty || model.isProbing).accessibilityIdentifier("system.dns.probe"); if let domain = model.serviceDomain { Button("Remove…", role: .destructive) { domainToRemove = domain }.disabled(model.activeMutation != nil).accessibilityIdentifier("system.dns.remove") } }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+            if let pending = model.pendingServiceDomain {
+                InlineBanner(
+                    message: "Restart the container service to apply the new DNS domain",
+                    detail: "\(pending) is written to \(model.configFilePath); the service reads its DNS domain when it starts.",
+                    scope: .card,
+                    severity: .attention,
+                    actionTitle: "Restart Service",
+                    action: { restartService() }
+                )
+                .disabled(system.serviceOperation != nil)
+                .accessibilityIdentifier("system.dns.restartNotice")
+            }
+
+            if let probe = model.probe { DNSProbeStrip(probe: probe, hostname: model.registeredNames.first?.hostname ?? "") }
+
+            DSCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack { Text("Local domains").font(.dsCardHeading); Spacer(); Button("Add Local Domain…") { addModel = AddLocalDomainModel(dns: model) }.disabled(model.activeMutation != nil).accessibilityIdentifier("system.dns.add") }
+                    if model.domains.isEmpty { EmptyState("No local domains", systemImage: "network.slash", description: "Add a local domain to make container names available to macOS.") }
+                    ForEach(model.domains) { domain in
+                        HStack { MonoText(value: domain.name); Spacer(); MonoText(value: domain.resolverFile.map { "\($0.nameserver ?? "—"):\($0.port.map(String.init) ?? "—")" } ?? "Missing", dimmed: true); Text("\(domain.registeredCount)").monospacedDigit(); if domain.isServiceDomain { TagChip(title: "Default") } }
+                    }
+                    Divider()
+                    HStack { Text(model.activeMutation.map { "Waiting for macOS to authenticate you before changing \($0.domain)…" } ?? "\(model.domains.count) domains · adding and removing one asks for your administrator password").font(.caption).foregroundStyle(Color.dsTextSecondary); Spacer(); Button(showsResolverContents ? "Hide resolver contents" : "Show resolver contents") { showsResolverContents.toggle() } }
+                    if showsResolverContents { ForEach(model.domains.compactMap(\.resolverFile)) { file in MonoText(value: "domain \(file.domain)\nsearch \(file.search.joined(separator: " "))\nnameserver \(file.nameserver ?? "")\nport \(file.port.map(String.init) ?? "")") } }
+                }
+            }
+
+            if !model.registeredNames.isEmpty {
+                DSCard { VStack(alignment: .leading, spacing: 8) { Text("Names in use").font(.dsCardHeading); ForEach(model.registeredNames) { name in HStack { MonoText(value: name.hostname); Spacer(); MonoText(value: name.address, dimmed: true); Text(name.networkName).foregroundStyle(Color.dsTextSecondary) } }; InlineBanner(message: "Bare-hostname lookups on custom networks are not supported.", scope: .row, severity: .info) } }
+            }
+        }
+        .accessibilityIdentifier("system.dns.section")
+        .sheet(item: $addModel) { AddLocalDomainSheet(model: $0) }
+        .sheet(item: $domainModel) { SetServiceDomainSheet(model: $0) }
+        .alert("Remove Local Domain?", isPresented: Binding(get: { domainToRemove != nil }, set: { if !$0 { domainToRemove = nil } })) {
+            Button("Remove", role: .destructive) { if let configuration = removeConfiguration { Task { await model.deleteDomain(configuration) } } }
+            Button("Run with sudo…") { if let configuration = removeConfiguration { sudoCommand = model.makeSudoCommand(delete: configuration) } }
+            Button("Copy Command") { if let configuration = removeConfiguration { model.copyDeleteCommand(configuration) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("Remove asks macOS for your administrator password. Run with sudo runs the command in a terminal inside this window instead, where you type the password yourself. Copy Command hands it to Terminal.") }
+        .sheet(item: $sudoCommand) { command in
+            PrivilegedCommandSheet(model: command) { await model.refresh() }
+        }
+    }
+}
+
+private struct DNSProbeStrip: View {
+    let probe: DNSProbeResult
+    let hostname: String
+    var body: some View {
+        switch probe {
+        case .resolved(let address, let duration): MonoText(value: "\(hostname) → \(address) · \(duration.components.attoseconds / 1_000_000_000_000_000) ms")
+        case .failed(let message): InlineBanner(message: "Resolution failed", detail: message, scope: .row, severity: .attention)
+        }
+    }
+}
+
+/// The shell all three glance cards share: a section label, the state line, the
+/// detail rows, and the card's own actions pinned to the bottom.
+private struct SystemCard<Content: View, Actions: View>: View {
+    let title: LocalizedStringResource
+    let value: LocalizedStringResource
+    let state: DSState
+    private let content: Content
+    private let actions: Actions
+
+    init(
+        title: LocalizedStringResource,
+        value: LocalizedStringResource,
+        state: DSState,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder actions: () -> Actions
+    ) {
+        self.title = title
+        self.value = value
+        self.state = state
+        self.content = content()
+        self.actions = actions()
+    }
+
+    var body: some View {
+        DSCard {
+            VStack(alignment: .leading, spacing: DSMetrics.spacing8) {
+                SectionLabel(title: title)
+                StateDot(state, label: value, accessibilityLabel: value)
+                    .font(.dsCardHeading)
+                content
+                Spacer(minLength: DSMetrics.spacing8)
+                HStack(spacing: DSMetrics.spacing8) { actions }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private struct SystemCardRow: View {
+    let label: LocalizedStringResource
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(Color.dsTextSecondary)
+            Spacer(minLength: DSMetrics.spacing8)
+            MonoText(value: value, dimmed: true, truncation: .middle)
+        }
+    }
+}
+
+private struct ServiceCard: View {
+    let model: SystemModel
+    @Binding var confirmsStop: Bool
+
+    var body: some View {
+        SystemCard(
+            title: "Service",
+            value: model.status.isRunning ? "Running" : "Stopped",
+            state: model.status.isRunning ? .running : .attention
+        ) {
+            SystemCardRow(label: "CLI", value: model.versions.cli?.version ?? "Unavailable")
+            SystemCardRow(
+                label: "Server",
+                value: model.versions.server?.version ?? model.status.version ?? "Unavailable"
+            )
+            if let message = model.status.message, !message.isEmpty {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(Color.dsTextSecondary)
+                    .textSelection(.enabled)
+            }
+        } actions: {
+            if let operation = model.serviceOperation {
+                ProgressView(operation.localizedDescription).controlSize(.small)
+            } else if model.status.isRunning {
+                Button("Stop Service…", role: .destructive) { confirmsStop = true }
+                    .accessibilityIdentifier("system.stop")
+            } else {
+                Button("Start Service") { Task { await model.perform(.start) } }
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityIdentifier("system.start")
+            }
+        }
+    }
+}
+
+private struct BuilderCard: View {
+    let model: BuilderModel
+    @State private var cpuLimit = ""
+    @State private var memoryLimit = ""
+    @State private var confirmsDelete = false
+
+    var body: some View {
+        SystemCard(title: "Builder", value: value, state: state) {
+            switch model.loadingState {
+            case .idle, .loading:
+                ProgressView().controlSize(.small)
+            case .failed(let message):
+                InlineBanner(
+                    message: "Builder status unavailable",
+                    detail: message,
+                    scope: .row,
+                    severity: .attention,
+                    actionTitle: "Try Again",
+                    action: { Task { await model.refresh() } }
+                )
+            case .loaded:
+                if let image = model.status.image {
+                    SystemCardRow(label: "Image", value: image)
+                }
+                if let id = model.status.id {
+                    SystemCardRow(label: "ID", value: id)
+                }
+                if let address = model.status.address {
+                    SystemCardRow(label: "Address", value: address)
+                }
+                if model.status.state == .absent {
+                    HStack(spacing: DSMetrics.spacing8) {
+                        TextField("CPUs", text: $cpuLimit)
+                        TextField("Memory", text: $memoryLimit)
+                    }
+                    .controlSize(.small)
+                }
+            }
+            if let error = model.actionError {
+                InlineBanner(
+                    message: "Builder action failed",
+                    detail: error,
+                    scope: .row,
+                    severity: .error,
+                    copyValue: error,
+                    onDismiss: model.dismissActionError
+                )
+            }
+        } actions: {
+            if model.operation != nil {
+                ProgressView().controlSize(.small)
+            } else {
+                BuilderActions(
+                    state: model.status.state,
+                    isBusy: model.isBusy,
+                    start: {
+                        Task {
+                            await model.start(
+                                cpuLimit: optionalTrimmed(cpuLimit),
+                                memoryLimit: optionalTrimmed(memoryLimit)
+                            )
+                        }
+                    },
+                    stop: { Task { await model.stop() } },
+                    delete: { confirmsDelete = true }
+                )
+            }
+        }
+        .alert("Delete Image Builder?", isPresented: $confirmsDelete) {
+            Button("Delete", role: .destructive) { Task { await model.delete() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The stopped builder container will be permanently deleted. A future image build can create it again.")
+        }
+    }
+
+    private var value: LocalizedStringResource {
+        switch model.status.state {
+        case .running: "Running"
+        case .stopped: "Stopped"
+        case .absent: "Not created"
+        case .unknown: "Unknown"
+        }
+    }
+
+    private var state: DSState {
+        switch model.status.state {
+        case .running: .running
+        case .stopped: .attention
+        case .absent, .unknown: .idle
+        }
+    }
+
+    private func optionalTrimmed(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+private struct UpdateCard: View {
+    let model: UpdateModel
+
+    var body: some View {
+        SystemCard(
+            title: "Update",
+            value: model.availableRelease == nil ? "Up to date" : "Available",
+            state: model.availableRelease == nil ? .running : .attention
+        ) {
+            SystemCardRow(label: "Installed", value: model.installedVersionDescription)
+            if let release = model.availableRelease {
+                SystemCardRow(label: "Latest", value: release.version.description)
+            }
+        } actions: {
+            if model.isChecking {
+                ProgressView().controlSize(.small)
+            } else {
+                Button("Check Now") { Task { await model.checkNow() } }
+                    .accessibilityIdentifier("system.update.checkCard")
+            }
+        }
+    }
+}
+
+private struct BuilderActions: View {
+    let state: BuilderState
+    let isBusy: Bool
+    let start: () -> Void
+    let stop: () -> Void
+    let delete: () -> Void
+
+    var body: some View {
+        switch state {
+        case .absent:
+            Button("Start Builder", action: start)
+                .disabled(isBusy)
+                .accessibilityIdentifier("system.builder.start")
+        case .running:
+            Button("Stop Builder", action: stop)
+                .disabled(isBusy)
+                .accessibilityIdentifier("system.builder.stop")
+        case .stopped:
+            Button("Start Builder", action: start)
+                .disabled(isBusy)
+                .accessibilityIdentifier("system.builder.start")
+            Button("Delete Builder…", role: .destructive, action: delete)
+                .disabled(isBusy)
+                .accessibilityIdentifier("system.builder.delete")
+        case .unknown:
+            EmptyView()
+        }
+    }
+}
+
+private struct SystemDiskUsageSection: View {
+    let model: SystemModel
+    let reclaim: () -> Void
+
+    var body: some View {
+        DSCard {
+            VStack(alignment: .leading, spacing: DSMetrics.spacing12) {
+            HStack {
+                Label("Disk Usage", systemImage: "internaldrive").font(.dsCardHeading)
+                Spacer()
+                if let reclaimable = model.diskUsage?.totalReclaimableBytes, reclaimable > 0 {
+                    Button("Reclaim \(Self.formatBytes(reclaimable))…", action: reclaim)
+                        .disabled(model.isReclaiming)
+                        .accessibilityIdentifier("system.reclaim")
+                }
+            }
+            switch model.snapshotState {
+            case .idle where model.diskUsage == nil,
+                 .loading where model.diskUsage == nil:
+                ProgressView("Loading disk usage…")
+                    .frame(maxWidth: .infinity, minHeight: 80)
+            case .failed(let error) where model.diskUsage == nil:
+                SystemUnavailableView(
+                    title: "Disk Usage Unavailable",
+                    error: error,
+                    model: model
+                )
+            default:
+                if let resources = model.diskUsage?.resources {
+                    if let usage = model.diskUsage {
+                        Text("\(Self.formatBytes(usage.totalSizeBytes)) used · \(Self.formatBytes(usage.totalReclaimableBytes)) reclaimable")
+                            .foregroundStyle(Color.dsTextSecondary)
+                        StackedUsageBar(segments: usage.usageSegments, height: 10)
+                        VStack(alignment: .leading, spacing: DSMetrics.spacing4) {
+                            StackedUsageLegend(segments: usage.usageSegments)
+                        }
+                        .font(.caption)
+                    }
+                    Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
+                        GridRow {
+                            Text("Resource").fontWeight(.semibold)
+                            Text("Total").fontWeight(.semibold)
+                            Text("Active").fontWeight(.semibold)
+                            Text("Size").fontWeight(.semibold)
+                            Text("Reclaimable").fontWeight(.semibold)
+                        }
+                        Divider().gridCellColumns(5)
+                        ForEach(resources) { resource in
+                            GridRow {
+                                Text(resource.type?.capitalized ?? "Unknown")
+                                MonoText(value: resource.totalCount.map(String.init) ?? "—", tabular: true)
+                                MonoText(value: resource.activeCount.map(String.init) ?? "—", tabular: true)
+                                MonoText(value: Self.formatBytes(resource.sizeBytes), tabular: true)
+                                MonoText(value: Self.formatBytes(resource.reclaimableBytes), tabular: true)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            }
+        }
+    }
+
+    private static func formatBytes(_ value: UInt64?) -> String {
+        guard let value else { return "—" }
+        return ByteCountFormatter.string(
+            fromByteCount: Int64(clamping: value),
+            countStyle: .file
+        )
+    }
+
+}
+
+/// Everything `container system property list` reports, grouped the way the CLI
+/// groups it. The section names and keys are the CLI's own, so a section or key
+/// a later CLI adds appears here without a change to this view.
+private struct SystemPropertiesSection: View {
+    let model: SystemModel
+
+    var body: some View {
+        DSCard {
+            VStack(alignment: .leading, spacing: DSMetrics.spacing12) {
+                Label("Configuration", systemImage: "slider.horizontal.3")
+                    .font(.dsCardHeading)
+                content
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityIdentifier("system.properties")
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let properties = model.properties, !properties.sections.isEmpty {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 240), alignment: .leading)],
+                alignment: .leading,
+                spacing: DSMetrics.spacing16
+            ) {
+                ForEach(properties.sections) { section in
+                    VStack(alignment: .leading, spacing: DSMetrics.spacing8) {
+                        SectionLabel(rawTitle: section.displayName)
+                        InspectionKeyValueList(section.values, emptyText: "Not configured")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        } else if model.snapshotState == .idle || model.snapshotState == .loading {
+            ProgressView("Loading configuration…")
+                .frame(maxWidth: .infinity, minHeight: 60)
+        } else {
+            // Not an error banner: the rest of the pane loaded, and a CLI that
+            // cannot list its properties is still a working CLI.
+            Text("The service reported no configuration. Older CLI versions do not list one.")
+                .font(.caption)
+                .foregroundStyle(Color.dsTextSecondary)
+        }
+    }
+}
+
+private struct SystemLogsSection: View {
+    let model: SystemModel
+    @State private var isTailing = true
+    @State private var jumpToLatestRequest = 0
+
+    var body: some View {
+        DSCard {
+            VStack(alignment: .leading, spacing: DSMetrics.spacing12) {
+            HStack {
+                Label("Recent Service Logs", systemImage: "text.alignleft")
+                    .font(.dsCardHeading)
+                Spacer()
+                Text("Last 15 minutes")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            switch model.logsState {
+            case .idle where model.logs.isEmpty,
+                 .loading where model.logs.isEmpty:
+                ProgressView("Loading recent logs…")
+                    .frame(maxWidth: .infinity, minHeight: 120)
+            case .failed(let error) where model.logs.isEmpty:
+                SystemUnavailableView(
+                    title: "Service Logs Unavailable",
+                    error: error,
+                    model: model
+                )
+            default:
+                if model.logs.isEmpty {
+                    Text("No service log messages were found in the last 15 minutes.")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)
+                } else {
+                    VStack(spacing: 0) {
+                        HStack(spacing: 10) {
+                            Spacer()
+                            LogJumpToLatestButton(
+                                isAtLatest: isTailing,
+                                action: jumpToLatest
+                            )
+                            .accessibilityIdentifier("system.logs.jumpToLatest")
+
+                            LogCopyButton(
+                                hasLogs: !model.logs.isEmpty,
+                                action: copyLogs
+                            )
+                                .accessibilityIdentifier("system.logs.copy")
+                        }
+                        .controlSize(.small)
+                        .padding(10)
+
+                        Divider()
+
+                        LogViewer(
+                            snapshot: LogSnapshot(
+                                text: model.logs,
+                                firstLogicalLineNumber: 1
+                            ),
+                            jumpToLatestRequest: jumpToLatestRequest
+                        ) { value in
+                            Task { @MainActor in
+                                isTailing = value
+                            }
+                        }
+                    }
+                    .frame(minHeight: 180, maxHeight: 360)
+                }
+            }
+            }
+        }
+        .onChange(of: model.logsState) { _, state in
+            guard state == .loaded, !model.logs.isEmpty else { return }
+            jumpToLatest()
+        }
+    }
+
+    private func copyLogs() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(model.logs, forType: .string)
+    }
+
+    private func jumpToLatest() {
+        jumpToLatestRequest &+= 1
+        isTailing = true
+    }
+}
+
+private struct SystemDiagnosticsSheet: View {
+    let model: SystemModel
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        // A read-only pane, so the footer carries the copy action and Done in
+        // place of the paging and submit buttons.
+        SheetScaffold {
+            VStack(spacing: 0) {
+                SheetHeader(title: "Diagnostics")
+
+                ScrollView {
+                    Text(model.diagnosticsText)
+                        .font(DSFont.mono(size: 12.5, relativeTo: .callout))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(DSMetrics.spacing16)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.dsCanvas)
+            }
+        } footer: {
+            Button(model.didCopyDiagnostics ? "Copied" : "Copy") {
+                model.copyDiagnostics()
+            }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .accessibilityIdentifier("system.diagnostics.copy")
+
+            Spacer()
+
+            Button("Done") {
+                isPresented = false
+            }
+            .keyboardShortcut(.defaultAction)
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("system.diagnostics.done")
+        }
+    }
+}
+
+private struct SystemUnavailableView: View {
+    let title: LocalizedStringResource
+    let error: String
+    let model: SystemModel
+
+    var body: some View {
+        EmptyState(title, systemImage: "exclamationmark.triangle", message: error) {
+            Button("Try Again") {
+                Task { await model.refresh() }
+            }
+        }
+    }
+}

@@ -1,12 +1,12 @@
-# Container GUI 1.6.0
+# CargoDeck 1.6.0
 
 Install or upgrade with:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh | bash
 ```
 
-Container GUI 1.6.0 completes the image and registry workflow. Until now the app
+CargoDeck 1.6.0 completes the image and registry workflow. Until now the app
 could pull an image and delete one; it could not tag, push, save, load, delete
 in bulk, prune deliberately, or log in to a registry at all — all of which meant
 dropping into Terminal.
@@ -69,15 +69,15 @@ dropping into Terminal.
   they mutate stored credentials or a remote registry. The release checklist has
   an opt-in section for them against a disposable registry.
 
-# Container GUI 1.5.0
+# CargoDeck 1.5.0
 
 Install or upgrade with:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh | bash
 ```
 
-Container GUI 1.5.0 adds Machines, a destination for the long-lived Linux VMs
+CargoDeck 1.5.0 adds Machines, a destination for the long-lived Linux VMs
 `container machine` manages, and the terminal that was missing from the app.
 Machines never appear in Containers — the service filters them out of every
 container list — so until now they were invisible to the app entirely.
@@ -152,7 +152,7 @@ The disk image is signed with a Developer ID Application certificate and
 notarized by Apple. Verify an installed copy yourself with:
 
 ```sh
-spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"
+spctl --assess --type execute --verbose=4 "/Applications/CargoDeck.app"
 ```
 
 ## Upgrade and rollback
@@ -161,7 +161,7 @@ Re-run the install command above to upgrade in place. To roll back, pin a
 previous release, for example:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash -s -- --version v1.4.0
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh | bash -s -- --version v1.4.0
 ```
 
 ## Known limitations
@@ -172,15 +172,15 @@ the terminal view now exists and could serve it. The app does not yet manage
 registry authentication, build secrets or SSH forwarding, import, or kernel
 settings, or remote hosts.
 
-# Container GUI 1.4.0
+# CargoDeck 1.4.0
 
 Install or upgrade with:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh | bash
 ```
 
-Container GUI 1.4.0 closes the gap between what the Apple Container CLI can do
+CargoDeck 1.4.0 closes the gap between what the Apple Container CLI can do
 to a container and what the app can. Creating without starting, signalling,
 pruning, running a command inside a container, copying files in and out, and
 exporting a filesystem are all reachable from the containers screen.
@@ -239,7 +239,7 @@ The disk image is signed with a Developer ID Application certificate and
 notarized by Apple. Verify an installed copy yourself with:
 
 ```sh
-spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"
+spctl --assess --type execute --verbose=4 "/Applications/CargoDeck.app"
 ```
 
 ## Upgrade and rollback
@@ -248,7 +248,7 @@ Re-run the install command above to upgrade in place. To roll back, pin a
 previous release, for example:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash -s -- --version v1.3.0
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh | bash -s -- --version v1.3.0
 ```
 
 ## Known limitations
@@ -258,15 +258,15 @@ pseudo-terminal plumbing exists and is tested, but no terminal view is wired to
 it. The app does not yet manage registry authentication, build secrets or SSH
 forwarding, import, or kernel settings, or remote hosts.
 
-# Container GUI 1.3.0
+# CargoDeck 1.3.0
 
 Install or upgrade with:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh | bash
 ```
 
-Container GUI 1.3.0 finishes the local DNS setup. Both halves of it — the
+CargoDeck 1.3.0 finishes the local DNS setup. Both halves of it — the
 resolver entry that needs root and the service domain in your own
 `config.toml` — are now changes the app makes for you, instead of commands and
 snippets it asks you to run and paste yourself.
@@ -316,7 +316,7 @@ The disk image is signed with a Developer ID Application certificate and
 notarized by Apple. Verify an installed copy yourself with:
 
 ```sh
-spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"
+spctl --assess --type execute --verbose=4 "/Applications/CargoDeck.app"
 ```
 
 ## Upgrade and rollback
@@ -325,7 +325,7 @@ Re-run the install command above to upgrade in place. To roll back, pin a
 previous release, for example:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash -s -- --version v1.2.1
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh | bash -s -- --version v1.2.1
 ```
 
 Releases up to and including 1.2.0 are ad-hoc signed and not notarized, so
@@ -338,15 +338,15 @@ The app does not yet manage registry authentication, build secrets or SSH
 forwarding, interactive terminals, import/export, or kernel settings,
 image/container pruning, or remote hosts.
 
-# Container GUI 1.2.1
+# CargoDeck 1.2.1
 
 Install or upgrade with:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh | bash
 ```
 
-Container GUI 1.2.1 is the first release signed with a Developer ID certificate
+CargoDeck 1.2.1 is the first release signed with a Developer ID certificate
 and notarized by Apple. The application code is unchanged from 1.2.0.
 
 ## Changes
@@ -379,7 +379,7 @@ The disk image is signed with a Developer ID Application certificate and
 notarized by Apple. Verify an installed copy yourself with:
 
 ```sh
-spctl --assess --type execute --verbose=4 "/Applications/Container GUI.app"
+spctl --assess --type execute --verbose=4 "/Applications/CargoDeck.app"
 ```
 
 ## Upgrade and rollback
@@ -388,7 +388,7 @@ Re-run the install command above to upgrade in place. To roll back, pin a
 previous release, for example:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash -s -- --version v1.2.0
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh | bash -s -- --version v1.2.0
 ```
 
 Releases up to and including 1.2.0 are ad-hoc signed and not notarized, so
@@ -401,15 +401,15 @@ The app does not yet manage registry authentication, build secrets or SSH
 forwarding, interactive terminals, import/export, or kernel settings,
 image/container pruning, or remote hosts.
 
-# Container GUI 1.2.0
+# CargoDeck 1.2.0
 
 Install or upgrade with:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh | bash
 ```
 
-Container GUI 1.2.0 adds complete volume and image-building workflows, built-in
+CargoDeck 1.2.0 adds complete volume and image-building workflows, built-in
 update checks, and a redesigned interface with richer live container details.
 
 ## Changes
@@ -449,7 +449,7 @@ Re-run the install command above to upgrade in place. To roll back, pin a
 previous release, for example:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Bramgus12/container-gui/main/scripts/install.sh | bash -s -- --version v1.1.0
+curl -fsSL https://raw.githubusercontent.com/Bramgus12/CargoDeck/main/scripts/install.sh | bash -s -- --version v1.1.0
 ```
 
 ## Known limitations
@@ -462,9 +462,9 @@ The distributed DMG is ad-hoc signed and is not notarized. The installer
 verifies its GitHub-published SHA-256 checksum and code signature before
 installing it. See the README for manual installation and Gatekeeper guidance.
 
-# Container GUI 1.1.0
+# CargoDeck 1.1.0
 
-Container GUI 1.1.0 adds network management and safer container and image
+CargoDeck 1.1.0 adds network management and safer container and image
 workflows.
 
 ## Changes
@@ -491,9 +491,9 @@ The distributed DMG is ad-hoc signed and is not notarized. Follow the README's
 Privacy & Security installation instructions when macOS blocks the first
 launch.
 
-# Container GUI 1.0.2
+# CargoDeck 1.0.2
 
-Container GUI 1.0.2 improves the container log viewer.
+CargoDeck 1.0.2 improves the container log viewer.
 
 ## Changes
 
@@ -516,9 +516,9 @@ The distributed DMG is ad-hoc signed and is not notarized. Follow the README's
 Privacy & Security installation instructions when macOS blocks the first
 launch.
 
-# Container GUI 1.0
+# CargoDeck 1.0
 
-Container GUI 1.0 provides a native macOS interface for Apple Container on
+CargoDeck 1.0 provides a native macOS interface for Apple Container on
 Apple silicon.
 
 ## Highlights

@@ -57,16 +57,16 @@ default registry in `runtime-config.toml`.
 | `k8s write-config` | Write/merge cluster access configuration into a chosen kubeconfig file. |
 
 Evidence: the complete typed command surface is
-[ContainerCommand.swift](../container-gui/CLI/ContainerCommand.swift).
+[ContainerCommand.swift](../CargoDeck/CLI/ContainerCommand.swift).
 DNS has a separate implementation in
-[DNSService.swift](../container-gui/CLI/DNSService.swift); none of the commands
+[DNSService.swift](../CargoDeck/CLI/DNSService.swift); none of the commands
 above has a corresponding service or feature screen. Kubernetes is experimental
 in the installed CLI and should be treated as an optional feature area.
 
 ## Missing options in run/create
 
-The shared [RunConfiguration](../container-gui/Models/RunConfiguration.swift)
-and [run form model](../container-gui/Features/Containers/RunContainerModel.swift)
+The shared [RunConfiguration](../CargoDeck/Models/RunConfiguration.swift)
+and [run form model](../CargoDeck/Features/Containers/RunContainerModel.swift)
 currently support name, detach, remove-on-stop, CPU/memory, explicit environment
 values, command/arguments, network attachments with MAC/MTU, DNS, published ports,
 and named-volume/bind mounts with read-only access.
@@ -90,17 +90,17 @@ and named-volume/bind mounts with read-only access.
 
 | Feature | Current limitation and evidence |
 | --- | --- |
-| Start attached/interactively | `start` always emits only the container ID. No `--attach` or `--interactive` choice in [ContainerCommand.swift](../container-gui/CLI/ContainerCommand.swift). |
-| Stop timeout | `StopTimeout` and `--time` exist in the command layer, but the app always passes `timeout: nil` in [AppModel.swift](../container-gui/App/AppModel.swift). There is no UI timeout control. |
+| Start attached/interactively | `start` always emits only the container ID. No `--attach` or `--interactive` choice in [ContainerCommand.swift](../CargoDeck/CLI/ContainerCommand.swift). |
+| Stop timeout | `StopTimeout` and `--time` exist in the command layer, but the app always passes `timeout: nil` in [AppModel.swift](../CargoDeck/App/AppModel.swift). There is no UI timeout control. |
 | Stop signal | No `stop --signal` support. Sending a signal with `kill` is a separate implemented action and does not expose the stop command's signal-plus-timeout behavior. |
 | Bulk lifecycle actions | Stop, kill, and delete accept one selected container in the app, rather than multiple IDs or `--all`. Prune stopped containers is implemented. |
-| Full signal selection | [KillSignal](../container-gui/Models/LifecycleModels.swift) allows TERM, KILL, INT, HUP, QUIT, USR1, and USR2 only; the CLI's broader signal input is not exposed. |
+| Full signal selection | [KillSignal](../CargoDeck/Models/LifecycleModels.swift) allows TERM, KILL, INT, HUP, QUIT, USR1, and USR2 only; the CLI's broader signal input is not exposed. |
 | Exec environment and limits | Missing `--env-file`, host environment inheritance, and `--ulimit`. Separate `--uid`/`--gid` flags are absent, though the existing `--user uid:gid` form covers common numeric-identity use. |
-| Detached exec | Supported by `ExecConfiguration`, but [ExecModel](../container-gui/Features/Containers/ExecSheet.swift) never sets it and has no detach control. |
+| Detached exec | Supported by `ExecConfiguration`, but [ExecModel](../CargoDeck/Features/Containers/ExecSheet.swift) never sets it and has no detach control. |
 | Embedded container terminal | Interactive exec plumbing exists, but the container exec UI offers a one-shot command and an external Terminal handoff. No embedded container shell, or independent stdin/TTY controls. Embedded **machine** shells are implemented. |
 | Container boot logs | Missing `logs --boot`; machine boot logs are implemented. |
-| Container log tail selection | The detail model fixes the displayed tail at 500 lines; there is no custom `-n`/all-history control. See [ContainerDetailModel.swift](../container-gui/Features/Containers/ContainerDetailModel.swift). |
-| Stats fields | `processCount` is decoded but never displayed. Per-container detail shows cumulative CPU time, not the CLI's live CPU percentage. Aggregate CPU rate is calculated separately by [ContainerStatsPoller.swift](../container-gui/Shared/ContainerStatsPoller.swift). |
+| Container log tail selection | The detail model fixes the displayed tail at 500 lines; there is no custom `-n`/all-history control. See [ContainerDetailModel.swift](../CargoDeck/Features/Containers/ContainerDetailModel.swift). |
+| Stats fields | `processCount` is decoded but never displayed. Per-container detail shows cumulative CPU time, not the CLI's live CPU percentage. Aggregate CPU rate is calculated separately by [ContainerStatsPoller.swift](../CargoDeck/Shared/ContainerStatsPoller.swift). |
 | Batch inspection | Container/image/network/volume inspection takes one selected resource; no combined inspection of multiple IDs. |
 
 Stats polling and log following are already implemented app behaviors; the fact
@@ -118,10 +118,10 @@ that they use snapshot commands internally is not itself a feature gap.
 | Builder startup DNS | Builder start exposes CPU and memory only, omitting its four DNS options. |
 | Builder force deletion | No `builder delete --force`; the UI offers deletion for a stopped builder. |
 
-Evidence: [BuildModels.swift](../container-gui/Models/BuildModels.swift),
-[ImageBuildModel.swift](../container-gui/Features/Images/ImageBuildModel.swift),
-[ContainerCommand.swift](../container-gui/CLI/ContainerCommand.swift), and
-[SystemModel.swift](../container-gui/Features/System/SystemModel.swift).
+Evidence: [BuildModels.swift](../CargoDeck/Models/BuildModels.swift),
+[ImageBuildModel.swift](../CargoDeck/Features/Images/ImageBuildModel.swift),
+[ContainerCommand.swift](../CargoDeck/CLI/ContainerCommand.swift), and
+[SystemModel.swift](../CargoDeck/Features/System/SystemModel.swift).
 
 ## Partial machine support
 
@@ -136,8 +136,8 @@ default selection, embedded shell, boot logs, and editing/restarting boot settin
 - The machine form always sets interactive and TTY to true; there are no
   independent no-stdin/no-TTY modes for one-shot commands. Detach is exposed.
 
-Evidence: [MachineModels.swift](../container-gui/Models/MachineModels.swift) and
-[MachineRunModel.swift](../container-gui/Features/Machines/MachineRunModel.swift).
+Evidence: [MachineModels.swift](../CargoDeck/Models/MachineModels.swift) and
+[MachineRunModel.swift](../CargoDeck/Features/Machines/MachineRunModel.swift).
 
 ## Partial network, volume, and system support
 
@@ -158,12 +158,12 @@ Evidence: [MachineModels.swift](../container-gui/Models/MachineModels.swift) and
 - **DNS:** list/create/delete and the create command's localhost redirect are
   implemented through the separate DNS service and privileged command runner.
 
-Evidence: [ContainerCommand.swift](../container-gui/CLI/ContainerCommand.swift),
-[SystemModel.swift](../container-gui/Features/System/SystemModel.swift),
-[SystemView.swift](../container-gui/Features/System/SystemView.swift),
-[ContainerConfigFile.swift](../container-gui/CLI/ContainerConfigFile.swift),
-[NetworkCreateModel.swift](../container-gui/Features/Networks/NetworkCreateModel.swift),
-and [VolumeCreateModel.swift](../container-gui/Features/Volumes/VolumeCreateModel.swift).
+Evidence: [ContainerCommand.swift](../CargoDeck/CLI/ContainerCommand.swift),
+[SystemModel.swift](../CargoDeck/Features/System/SystemModel.swift),
+[SystemView.swift](../CargoDeck/Features/System/SystemView.swift),
+[ContainerConfigFile.swift](../CargoDeck/CLI/ContainerConfigFile.swift),
+[NetworkCreateModel.swift](../CargoDeck/Features/Networks/NetworkCreateModel.swift),
+and [VolumeCreateModel.swift](../CargoDeck/Features/Volumes/VolumeCreateModel.swift).
 
 ## CLI-oriented differences, not necessarily UI features to add
 

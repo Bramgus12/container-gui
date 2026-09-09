@@ -1,6 +1,6 @@
 {
-  "name": "Container GUI",
-  "short_name": "Container GUI",
+  "name": "CargoDeck",
+  "short_name": "CargoDeck",
   "description": "A native macOS app for Apple Container.",
   "start_url": "/",
   "display": "browser",
